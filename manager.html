@@ -192,7 +192,8 @@ function render(){
   g.innerHTML=ACCOUNTS.map(a=>{
     const live=a.live||{};
     const u=live.usage||{};
-    const used=u.week_word_usage_value||0, lim=u.week_word_usage_limit||8000;
+    const ok=u.week_word_usage_value!=null; // liveStatus 失败时 usage 为空,显示 — 而非误导的 0
+    const used=ok?u.week_word_usage_value:0, lim=u.week_word_usage_limit||8000;
     const p=pct(used,lim); const pcls=p>80?'err':p>60?'warn':'';
     const valid=live.token_valid!==false;
     return `<div class="card ${a.user_id===CUR_ID?'active':''}" onclick="openDetail('${a.user_id}')">
@@ -201,9 +202,9 @@ function render(){
         <div><div class="nick">${esc(a.nickname)}</div><div class="email">${esc(a.email||'')}</div></div>
         <span class="badge ${a.role||''} ${valid?'':'invalid'}">${valid?(a.role||'未知'):'token失效'}</span>
       </div>
-      <div class="row"><span>本周额度</span><b>${used.toLocaleString()} / ${lim.toLocaleString()}</b></div>
+      <div class="row"><span>本周额度</span><b>${ok?used.toLocaleString():'—'} / ${lim.toLocaleString()}</b></div>
       <div class="bar ${pcls}"><i style="width:${p}%"></i></div>
-      <div class="row"><span>剩余字数</span><b>${(lim-used).toLocaleString()}</b></div>
+      <div class="row"><span>剩余字数</span><b>${ok?(lim-used).toLocaleString():'—'}</b></div>
       <div class="mini">
         <div class="m"><div class="k">词库词条</div><div class="v">${live.dict_count??'-'}</div></div>
         <div class="m"><div class="k">个性化</div><div class="v">${Math.round((live.personal?.total_learning_ratio||0)*100)}%</div></div>
@@ -242,10 +243,10 @@ function renderDict(){
   </div>`).join('') : '<div class="empty" style="padding:20px">无词条</div>';
 }
 function renderUsage(a){
-  const u=a.live?.usage||{}; const used=u.week_word_usage_value||0,lim=u.week_word_usage_limit||8000;
+  const u=a.live?.usage||{}; const ok=u.week_word_usage_value!=null; const used=ok?u.week_word_usage_value:0,lim=u.week_word_usage_limit||8000;
   document.getElementById('tab-usage').innerHTML=`<div class="statbox">
-    <div class="line"><span>本周已用</span><b>${used.toLocaleString()} / ${lim.toLocaleString()} 字</b></div>
-    <div class="line"><span>剩余</span><b>${(lim-used).toLocaleString()} 字</b></div>
+    <div class="line"><span>本周已用</span><b>${ok?used.toLocaleString():'—'} / ${lim.toLocaleString()} 字</b></div>
+    <div class="line"><span>剩余</span><b>${ok?(lim-used).toLocaleString():'—'} 字</b></div>
     <div class="line"><span>总听写字数</span><b>${(u.total_words||0).toLocaleString()}</b></div>
     <div class="line"><span>录音总时长</span><b>${Math.round(u.total_audio_seconds||0)} 秒</b></div>
     <div class="line"><span>平均语速</span><b>${u.avg_wpm||0} wpm</b></div>
