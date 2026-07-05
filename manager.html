@@ -5,97 +5,204 @@
 <title>Typeless 多账号管理</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --bg:#f4f5f7; --card:#fff; --accent:#346BFF; --accent-soft:#eaf0ff; --text:#1a2233; --sub:#6b7280; --line:#eceef1; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+  :root {
+    --bg:#f5f6f9; --bg2:#eef0f4; --card:#fff; --accent:#3563ff; --accent2:#5b7cff;
+    --accent-soft:#eaf0ff; --text:#161d2e; --sub:#6b7280; --line:#e9ebef;
+    --ok:#16a34a; --ok-soft:#e7f7ee; --warn:#f59e0b; --warn-soft:#fff4e0;
+    --err:#ef4444; --err-soft:#fdecec; --shadow:0 1px 2px rgba(16,24,40,.04);
+    --shadow-lg:0 10px 34px rgba(16,24,40,.10); --r:14px;
+  }
+  html[data-theme="dark"] {
+    --bg:#0f1420; --bg2:#151b29; --card:#1a2130; --accent:#5b82ff; --accent2:#7d9bff;
+    --accent-soft:#1e2a48; --text:#e6e9f0; --sub:#93a0b5; --line:#28303f;
+    --ok:#3ddc84; --ok-soft:#16301f; --warn:#f5b13d; --warn-soft:#33280f;
+    --err:#ff6b6b; --err-soft:#331a1a; --shadow:0 1px 2px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
-  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 60px; }
-  header { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
-  header h1 { font-size:20px; font-weight:650; margin:0; }
-  header .sub { color:var(--sub); font-size:13px; }
-  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 18px; }
-  .btn { background:var(--card); border:1px solid var(--line); color:var(--text); padding:8px 14px; border-radius:10px; font-size:13px; cursor:pointer; transition:.15s; display:inline-flex; align-items:center; gap:6px; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); }
-  .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .btn.primary:hover { background:#2a5fe8; color:#fff; }
-  .btn.small { padding:5px 10px; font-size:12px; border-radius:8px; }
-  .btn:disabled { opacity:.5; cursor:not-allowed; }
-  .banner { background:var(--accent-soft); border:1px solid #d4e0ff; color:#3b5bdb; padding:10px 14px; border-radius:12px; font-size:13px; margin-bottom:16px; display:none; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px; }
-  .card { background:var(--card); border-radius:16px; padding:16px 16px 14px; border:1px solid var(--line); box-shadow:0 1px 2px rgba(16,24,40,.03); cursor:pointer; transition:.15s; position:relative; }
-  .card:hover { box-shadow:0 6px 20px rgba(16,24,40,.07); transform:translateY(-1px); }
-  .card .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-  .nick { font-weight:650; font-size:15px; }
-  .email { color:var(--sub); font-size:12px; margin-top:2px; }
-  .badge { font-size:11px; padding:2px 8px; border-radius:20px; background:#f0f1f3; color:var(--sub); }
-  .badge.free { background:#fff3e0; color:#b26a00; }
-  .badge.pro { background:#e7f7ee; color:#1a8243; }
-  .badge.invalid { background:#fdecec; color:#c01f1f; }
-  .row { display:flex; justify-content:space-between; font-size:12px; color:var(--sub); margin-top:6px; }
-  .row b { color:var(--text); font-weight:600; }
-  .bar { height:8px; background:#f0f1f3; border-radius:6px; overflow:hidden; margin:6px 0 2px; }
-  .bar > i { display:block; height:100%; background:var(--accent); border-radius:6px; }
-  .bar.warn > i { background:var(--warn); }
-  .bar.err > i { background:var(--err); }
-  .mini { display:flex; gap:10px; margin-top:10px; }
-  .mini .m { flex:1; background:#f8f9fb; border-radius:10px; padding:8px 10px; }
-  .mini .m .k { font-size:11px; color:var(--sub); }
-  .mini .m .v { font-size:14px; font-weight:650; margin-top:2px; }
-  .tag-active { position:absolute; top:14px; right:-30px; background:var(--accent); color:#fff; font-size:10px; padding:3px 34px; transform:rotate(45deg); display:none; }
-  .card.active .tag-active { display:block; }
-  .card.active { box-shadow:0 0 0 2px var(--accent) inset; }
-  .empty { text-align:center; color:var(--sub); padding:50px 0; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; }
+  .wrap { max-width:1240px; margin:0 auto; padding:0 20px 64px; }
+
+  /* 顶栏 */
+  .topbar { position:sticky; top:0; z-index:30; background:color-mix(in srgb,var(--bg) 82%,transparent); backdrop-filter:saturate(160%) blur(12px); border-bottom:1px solid var(--line); }
+  .topbar .inner { max-width:1240px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:14px; }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo .mark { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; box-shadow:0 4px 12px rgba(53,99,255,.35); }
+  .logo h1 { font-size:16px; font-weight:700; margin:0; letter-spacing:.2px; }
+  .logo .sub { font-size:11.5px; color:var(--sub); margin-top:1px; }
+  .topbar .spacer { flex:1; }
+  .status-pill { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:20px; cursor:pointer; max-width:340px; }
+  .status-pill:hover { border-color:var(--accent); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--sub); flex:none; }
+  .dot.on { background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .dot.off { background:var(--err); box-shadow:0 0 0 3px var(--err-soft); }
+  .status-pill b { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .icon-btn { width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--sub); cursor:pointer; font-size:16px; display:inline-flex; align-items:center; justify-content:center; }
+  .icon-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* 概览统计 */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:20px 0 6px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; box-shadow:var(--shadow); }
+  .stat .k { font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px; }
+  .stat .v { font-size:22px; font-weight:750; margin-top:6px; letter-spacing:.3px; }
+  .stat .v small { font-size:13px; color:var(--sub); font-weight:500; }
+  .stat .foot { font-size:11.5px; color:var(--sub); margin-top:3px; }
+
+  /* 工具栏 */
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:18px 0 14px; }
+  .toolbar .gap { flex:1; }
+  .btn { background:var(--card); border:1px solid var(--line); color:var(--text); padding:8px 14px; border-radius:10px; font-size:13px; cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; box-shadow:0 4px 14px rgba(53,99,255,.3); }
+  .btn.primary:hover { color:#fff; filter:brightness(1.05); }
+  .btn.danger:hover { border-color:var(--err); color:var(--err); }
+  .btn.small { padding:6px 11px; font-size:12px; border-radius:9px; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .divider { width:1px; height:24px; background:var(--line); margin:0 2px; }
+
+  /* 搜索 / 排序 */
+  .filterbar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .search { position:relative; flex:1; min-width:200px; }
+  .search input { width:100%; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:9px 12px 9px 34px; font-size:13px; outline:none; }
+  .search input:focus { border-color:var(--accent); }
+  .search::before { content:"⌕"; position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--sub); font-size:15px; }
+  select.sort { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:9px 12px; font-size:13px; cursor:pointer; outline:none; }
+
+  /* 账号卡片 */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+  .card { background:var(--card); border-radius:var(--r); padding:16px; border:1px solid var(--line); box-shadow:var(--shadow); cursor:pointer; transition:.16s; position:relative; overflow:hidden; }
+  .card:hover { box-shadow:var(--shadow-lg); transform:translateY(-2px); border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); }
+  .card.active { border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent), var(--shadow); }
+  .card.invalid { opacity:.82; }
+  .ribbon { position:absolute; top:13px; right:-34px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:10px; font-weight:600; padding:3px 38px; transform:rotate(45deg); display:none; letter-spacing:1px; }
+  .card.active .ribbon { display:block; }
+  .chead { display:flex; align-items:center; gap:11px; margin-bottom:14px; }
+  .avatar { width:42px; height:42px; border-radius:12px; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; flex:none; }
+  .chead .who { min-width:0; flex:1; }
+  .nick { font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .email { color:var(--sub); font-size:12px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .badge { font-size:11px; padding:2.5px 9px; border-radius:20px; background:var(--bg2); color:var(--sub); font-weight:600; flex:none; }
+  .badge.free { background:var(--warn-soft); color:var(--warn); }
+  .badge.pro,.badge.premium { background:var(--ok-soft); color:var(--ok); }
+  .badge.invalid { background:var(--err-soft); color:var(--err); }
+
+  .quota { margin:6px 0 12px; }
+  .quota .qtop { display:flex; justify-content:space-between; align-items:baseline; font-size:12px; color:var(--sub); margin-bottom:6px; }
+  .quota .qtop b { color:var(--text); font-weight:650; font-size:13px; }
+  .bar { height:9px; background:var(--bg2); border-radius:6px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:6px; transition:width .5s; }
+  .bar.warn > i { background:linear-gradient(90deg,var(--warn),#fbbf24); }
+  .bar.err > i { background:linear-gradient(90deg,var(--err),#f87171); }
+
+  .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:13px; }
+  .mini .m { background:var(--bg2); border-radius:10px; padding:9px 10px; text-align:center; }
+  .mini .m .k { font-size:10.5px; color:var(--sub); }
+  .mini .m .v { font-size:15px; font-weight:700; margin-top:3px; }
+  .mini .m .v.mut { color:var(--sub); font-weight:600; }
+
+  .cfoot { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; border-top:1px solid var(--line); }
+  .snap { font-size:11.5px; color:var(--sub); display:inline-flex; align-items:center; gap:5px; }
+  .snap .d { width:6px; height:6px; border-radius:50%; background:var(--sub); }
+  .snap.has .d { background:var(--ok); }
+  .cfoot .acts { display:flex; gap:7px; }
+
+  .empty { text-align:center; color:var(--sub); padding:64px 20px; grid-column:1/-1; }
+  .empty .big { font-size:40px; margin-bottom:10px; opacity:.5; }
+  .skeleton { background:linear-gradient(90deg,var(--bg2) 25%,var(--line) 50%,var(--bg2) 75%); background-size:200% 100%; animation:sk 1.3s infinite; border-radius:var(--r); height:230px; }
+  @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
   /* 弹窗 */
-  .mask { position:fixed; inset:0; background:rgba(16,24,40,.35); display:none; align-items:center; justify-content:center; z-index:50; }
-  .mask.on { display:flex; }
-  .modal { background:#fff; border-radius:18px; width:min(720px,94vw); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
-  .modal .hd { padding:16px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .modal .hd h3 { margin:0; font-size:16px; }
-  .modal .bd { padding:16px 18px; overflow:auto; }
-  .tabs { display:flex; gap:6px; margin-bottom:14px; }
-  .tab { padding:6px 12px; border-radius:8px; font-size:13px; cursor:pointer; color:var(--sub); }
-  .tab.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
-  .wordlist { display:flex; flex-direction:column; gap:6px; }
-  .word { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f8f9fb; border-radius:9px; font-size:13px; }
+  .mask { position:fixed; inset:0; background:rgba(10,14,22,.45); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .mask.on { display:flex; animation:fade .15s; }
+  @keyframes fade { from{opacity:0} to{opacity:1} }
+  .modal { background:var(--card); border-radius:18px; width:min(720px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:var(--shadow-lg); border:1px solid var(--line); animation:pop .18s; }
+  @keyframes pop { from{transform:translateY(10px) scale(.98);opacity:0} to{transform:none;opacity:1} }
+  .modal .hd { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+  .modal .hd h3 { margin:0; font-size:16px; display:flex; align-items:center; gap:10px; }
+  .modal .bd { padding:18px 20px; overflow:auto; }
+  .tabs { display:flex; gap:6px; margin-bottom:16px; background:var(--bg2); padding:4px; border-radius:11px; }
+  .tab { flex:1; text-align:center; padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; color:var(--sub); transition:.14s; }
+  .tab.on { background:var(--card); color:var(--accent); font-weight:650; box-shadow:var(--shadow); }
+  .wordlist { display:flex; flex-direction:column; gap:6px; max-height:340px; overflow:auto; }
+  .word { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--bg2); border-radius:9px; font-size:13px; }
   .word .t { font-weight:500; }
-  .word .meta { font-size:11px; color:var(--sub); display:flex; gap:8px; align-items:center; }
-  .word .del { color:var(--err); cursor:pointer; opacity:.6; }
+  .word .meta { font-size:11px; color:var(--sub); display:flex; gap:9px; align-items:center; }
+  .word .del { color:var(--err); cursor:pointer; opacity:.55; font-size:12px; }
   .word .del:hover { opacity:1; }
-  .pill { font-size:10px; padding:1px 6px; border-radius:6px; background:#eef0f3; }
-  .pill.auto { background:#fff3e0; color:#b26a00; }
-  input.fld { border:1px solid var(--line); border-radius:9px; padding:8px 11px; font-size:13px; width:100%; outline:none; }
+  .pill { font-size:10px; padding:1.5px 7px; border-radius:6px; background:var(--line); }
+  .pill.auto { background:var(--warn-soft); color:var(--warn); }
+  input.fld { border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; background:var(--card); color:var(--text); }
   input.fld:focus { border-color:var(--accent); }
-  .field { margin-bottom:12px; }
+  input.fld[readonly] { background:var(--bg2); color:var(--sub); }
+  .field { margin-bottom:13px; }
   .field label { display:block; font-size:12px; color:var(--sub); margin-bottom:5px; }
-  .statbox { background:#f8f9fb; border-radius:12px; padding:14px; }
-  .statbox .line { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px dashed var(--line); }
+  .statbox { background:var(--bg2); border-radius:12px; padding:6px 16px; }
+  .statbox .line { display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:11px 0; border-bottom:1px solid var(--line); }
   .statbox .line:last-child { border:none; }
-  .ring { width:88px; height:88px; border-radius:50%; background:conic-gradient(var(--accent) calc(var(--p)*1%), #eef0f3 0); display:flex; align-items:center; justify-content:center; margin:0 auto 8px; }
-  .ring span { background:#fff; width:70px; height:70px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; }
-  .master-edit textarea { width:100%; min-height:180px; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:13px; font-family:inherit; resize:vertical; }
-  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1a2233; color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; z-index:80; opacity:0; transition:.2s; pointer-events:none; }
-  .toast.on { opacity:1; }
-  a.link { color:var(--accent); cursor:pointer; }
+  .statbox .line b { font-weight:700; }
+  .ring { width:110px; height:110px; border-radius:50%; background:conic-gradient(var(--accent) calc(var(--p)*1%), var(--bg2) 0); display:flex; align-items:center; justify-content:center; margin:8px auto 12px; transition:.5s; }
+  .ring span { background:var(--card); width:84px; height:84px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:750; font-size:19px; }
+  .master-edit textarea { width:100%; min-height:280px; border:1px solid var(--line); border-radius:11px; padding:12px; font-size:13px; font-family:"SF Mono","Cascadia Code",Consolas,monospace; resize:vertical; background:var(--bg2); color:var(--text); outline:none; line-height:1.6; }
+  .master-edit textarea:focus { border-color:var(--accent); }
+  .hint { font-size:12px; color:var(--sub); line-height:1.7; }
+  .row-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+  .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--card); padding:11px 20px; border-radius:11px; font-size:13px; z-index:80; opacity:0; transition:.25s; pointer-events:none; box-shadow:var(--shadow-lg); max-width:80vw; }
+  .toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.err { background:var(--err); color:#fff; }
+  .toast.ok { background:var(--ok); color:#fff; }
+  a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
+  a.link:hover { text-decoration:underline; }
+  @media (max-width:720px){ .stats{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div>
-      <h1>Typeless 多账号管理</h1>
-      <div class="sub">周额度 8,000 字/号 · 词库跨账号同步 · <a class="link" id="curLink">检测当前登录账号</a></div>
+<div class="topbar">
+  <div class="inner">
+    <div class="logo">
+      <div class="mark">T</div>
+      <div>
+        <h1>Typeless 多账号管理</h1>
+        <div class="sub">账号切换 · 词库同步 · 额度总览</div>
+      </div>
     </div>
-  </header>
+    <div class="spacer"></div>
+    <span class="badge" id="envBadge" title="运行环境" style="cursor:help">…</span>
+    <div class="status-pill" id="curPill" onclick="detectCurrent()">
+      <span class="dot" id="curDot"></span>
+      <b id="curText">检测当前登录…</b>
+    </div>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="切换主题">◐</button>
+  </div>
+</div>
 
-  <div class="banner" id="banner"></div>
+<div class="wrap">
+  <!-- 概览 -->
+  <div class="stats" id="stats"></div>
 
+  <!-- 工具栏 -->
   <div class="toolbar">
     <button class="btn primary" onclick="launch()">⏻ 启动 Typeless</button>
     <button class="btn" onclick="addAccount()">＋ 添加当前账号</button>
-    <button class="btn" onclick="loadAccounts()">↻ 全部刷新</button>
+    <div class="divider"></div>
+    <button class="btn" onclick="loadAccounts()">↻ 刷新</button>
     <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
-    <button class="btn" onclick="openMaster()">✎ 主词库编辑</button>
-    <button class="btn" onclick="resetDevice()" style="color:#c01f1f;border-color:#f5c2c2">⊘ 解除设备限制</button>
-    <button class="btn" onclick="patchPaywall()" style="color:#c01f1f;border-color:#f5c2c2">⊘ 解除弹窗提示</button>
+    <button class="btn" onclick="openMaster()">✎ 主词库</button>
+    <button class="btn" onclick="backup()">⇩ 备份数据</button>
+    <div class="gap"></div>
+    <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
+    <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
+  </div>
+
+  <!-- 搜索排序 -->
+  <div class="filterbar" id="filterbar" style="display:none">
+    <div class="search"><input id="q" placeholder="搜索昵称或邮箱…" oninput="render()"></div>
+    <select class="sort" id="sort" onchange="render()">
+      <option value="added">按添加时间</option>
+      <option value="name">按昵称</option>
+      <option value="usage">按额度用量</option>
+      <option value="remain">按剩余额度</option>
+      <option value="dict">按词库数量</option>
+    </select>
   </div>
 
   <div id="grid" class="grid"></div>
@@ -104,7 +211,7 @@
 <!-- 账号详情 -->
 <div class="mask" id="detailMask" onclick="if(event.target===this)closeModal('detailMask')">
   <div class="modal">
-    <div class="hd"><h3 id="dTitle">账号详情</h3><button class="btn small" onclick="closeModal('detailMask')">✕</button></div>
+    <div class="hd"><h3 id="dTitle">账号详情</h3><button class="icon-btn" onclick="closeModal('detailMask')">✕</button></div>
     <div class="bd">
       <div class="tabs">
         <div class="tab on" onclick="selTab(this,'dict')">词库</div>
@@ -116,17 +223,21 @@
           <input class="fld" id="wordInput" placeholder="输入新词,回车添加" onkeydown="if(event.key==='Enter')addWord()">
           <button class="btn small primary" onclick="addWord()">加词</button>
         </div>
-        <input class="fld" id="dictSearch" placeholder="筛选词条…" oninput="renderDict()" style="margin-bottom:10px;">
+        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+          <input class="fld" id="dictSearch" placeholder="筛选词条…" oninput="renderDict()">
+          <button class="btn small" onclick="exportDict()">⇩ 导出</button>
+        </div>
         <div class="wordlist" id="wordList"></div>
       </div>
       <div id="tab-usage" style="display:none"></div>
       <div id="tab-personal" style="display:none"></div>
-      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn small primary" onclick="syncOne()">同步本账号</button>
-        <button class="btn small" onclick="importMaster()">从主词库导入</button>
-        <button class="btn small" onclick="copyFrom()">从其他号复制</button>
-        <button class="btn small" onclick="saveSnap()">更新快照</button>
-        <button class="btn small" onclick="rmAccount()">移除账号</button>
+      <div class="row-btns">
+        <button class="btn small primary" onclick="syncOne()">↻ 同步本账号</button>
+        <button class="btn small" onclick="importMaster()">⬇ 导入主词库</button>
+        <button class="btn small" onclick="copyFrom()">⧉ 从其他号复制</button>
+        <button class="btn small" onclick="saveSnap()">⛁ 更新快照</button>
+        <div class="gap" style="flex:1"></div>
+        <button class="btn small danger" onclick="rmAccount()">移除账号</button>
       </div>
     </div>
   </div>
@@ -135,13 +246,13 @@
 <!-- 主词库编辑 -->
 <div class="mask" id="masterMask" onclick="if(event.target===this)closeModal('masterMask')">
   <div class="modal">
-    <div class="hd"><h3>主词库（各账号并集）</h3><button class="btn small" onclick="closeModal('masterMask')">✕</button></div>
-    <div class="bd">
-      <div class="sub" style="color:var(--sub);font-size:12px;margin-bottom:8px;">一行一个词。保存后会作为所有账号同步的基准（同步时把缺失的词导入各账号，并吸收各账号已有词）。</div>
+    <div class="hd"><h3>主词库 <span class="badge" id="masterCnt"></span></h3><button class="icon-btn" onclick="closeModal('masterMask')">✕</button></div>
+    <div class="bd master-edit">
+      <div class="hint" style="margin-bottom:10px;">一行一个词,作为所有账号同步的基准。保存后同步时会把缺失的词导入各账号,并吸收各账号已有词(只增不删)。</div>
       <textarea id="masterArea"></textarea>
-      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+      <div class="row-btns">
         <button class="btn small primary" onclick="saveMaster()">保存</button>
-        <span id="masterCnt" style="font-size:12px;color:var(--sub);"></span>
+        <a class="btn small" href="/api/master/export">⇩ 导出 txt</a>
       </div>
     </div>
   </div>
@@ -149,19 +260,21 @@
 
 <!-- 添加账号 -->
 <div class="mask" id="addMask" onclick="if(event.target===this)closeModal('addMask')">
-  <div class="modal" style="width:min(440px,94vw)">
-    <div class="hd"><h3>添加账号</h3><button class="btn small" onclick="closeModal('addMask')">✕</button></div>
+  <div class="modal" style="width:min(460px,96vw)">
+    <div class="hd"><h3>添加账号</h3><button class="icon-btn" onclick="closeModal('addMask')">✕</button></div>
     <div class="bd">
       <div id="addStep1">
-        <div style="font-size:13px;color:var(--sub);line-height:1.7;margin-bottom:12px;">先在 Typeless 里登录要添加的账号，然后点下方按钮。工具会自动抓取当前登录账号的凭证（会重载一次主窗口）。</div>
+        <div class="hint" style="margin-bottom:14px;">先在 Typeless 里登录要添加的账号,然后点下方按钮。工具会自动抓取当前登录账号的凭证(会重载一次主窗口)。</div>
         <button class="btn primary" onclick="doCapture()" id="capBtn">抓取当前账号</button>
       </div>
       <div id="addStep2" style="display:none">
         <div class="field"><label>昵称</label><input class="fld" id="addNick"></div>
         <div class="field"><label>邮箱</label><input class="fld" id="addEmail" readonly></div>
         <div class="field"><label>套餐 / user_id</label><input class="fld" id="addMeta" readonly></div>
-        <button class="btn primary" onclick="saveAccount()">保存</button>
-        <span id="addExist" style="font-size:12px;color:var(--warn);margin-left:10px;"></span>
+        <div class="row-btns">
+          <button class="btn primary" onclick="saveAccount()">保存并导入主词库</button>
+          <span id="addExist" style="font-size:12px;color:var(--warn);align-self:center;"></span>
+        </div>
       </div>
     </div>
   </div>
@@ -173,65 +286,110 @@
 const api = (p, opt={}) => fetch(p, { headers:{'Content-Type':'application/json'}, ...opt }).then(r=>r.json());
 let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [];
 
-function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),1800); }
+function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function openModal(id){ document.getElementById(id).classList.add('on'); }
 function closeModal(id){ document.getElementById(id).classList.remove('on'); }
-
-async function launch(){ const r=await api('/api/launch',{method:'POST'}); toast(r.msg||'已启动'); }
-async function loadAccounts(){
-  const g=document.getElementById('grid'); g.innerHTML='<div class="empty">加载中…</div>';
-  const r=await api('/api/accounts');
-  if(r.status!=='OK'){ g.innerHTML='<div class="empty">'+r.msg+'</div>'; return; }
-  ACCOUNTS=r.data||[];
-  render();
-}
+function esc(s){ return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 function pct(v,l){ return l? Math.min(100, Math.round(v/l*100)):0; }
+function nfmt(n){ return (n||0).toLocaleString(); }
+
+/* 主题 */
+function applyTheme(t){ document.documentElement.setAttribute('data-theme',t); document.getElementById('themeBtn').textContent = t==='dark'?'☀':'◐'; }
+function toggleTheme(){ const cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'; localStorage.setItem('tl_theme',cur); applyTheme(cur); }
+applyTheme(localStorage.getItem('tl_theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
+
+/* 概览统计 */
+function renderStats(){
+  const n=ACCOUNTS.length;
+  const valid=ACCOUNTS.filter(a=>a.live?.token_valid!==false).length;
+  let used=0, lim=0, dict=0, saved=0;
+  ACCOUNTS.forEach(a=>{ const u=a.live?.usage||{}; if(u.week_word_usage_value!=null){used+=u.week_word_usage_value; lim+=(u.week_word_usage_limit||8000);} dict+=(a.live?.dict_count||0); saved+=(u.mins_saved||0); });
+  const rp=pct(used,lim);
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="k">👥 账号</div><div class="v">${n} <small>个</small></div><div class="foot">有效 ${valid} · 失效 ${n-valid}</div></div>
+    <div class="stat"><div class="k">⚡ 本周额度</div><div class="v">${nfmt(used)} <small>/ ${nfmt(lim)}</small></div><div class="foot">合计已用 ${rp}% · 剩 ${nfmt(lim-used)} 字</div></div>
+    <div class="stat"><div class="k">📖 词库</div><div class="v">${nfmt(dict)} <small>条</small></div><div class="foot">各账号合计</div></div>
+    <div class="stat"><div class="k">⏱ 累计节省</div><div class="v">${nfmt(saved)} <small>分钟</small></div><div class="foot">全部账号听写</div></div>`;
+}
+
+async function launch(){ toast('启动中…'); const r=await api('/api/launch',{method:'POST'}); toast(r.msg||'已启动','ok'); setTimeout(detectCurrent,3000); }
+async function loadAccounts(){
+  const g=document.getElementById('grid');
+  if(!ACCOUNTS.length) g.innerHTML='<div class="skeleton"></div>'.repeat(3);
+  const r=await api('/api/accounts');
+  if(r.status!=='OK'){ g.innerHTML='<div class="empty">'+esc(r.msg||'加载失败')+'</div>'; return; }
+  ACCOUNTS=r.data||[];
+  render(); renderStats();
+  document.getElementById('filterbar').style.display = ACCOUNTS.length>3?'flex':'none';
+}
+function sortAccounts(list){
+  const s=document.getElementById('sort').value;
+  const u=a=>a.live?.usage||{};
+  const arr=[...list];
+  if(s==='name') arr.sort((a,b)=>(a.nickname||'').localeCompare(b.nickname||'','zh'));
+  else if(s==='usage') arr.sort((a,b)=>(u(b).week_word_usage_value||0)-(u(a).week_word_usage_value||0));
+  else if(s==='remain') arr.sort((a,b)=>((u(b).week_word_usage_limit||8000)-(u(b).week_word_usage_value||0))-((u(a).week_word_usage_limit||8000)-(u(a).week_word_usage_value||0)));
+  else if(s==='dict') arr.sort((a,b)=>(b.live?.dict_count||0)-(a.live?.dict_count||0));
+  return arr;
+}
 function render(){
   const g=document.getElementById('grid');
-  if(!ACCOUNTS.length){ g.innerHTML='<div class="empty">还没有账号。点「添加当前账号」开始（先在 Typeless 登录该号）。</div>'; return; }
-  g.innerHTML=ACCOUNTS.map(a=>{
-    const live=a.live||{};
-    const u=live.usage||{};
-    const ok=u.week_word_usage_value!=null; // liveStatus 失败时 usage 为空,显示 — 而非误导的 0
+  if(!ACCOUNTS.length){ g.innerHTML='<div class="empty"><div class="big">👤</div>还没有账号。<br>先在 Typeless 登录一个账号,再点上方「添加当前账号」。</div>'; return; }
+  const q=(document.getElementById('q').value||'').trim().toLowerCase();
+  let list=ACCOUNTS.filter(a=>!q||(a.nickname||'').toLowerCase().includes(q)||(a.email||'').toLowerCase().includes(q));
+  list=sortAccounts(list);
+  if(!list.length){ g.innerHTML='<div class="empty">没有匹配的账号</div>'; return; }
+  g.innerHTML=list.map(a=>{
+    const live=a.live||{}, u=live.usage||{};
+    const ok=u.week_word_usage_value!=null;
     const used=ok?u.week_word_usage_value:0, lim=u.week_word_usage_limit||8000;
-    const p=pct(used,lim); const pcls=p>80?'err':p>60?'warn':'';
+    const p=pct(used,lim), pcls=p>85?'err':p>65?'warn':'';
     const valid=live.token_valid!==false;
-    return `<div class="card ${a.user_id===CUR_ID?'active':''}" onclick="openDetail('${a.user_id}')">
-      <div class="tag-active">当前</div>
-      <div class="top">
-        <div><div class="nick">${esc(a.nickname)}</div><div class="email">${esc(a.email||'')}</div></div>
-        <span class="badge ${a.role||''} ${valid?'':'invalid'}">${valid?(a.role||'未知'):'token失效'}</span>
+    const days=live.token_days_left;
+    const daysTxt = days==null?'—':(days<0?'已过期':days+'天');
+    const daysCls = days==null?'mut':'';
+    const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
+    return `<div class="card ${a.user_id===CUR_ID?'active':''} ${valid?'':'invalid'}" onclick="openDetail('${a.user_id}')">
+      <div class="ribbon">当前登录</div>
+      <div class="chead">
+        <div class="avatar">${esc(ini)}</div>
+        <div class="who"><div class="nick">${esc(a.nickname)}</div><div class="email">${esc(a.email||a.user_id)}</div></div>
+        <span class="badge ${valid?(a.role||''):'invalid'}">${valid?(a.role||'未知'):'失效'}</span>
       </div>
-      <div class="row"><span>本周额度</span><b>${ok?used.toLocaleString():'—'} / ${lim.toLocaleString()}</b></div>
-      <div class="bar ${pcls}"><i style="width:${p}%"></i></div>
-      <div class="row"><span>剩余字数</span><b>${ok?(lim-used).toLocaleString():'—'}</b></div>
+      <div class="quota">
+        <div class="qtop"><span>本周额度</span><b>${ok?nfmt(used):'—'} / ${nfmt(lim)}</b></div>
+        <div class="bar ${pcls}"><i style="width:${p}%"></i></div>
+      </div>
       <div class="mini">
-        <div class="m"><div class="k">词库词条</div><div class="v">${live.dict_count??'-'}</div></div>
+        <div class="m"><div class="k">词库</div><div class="v">${live.dict_count??'-'}</div></div>
         <div class="m"><div class="k">个性化</div><div class="v">${Math.round((live.personal?.total_learning_ratio||0)*100)}%</div></div>
-        <div class="m"><div class="k">总字数</div><div class="v">${(u.total_words||0).toLocaleString()}</div></div>
+        <div class="m"><div class="k">凭证有效</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
-      <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:11px;color:var(--sub)">${a.has_snapshot?'快照已存':'未存快照'}</span>
-        <button class="btn small" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot?'':'disabled'}>切换到此号</button>
+      <div class="cfoot">
+        <span class="snap ${a.has_snapshot?'has':''}"><span class="d"></span>${a.has_snapshot?'快照已存':'未存快照'}</span>
+        <div class="acts">
+          <button class="btn small" onclick="event.stopPropagation();openDetail('${a.user_id}')">详情</button>
+          <button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot?'':'disabled'}>切换</button>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
-function esc(s){ return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 
 async function openDetail(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
   curDetail=a;
-  document.getElementById('dTitle').textContent=a.nickname+' · '+(a.email||'');
+  document.getElementById('dTitle').innerHTML=`<div class="avatar" style="width:30px;height:30px;font-size:14px;border-radius:9px">${esc((a.nickname||'?').charAt(0).toUpperCase())}</div> ${esc(a.nickname)} <span style="color:var(--sub);font-weight:400;font-size:13px">${esc(a.email||'')}</span>`;
   openModal('detailMask');
-  selTab(document.querySelector('.tab'),'dict');
+  selTab(document.querySelector('#detailMask .tab'),'dict');
+  renderUsage(a); renderPersonal(a);
+  document.getElementById('wordList').innerHTML='<div class="empty" style="padding:20px">加载词库中…</div>';
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/dictionary');
   curWords = r.data?.words||[];
   document.getElementById('dictSearch').value=''; renderDict();
-  renderUsage(a); renderPersonal(a);
 }
 function selTab(el,tab){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); el.classList.add('on');
+  el.parentNode.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); el.classList.add('on');
   ['dict','usage','personal'].forEach(t=>document.getElementById('tab-'+t).style.display = t===tab?'block':'none');
 }
 function renderDict(){
@@ -239,136 +397,141 @@ function renderDict(){
   const ws=curWords.filter(w=>!q||(w.term||'').toLowerCase().includes(q));
   document.getElementById('wordList').innerHTML = ws.length? ws.map(w=>`<div class="word">
     <span class="t">${esc(w.term)}</span>
-    <span class="meta"><span class="pill ${w.auto?'auto':''}">${w.auto?'自动':'手动'}</span>${w.lang||''}<span class="del" onclick="delWord('${esc(w.term)}')">删除</span></span>
-  </div>`).join('') : '<div class="empty" style="padding:20px">无词条</div>';
+    <span class="meta"><span class="pill ${w.auto?'auto':''}">${w.auto?'自动':'手动'}</span>${esc(w.lang||'')}<span class="del" onclick="delWord('${esc(w.term)}')">删除</span></span>
+  </div>`).join('') : '<div class="empty" style="padding:24px">'+(q?'无匹配词条':'词库为空')+'</div>';
 }
 function renderUsage(a){
   const u=a.live?.usage||{}; const ok=u.week_word_usage_value!=null; const used=ok?u.week_word_usage_value:0,lim=u.week_word_usage_limit||8000;
   document.getElementById('tab-usage').innerHTML=`<div class="statbox">
-    <div class="line"><span>本周已用</span><b>${ok?used.toLocaleString():'—'} / ${lim.toLocaleString()} 字</b></div>
-    <div class="line"><span>剩余</span><b>${ok?(lim-used).toLocaleString():'—'} 字</b></div>
-    <div class="line"><span>总听写字数</span><b>${(u.total_words||0).toLocaleString()}</b></div>
-    <div class="line"><span>录音总时长</span><b>${Math.round(u.total_audio_seconds||0)} 秒</b></div>
+    <div class="line"><span>本周已用</span><b>${ok?nfmt(used):'—'} / ${nfmt(lim)} 字</b></div>
+    <div class="line"><span>剩余额度</span><b>${ok?nfmt(lim-used):'—'} 字</b></div>
+    <div class="line"><span>累计听写字数</span><b>${nfmt(u.total_words)}</b></div>
+    <div class="line"><span>累计录音时长</span><b>${Math.round((u.total_audio_seconds||0)/60)} 分钟</b></div>
     <div class="line"><span>平均语速</span><b>${u.avg_wpm||0} wpm</b></div>
-    <div class="line"><span>已节省</span><b>${u.mins_saved||0} 分钟</b></div>
+    <div class="line"><span>累计节省</span><b>${nfmt(u.mins_saved)} 分钟</b></div>
   </div>`;
 }
 function renderPersonal(a){
   const p=a.live?.personal||{}; const ratio=p.total_learning_ratio||0;
   document.getElementById('tab-personal').innerHTML=`<div style="text-align:center">
     <div class="ring" style="--p:${Math.round(ratio*100)}"><span>${Math.round(ratio*100)}%</span></div>
-    <div style="color:var(--sub);font-size:12px">个性化学习进度</div>
-    <div style="font-size:13px;margin-top:6px">${p.enabled?'已启用':'未启用'} · ${(p.category_stats||[]).length} 个学习类别</div>
+    <div style="color:var(--sub);font-size:13px">个性化学习进度</div>
+    <div style="font-size:13px;margin-top:8px">${p.enabled?'✅ 已启用':'⭕ 未启用'} · ${(p.category_stats||[]).length} 个学习类别</div>
   </div>`;
 }
+async function refreshDict(){ const d=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary'); curWords=d.data?.words||[]; renderDict(); }
 async function addWord(){
   const t=document.getElementById('wordInput').value.trim(); if(!t||!curDetail) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/word',{method:'POST',body:JSON.stringify({term:t})});
-  if(r.status==='OK'){ toast('已添加'); document.getElementById('wordInput').value=''; const d=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary'); curWords=d.data?.words||[]; renderDict(); } else toast('失败');
+  if(r.status==='OK'){ toast('已添加','ok'); document.getElementById('wordInput').value=''; refreshDict(); } else toast('失败','err');
 }
 async function delWord(term){
   if(!curDetail) return; if(!confirm('删除「'+term+'」?')) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/word?term='+encodeURIComponent(term),{method:'DELETE'});
-  if(r.status==='OK'){ toast('已删除'); curWords=curWords.filter(w=>w.term!==term); renderDict(); } else toast('失败');
+  if(r.status==='OK'){ toast('已删除','ok'); curWords=curWords.filter(w=>w.term!==term); renderDict(); } else toast('失败','err');
 }
+function exportDict(){ if(!curDetail) return; window.location.href='/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary/export'; }
 async function syncOne(){
   if(!curDetail) return; toast('同步中…');
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/sync',{method:'POST'});
-  if(r.status==='OK') toast(`同步完成:导出 ${r.data.exported} / 导入 ${r.data.imported} / 主库 ${r.data.master_count}`);
-  else toast('失败: '+(r.msg||''));
+  if(r.status==='OK') toast(`同步完成:导出 ${r.data.exported} · 导入 ${r.data.imported} · 主库 ${r.data.master_count}`,'ok');
+  else toast('失败: '+(r.msg||''),'err');
   await loadAccounts();
 }
 async function syncAll(){
-  toast('全部同步中…');
+  if(!confirm('对全部账号执行词库同步?\n(各账号词库合并进主库,再把缺失词回灌各账号,只增不删)')) return;
+  toast('全部同步中…可能需要一会儿');
   const r=await api('/api/sync-all',{method:'POST'});
-  if(r.status==='OK'){ const d=r.data||[]; toast(`完成 ${d.length} 个账号`); await loadAccounts(); }
+  if(r.status==='OK'){ const d=r.data||[]; const imp=d.reduce((s,x)=>s+(x.imported||0),0); toast(`完成 ${d.length} 个账号,共导入 ${imp} 个词`,'ok'); await loadAccounts(); }
+  else toast('失败','err');
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
   if(!confirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。')) return;
-  toast('切换中…');
+  toast('切换中…Typeless 将重启');
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/switch',{method:'POST'});
-  toast(r.msg||'已切换');
+  toast(r.msg||'已切换','ok');
   setTimeout(()=>{ loadAccounts(); detectCurrent(); }, 6000);
 }
 async function resetDevice(){
   if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。')) return;
   toast('重置中…');
   const r=await api('/api/reset-device',{method:'POST'});
-  toast(r.msg||'已重置');
+  toast(r.msg||'已重置','ok');
   setTimeout(()=>{ loadAccounts(); detectCurrent(); }, 7000);
 }
-// 解除升级/会员弹窗(等长字节补丁 app.asar + Typeless.exe,同步两层 asar 完整性哈希)
 async function patchPaywall(){
-  // 先查状态:已打过就提示,不再动文件
   let st={};
   try{ st=await api('/api/paywall-status'); }catch(e){}
-  if(st.data && st.data.patched){
-    toast('已是无弹窗补丁版,无需重复操作');
-    return;
-  }
-  if(!confirm('解除升级弹窗?\n\n将修改 app.asar + Typeless.exe(等长字节替换 gn(x)→(0,x),并同步 per-file SHA256 与 exe 内嵌整头 SHA256 两层完整性)。\n首次会自动备份 app.asar.bak / Typeless.exe.bak。\nTypeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。')) return;
+  if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
+  if(!confirm('解除升级弹窗?\n\n将修改 app.asar + Typeless.exe(等长字节替换,并同步两层完整性哈希)。\n首次会自动备份 .bak。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。')) return;
   toast('打补丁中…');
   const r=await api('/api/patch-paywall',{method:'POST'});
-  if(r.status==='OK'){
-    toast(r.data?.already?'已是补丁版,无需重打':'补丁完成,已重启 Typeless');
-  }else{
-    toast(r.msg||'打补丁失败');
-  }
-  setTimeout(()=>{ detectCurrent(); }, 7000);
+  if(r.status==='OK') toast(r.data?.already?'已是补丁版,无需重打':'补丁完成,已重启 Typeless','ok');
+  else toast(r.msg||'打补丁失败','err');
+  setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); }, 7000);
+}
+async function refreshPatchStatus(){
+  try{ const st=await api('/api/paywall-status'); if(st.data?.patched) document.getElementById('patchLabel').textContent='✓ 弹窗已解除'; }catch(e){}
+}
+async function backup(){
+  toast('备份中…');
+  const r=await api('/api/backup',{method:'POST'});
+  if(r.status==='OK') toast(r.msg||'已备份','ok'); else toast('备份失败','err');
 }
 async function importMaster(){
   if(!curDetail) return; toast('导入主词库中…');
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/import-master',{method:'POST'});
-  if(r.status==='OK') toast(`主词库 ${r.data.master} 条,新导入 ${r.data.imported} 条`);
-  else toast('失败: '+(r.msg||''));
-  await loadAccounts();
+  if(r.status==='OK') toast(`主词库 ${r.data.master} 条,新导入 ${r.data.imported} 条`,'ok');
+  else toast('失败: '+(r.msg||''),'err');
+  refreshDict(); loadAccounts();
 }
 async function copyFrom(){
   if(!curDetail) return;
-  const src=ACCOUNTS.find(x=>x.user_id!==curDetail.user_id);
-  if(!src) { toast('没有其他账号可复制'); return; }
-  const opts=ACCOUNTS.filter(x=>x.user_id!==curDetail.user_id).map(x=>x.nickname).join(', ');
-  const name=prompt('从哪个账号复制词库到「'+curDetail.nickname+'」?\n('+opts+')');
-  const srcAcc=ACCOUNTS.find(x=>x.nickname===name && x.user_id!==curDetail.user_id);
-  if(!srcAcc){ toast('已取消或未找到'); return; }
+  const others=ACCOUNTS.filter(x=>x.user_id!==curDetail.user_id);
+  if(!others.length) { toast('没有其他账号可复制'); return; }
+  const name=prompt('从哪个账号复制词库到「'+curDetail.nickname+'」?\n可选:'+others.map(x=>x.nickname).join(', '));
+  if(name===null) return;
+  const srcAcc=others.find(x=>x.nickname===name.trim());
+  if(!srcAcc){ toast('未找到该账号','err'); return; }
   toast('复制中…');
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/copy-from/'+encodeURIComponent(srcAcc.user_id),{method:'POST'});
-  if(r.status==='OK') toast(`源 ${r.data.src_count} 条,新导入 ${r.data.imported} 条`);
-  else toast('失败: '+(r.msg||''));
-  await loadAccounts();
+  if(r.status==='OK') toast(`源 ${r.data.src_count} 条,新导入 ${r.data.imported} 条`,'ok');
+  else toast('失败: '+(r.msg||''),'err');
+  refreshDict(); loadAccounts();
 }
 async function saveSnap(){
   if(!curDetail) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/snapshot',{method:'POST'});
-  toast(r.msg||'已保存'); await loadAccounts();
+  toast(r.msg||'已保存','ok'); await loadAccounts();
 }
-function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除');}); }
+function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
 
-function addAccount(){ openModal('addMask'); document.getElementById('addStep1').style.display='block'; document.getElementById('addStep2').style.display='none'; }
+function addAccount(){ openModal('addMask'); document.getElementById('addStep1').style.display='block'; document.getElementById('addStep2').style.display='none'; document.getElementById('addExist').textContent=''; }
 async function doCapture(){
   const btn=document.getElementById('capBtn'); btn.disabled=true; btn.textContent='抓取中…(主窗口将重载)';
   const r=await api('/api/capture',{method:'POST'});
   btn.disabled=false; btn.textContent='抓取当前账号';
-  if(r.status!=='OK'){ toast('抓取失败: '+(r.msg||'')); return; }
+  if(r.status!=='OK'){ toast('抓取失败: '+(r.msg||''),'err'); return; }
   const d=r.data; window._cap=d;
+  const ui=d.user_info||{};
+  d.email=ui.email; d.role=ui.roles?.[0]?.name; d.nickname=ui.email||d.user_id;
   document.getElementById('addStep1').style.display='none';
   document.getElementById('addStep2').style.display='block';
-  document.getElementById('addNick').value=d.nickname||d.email||'';
+  document.getElementById('addNick').value=d.nickname||'';
   document.getElementById('addEmail').value=d.email||'';
-  document.getElementById('addMeta').value=(d.role||'')+' · '+d.user_id;
+  document.getElementById('addMeta').value=(d.role||'未知')+' · '+d.user_id;
   const exist=ACCOUNTS.find(x=>x.user_id===d.user_id);
   document.getElementById('addExist').textContent=exist?'该账号已存在,保存将更新 token':'';
 }
 async function saveAccount(){
   const d=window._cap; if(!d) return;
   const r=await api('/api/accounts',{method:'POST',body:JSON.stringify({user_id:d.user_id,nickname:document.getElementById('addNick').value.trim(),email:d.email,role:d.role,token:d.token,captured_at:d.captured_at})});
-  if(r.status!=='OK'){ toast('保存失败'); return; }
+  if(r.status!=='OK'){ toast('保存失败','err'); return; }
   closeModal('addMask'); toast('已保存,正在迁移主词库到此号…');
-  // 自动迁移:把主词库导入新账号
   const m=await api('/api/accounts/'+encodeURIComponent(d.user_id)+'/import-master',{method:'POST'});
-  if(m.status==='OK') toast('添加完成,已导入 '+m.data.imported+' 个词');
-  await loadAccounts();
+  if(m.status==='OK') toast('添加完成,已导入 '+m.data.imported+' 个词','ok');
+  await loadAccounts(); detectCurrent();
 }
 
 async function openMaster(){
@@ -380,23 +543,35 @@ async function openMaster(){
 async function saveMaster(){
   const terms=document.getElementById('masterArea').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const r=await api('/api/master',{method:'POST',body:JSON.stringify({terms})});
-  if(r.status==='OK'){ document.getElementById('masterArea').value=r.data.join('\n'); document.getElementById('masterCnt').textContent=r.data.length+' 条'; toast('已保存'); }
+  if(r.status==='OK'){ document.getElementById('masterArea').value=r.data.join('\n'); document.getElementById('masterCnt').textContent=r.data.length+' 条'; toast('已保存','ok'); }
+}
+
+async function fetchEnv(){
+  try{
+    const r=await api('/api/env'); if(r.status!=='OK') return;
+    const e=r.data, b=document.getElementById('envBadge');
+    const osName={windows:'Windows',macos:'macOS'}[e.platform]||e.platform;
+    if(e.exe_found){ b.textContent=osName; b.title='平台 '+osName+' · Typeless: '+e.typeless_exe; }
+    else { b.textContent=osName+' ⚠ 未找到 Typeless'; b.className='badge invalid'; b.title='未探测到 Typeless 可执行文件,请在 config.json 里配置 typeless_exe。当前探测:'+(e.typeless_exe||'无'); }
+  }catch(err){}
 }
 
 async function detectCurrent(){
-  const el=document.getElementById('curLink'); el.textContent='检测中…';
+  const dot=document.getElementById('curDot'), txt=document.getElementById('curText');
+  txt.textContent='检测中…'; dot.className='dot';
   const r=await api('/api/current');
-  if(r.status!=='OK'){ el.textContent='未连接 Typeless'; el.style.opacity='.55'; toast('Typeless 未连接,点「⏻ 启动 Typeless」即可(自动带端口)'); return; }
+  if(r.status!=='OK'){ dot.className='dot off'; txt.textContent='Typeless 未连接(点此重试)'; CUR_ID=null; render(); return; }
   const d=r.data; CUR_ID=d.user_id;
+  const ui=d.user_info||{};
   const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
-  const b=document.getElementById('banner');
-  b.style.display='block'; b.textContent='当前 Typeless 登录: '+(matched?matched.nickname+' ('+matched.email+')':d.email||d.user_id)+(matched?'':'  — 未收录,点「添加当前账号」加入');
-  el.textContent=matched?('当前: '+matched.nickname):'检测当前登录账号';
+  dot.className='dot on';
+  txt.textContent='当前: '+(matched?matched.nickname:(ui.email||d.user_id))+(matched?'':' (未收录)');
   render();
 }
-document.getElementById('curLink').onclick=detectCurrent;
 
-loadAccounts();
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on')); });
+loadAccounts().then(refreshPatchStatus);
+fetchEnv();
 detectCurrent();
 </script>
 </body>

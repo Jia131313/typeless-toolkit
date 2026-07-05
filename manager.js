@@ -19,6 +19,7 @@ const {
   killTypeless, launchTypeless, resetDevice,
   readMaster, writeMaster,
   curlApi, ensureApp, captureTokenCDP,
+  fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount,
   paywallStatus, patchPaywall,
   log, sleep,
@@ -30,6 +31,14 @@ const PORT = config.manager_port;
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
   res.end(JSON.stringify(obj));
+}
+// 文本文件下载(词库导出用)
+function sendDownload(res, filename, text) {
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+  });
+  res.end('﻿' + text); // 带 BOM,Excel/记事本不乱码
 }
 function readBody(req) {
   return new Promise(r => {
@@ -126,8 +135,8 @@ const server = http.createServer(async (req, res) => {
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const master = readMaster();
-      const dl = await curlApi('GET', '/user/dictionary/list?size=500', acc.token);
-      const have = new Set((dl.data?.words || []).map(w => w.term));
+      const dl = await fetchAllWords(acc.token);
+      const have = new Set((dl.words || []).map(w => w.term));
       const missing = master.filter(w => !have.has(w));
       let imported = 0;
       if (missing.length) {
@@ -145,10 +154,10 @@ const server = http.createServer(async (req, res) => {
       const src = accs.find(x => x.user_id === srcId);
       const dst = accs.find(x => x.user_id === dstId);
       if (!src || !dst) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const sl = await curlApi('GET', '/user/dictionary/list?size=500', src.token);
-      const srcWords = (sl.data?.words || []).map(w => w.term).filter(Boolean);
-      const dl = await curlApi('GET', '/user/dictionary/list?size=500', dst.token);
-      const have = new Set((dl.data?.words || []).map(w => w.term));
+      const sl = await fetchAllWords(src.token);
+      const srcWords = (sl.words || []).map(w => w.term).filter(Boolean);
+      const dl = await fetchAllWords(dst.token);
+      const have = new Set((dl.words || []).map(w => w.term));
       const missing = srcWords.filter(w => !have.has(w));
       let imported = 0;
       if (missing.length) {
@@ -165,13 +174,22 @@ const server = http.createServer(async (req, res) => {
       writeAccounts(accs);
       return send(res, 200, { status: 'OK' });
     }
-    // 单账号词库
+    // 单账号词库(全量分页)
     if (m === 'GET' && p.startsWith('/api/accounts/') && p.endsWith('/dictionary')) {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const dl = await curlApi('GET', '/user/dictionary/list?size=500', acc.token);
-      return send(res, 200, { status: 'OK', data: dl.data || { words: [] } });
+      const dl = await fetchAllWords(acc.token);
+      return send(res, 200, { status: 'OK', data: dl });
+    }
+    // 导出单账号词库为 txt 文件下载
+    if (m === 'GET' && p.startsWith('/api/accounts/') && p.endsWith('/dictionary/export')) {
+      const id = decodeURIComponent(p.split('/')[3]);
+      const acc = readAccounts().find(x => x.user_id === id);
+      if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
+      const dl = await fetchAllWords(acc.token);
+      const name = (acc.nickname || id).replace(/[\\/:*?"<>|]/g, '_');
+      return sendDownload(res, `Typeless词库_${name}.txt`, dictToText(dl.words));
     }
     // 单账号同步
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/sync')) {
@@ -204,8 +222,8 @@ const server = http.createServer(async (req, res) => {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       const term = u.searchParams.get('term');
-      const dl = await curlApi('GET', '/user/dictionary/list?size=500', acc.token);
-      const w = (dl.data?.words || []).find(x => x.term === term);
+      const dl = await fetchAllWords(acc.token);
+      const w = (dl.words || []).find(x => x.term === term);
       if (!w) return send(res, 404, { status: 'FAIL', msg: '词条不存在' });
       const r = await curlApi('POST', '/user/dictionary/delete', acc.token, { user_dictionary_id: w.user_dictionary_id });
       return send(res, 200, { status: 'OK', data: r.data });
@@ -215,6 +233,19 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/master') {
       const b = await readBody(req); const t = writeMaster(b.terms || []);
       return send(res, 200, { status: 'OK', data: t });
+    }
+    // 导出主词库为 txt 下载
+    if (m === 'GET' && p === '/api/master/export') {
+      return sendDownload(res, 'Typeless主词库.txt', readMaster().join('\n'));
+    }
+    // 运行环境信息(排错用:平台、探测到的路径、凭据名)
+    if (m === 'GET' && p === '/api/env') {
+      return send(res, 200, { status: 'OK', data: envInfo() });
+    }
+    // 一键备份(账号表 + 主词库,带时间戳)
+    if (m === 'POST' && p === '/api/backup') {
+      const r = backupData();
+      return send(res, 200, { status: 'OK', data: r, msg: `已备份 ${r.files.length} 个文件到 backups/${r.stamp}` });
     }
     // 启动 Typeless:已带调试端口则不动,否则以调试端口启动(若已开不带端口会重启带端口)
     if (m === 'POST' && p === '/api/launch') {
