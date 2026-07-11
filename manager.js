@@ -103,7 +103,7 @@ const server = http.createServer(async (req, res) => {
       if (!hasSnapshot(id)) return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
       killTypeless(); await sleep(1500);
       restoreSnapshot(id);
-      launchTypeless();
+      await launchTypeless();
       return send(res, 200, { status: 'OK', msg: '已切换并重启 Typeless' });
     }
     // 解除设备限制(重置设备 ID,准备注册新账号)
@@ -120,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       killTypeless(); await sleep(1500);
       try {
         const r = patchPaywall();
-        launchTypeless(); // 重启使补丁生效
+        await launchTypeless(); // 重启使补丁生效
         return send(res, 200, { status: 'OK', data: r });
       } catch (e) {
         // 失败则从备份还原,避免半改导致闪退
