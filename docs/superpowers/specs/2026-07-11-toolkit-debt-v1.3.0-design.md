@@ -78,7 +78,7 @@ Typeless Toolkit 已开源（`Jia131313/typeless-toolkit`），公开版 `main` 
 
 ### 错误处理原则
 
-- 启动失败：向上返回中文可读原因（路径/占用/权限），前端 toast；**禁止** 主进程未捕获异常弹窗。  
+- 启动失败：`launchApp`/`launchTypeless`/`ensureApp` 失败必须传播到 HTTP 路由层；`/api/launch` 等返回 `status:FAIL` + 中文 `msg`，前端已有 toast 即够；**禁止** 主进程未捕获异常弹窗。若现有路由吞掉 error，则一并改 `manager.js` 对应路由。  
 - 补丁失败：保持「未找到标记 + 从 .bak 还原」。  
 - CDP 超时：保持现有文案；竞态由已合并的 ensureApp/withCDP 修复覆盖。
 
@@ -96,11 +96,12 @@ Typeless Toolkit 已开源（`Jia131313/typeless-toolkit`），公开版 `main` 
 
 | 检查 | 方法 |
 | --- | --- |
-| 源码与打包一致 | 对比打包目录与公开版的 `config.json` paywall 段、`common.js` 中 ensureApp/withCDP/默认 paywall |
+| 源码与打包一致 | 固定对比：`config.json` 的 `paywall` 段；`lib/common.js` 默认 paywall、`ensureApp`、`withCDP`（含 `/json/list`） |
 | 2.0 补丁 | 本机关闭 Typeless 后 `patchPaywall` 或管理器「解除弹窗」；`paywallStatus.patched === true` 或 already |
 | CDP | 启动（ensureApp）后立即添加当前账号；不应再稳定复现「已就绪 + CDP 无响应」假就绪 |
 | Release | `gh release list` 仅 `v1.3.0`；资产含 `TypelessToolkit.exe` |
-| spawn 错误（可选） | 临时错误 `typeless_exe` 路径，确认返回可读错误而非主进程崩溃 |
+| spawn 错误（可选） | 临时错误 `typeless_exe` 路径，确认 API 返回可读 FAIL 文案而非主进程崩溃 |
+| README | 安装要求含 Win/Mac；配置示例标记与 main 一致（`BYriTiPi` / `_n(...)`）；原理不再只写过时的 `gn(x)` 且无「仅 Windows」矛盾 |
 
 ## 6. 风险与备注
 
