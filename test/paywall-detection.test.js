@@ -2,7 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
-const { resolvePaywallReplacements } = require('../lib/common');
+const { currentUserFromStorage, resolvePaywallReplacements } = require('../lib/common');
+
+test('reads the current account from local Typeless storage without CDP', () => {
+  assert.deepEqual(currentUserFromStorage({ userData: { user_id: 'user-1', email: 'user@example.com' } }), {
+    user_id: 'user-1',
+    user_info: { user_id: 'user-1', email: 'user@example.com' },
+    source: 'local-storage',
+  });
+  assert.equal(currentUserFromStorage({ userData: {} }), null);
+});
 
 test('derives two equal-length replacements from current handler structure', () => {
   const source = [

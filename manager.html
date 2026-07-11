@@ -167,7 +167,7 @@
     </div>
     <div class="spacer"></div>
     <span class="badge" id="envBadge" title="运行环境" style="cursor:help">…</span>
-    <div class="status-pill" id="curPill" onclick="detectCurrent(true)">
+    <div class="status-pill" id="curPill" onclick="detectCurrent()">
       <span class="dot" id="curDot"></span>
       <b id="curText">检测当前登录…</b>
     </div>
@@ -556,11 +556,11 @@ async function fetchEnv(){
   }catch(err){}
 }
 
-async function detectCurrent(autoConnect=false){
+async function detectCurrent(){
   const dot=document.getElementById('curDot'), txt=document.getElementById('curText');
-  txt.textContent=autoConnect?'正在连接 Typeless…':'检测中…'; dot.className='dot';
-  const r=await api('/api/current'+(autoConnect?'?connect=1':''));
-  if(r.status!=='OK'){ dot.className='dot off'; txt.textContent='Typeless 未连接(点此连接)'; CUR_ID=null; render(); if(autoConnect) toast(r.msg||'连接失败','err'); return; }
+  txt.textContent='检测中…'; dot.className='dot';
+  const r=await api('/api/current');
+  if(r.status!=='OK'){ dot.className='dot off'; txt.textContent='未识别当前账号(点此重试)'; CUR_ID=null; render(); return; }
   const d=r.data; CUR_ID=d.user_id;
   const ui=d.user_info||{};
   const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);

@@ -14,7 +14,7 @@ const { execSync, spawn } = require('child_process');
 const C = require('./lib/common');
 const {
   config, ROOT, TYPELESS_EXE, CDP_PORT, ASAR_PATH,
-  readAccounts, writeAccounts,
+  readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot,
   killTypeless, launchTypeless, resetDevice,
   readMaster, writeMaster,
@@ -65,11 +65,11 @@ const server = http.createServer(async (req, res) => {
       const data = accs.map((a, i) => ({ ...a, live: live[i], has_snapshot: hasSnapshot(a.user_id) }));
       return send(res, 200, { status: 'OK', data });
     }
-    // 当前登录账号探测;connect=1 仅用于用户主动点击连接,允许重启并打开调试端口
+    // 从 Typeless 本地状态识别当前账号,不重启应用、不依赖 CDP
     if (m === 'GET' && p === '/api/current') {
-      const autoConnect = u.searchParams.get('connect') === '1';
-      try { const c = await captureTokenCDP(null, autoConnect); return send(res, 200, { status: 'OK', data: c }); }
-      catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
+      const current = readCurrentUser();
+      if (current) return send(res, 200, { status: 'OK', data: current });
+      return send(res, 200, { status: 'FAIL', msg: '未在 Typeless 本地状态中识别到已登录账号' });
     }
     // 抓取当前账号(准备添加)
     if (m === 'POST' && p === '/api/capture') {
