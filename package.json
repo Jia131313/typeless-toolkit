@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "check": "node --check electron-main.js && node --check manager.js && node --check lib/common.js && node --check lib/platform.js && node --check typeless-dict-sync.js",
+    "check": "node --check electron-main.js && node --check manager.js && node --check lib/common.js && node --check lib/platform.js && node --check typeless-dict-sync.js && node --test",
     "build:mac": "npm run check && electron-builder --mac dmg --arm64",
     "build:mac:universal": "npm run check && electron-builder --mac dmg --universal"
   },

@@ -1,0 +1,46 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+process.env.TYPELESS_EXE = '/path/that/does/not/exist';
+const { resolvePaywallReplacements } = require('../lib/common');
+
+test('derives two equal-length replacements from current handler structure', () => {
+  const source = [
+    "'onImportantNotification':_0x4931cd=>{if(_0x4931cd['type']==='paywall')_n(_0x4931cd);}",
+    "'onSessionInterrupt':(_0x5b741f,_0x348c9a)=>{if(_0x5b741f['type']==='paywall')_n(_0x5b741f);}",
+  ].join(',');
+
+  assert.deepEqual(resolvePaywallReplacements(source), {
+    replacements: [
+      ['_n(_0x4931cd)', '(0,_0x4931cd)'],
+      ['_n(_0x5b741f)', '(0,_0x5b741f)'],
+    ],
+    alreadyPatched: false,
+    detected: true,
+  });
+});
+
+test('recognises dynamically detected replacements after patching', () => {
+  const source = [
+    "'onImportantNotification':_0x4931cd=>{if(_0x4931cd['type']==='paywall')(0,_0x4931cd);}",
+    "'onSessionInterrupt':(_0x5b741f,_0x348c9a)=>{if(_0x5b741f['type']==='paywall')(0,_0x5b741f);}",
+  ].join(',');
+
+  assert.deepEqual(resolvePaywallReplacements(source), {
+    replacements: [],
+    alreadyPatched: true,
+    detected: true,
+  });
+});
+
+test('rejects handler shapes that cannot preserve byte length', () => {
+  const source = [
+    "'onImportantNotification':notice=>{if(notice['type']==='paywall')show(notice);}",
+    "'onSessionInterrupt':(event,retry)=>{if(event['type']==='paywall')show(event);}",
+  ].join(',');
+
+  assert.throws(
+    () => resolvePaywallReplacements(source),
+    /无法推导两个等长替换标记/,
+  );
+});
