@@ -22,6 +22,7 @@ const {
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount,
   paywallStatus, patchPaywall,
+  detectCurrentAccountFromFile,
   log, sleep,
 } = C;
 
@@ -75,16 +76,16 @@ const server = http.createServer(async (req, res) => {
       const data = accs.map((a, i) => ({ ...a, live: live[i], has_snapshot: hasSnapshot(a.user_id) }));
       return send(res, 200, { status: 'OK', data });
     }
-    // 当前登录账号探测:
-    //   macOS 默认 soft —— Dock 启动无调试端口时自动以调试端口重启再抓
-    //   Windows 保持原行为(autoRestart=false,不杀进程)
-    //   ?reconnect=0 强制纯探测;?reconnect=1 强制 soft(仅 mac 生效)
+    // 日常账号探测优先读取本地文件，不重启 Typeless，也不依赖调试端口。
+    // macOS 若文件暂不可读，保留上游已实测的 soft CDP 重连作为兜底。
     if (m === 'GET' && p === '/api/current') {
-      const mode = u.searchParams.get('reconnect');
-      let auto = false;
-      if (IS_MAC) auto = mode === '0' ? false : 'soft';
-      try { const c = await captureTokenCDP(null, auto); return send(res, 200, { status: 'OK', data: c }); }
-      catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
+      const info = detectCurrentAccountFromFile();
+      if (info.found) return send(res, 200, { status: 'OK', data: { user_id: info.user_id, email: info.email, roles: info.roles } });
+      if (IS_MAC) {
+        try { const c = await captureTokenCDP(null, 'soft'); return send(res, 200, { status: 'OK', data: c }); }
+        catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
+      }
+      return send(res, 200, { status: 'FAIL', msg: info.error || '无法探测当前账号' });
     }
     // 抓取当前账号(准备添加)
     if (m === 'POST' && p === '/api/capture') {

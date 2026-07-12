@@ -579,10 +579,9 @@ async function detectCurrent(){
     CUR_ID=null; render(); return;
   }
   const d=r.data; CUR_ID=d.user_id;
-  const ui=d.user_info||{};
   const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
   dot.className='dot on';
-  txt.textContent='当前: '+(matched?matched.nickname:(ui.email||d.user_id))+(matched?'':' (未收录)');
+  txt.textContent='当前: '+(matched?matched.nickname:(d.email||d.user_id))+(matched?'':' (未收录)');
   render();
   fetchEnv();
 }
