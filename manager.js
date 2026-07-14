@@ -132,19 +132,39 @@ const server = http.createServer(async (req, res) => {
     if (m === 'GET' && p === '/api/paywall-status') {
       return send(res, 200, { status: 'OK', data: paywallStatus() });
     }
-    // 解除升级弹窗(打 asar+exe 两层补丁,失败自动从备份还原)
+    // 解除升级弹窗；无论成功或失败都恢复 Typeless 普通启动。
     if (m === 'POST' && p === '/api/patch-paywall') {
       killTypeless(); await sleep(1500);
+      // 每次尝试都备份“当前版本”用于事务回滚。不能直接依赖长期 .bak：
+      // Typeless 更新后旧 .bak 可能属于上一版本，失败时覆盖回来会造成版本错配。
+      const rollbackAsar = ASAR_PATH + '.toolkit-rollback';
+      const rollbackExe = TYPELESS_EXE + '.toolkit-rollback';
+      let result = null;
+      let patchError = null;
       try {
-        const r = patchPaywall();
-        await launchTypeless(); // 重启使补丁生效
-        return send(res, 200, { status: 'OK', data: r });
+        fs.copyFileSync(ASAR_PATH, rollbackAsar);
+        fs.copyFileSync(TYPELESS_EXE, rollbackExe);
+        result = await patchPaywall();
       } catch (e) {
-        // 失败则从备份还原,避免半改导致闪退
-        try { if (fs.existsSync(ASAR_PATH + '.bak')) fs.copyFileSync(ASAR_PATH + '.bak', ASAR_PATH); } catch (_) {}
-        try { if (TYPELESS_EXE && fs.existsSync(TYPELESS_EXE + '.bak')) fs.copyFileSync(TYPELESS_EXE + '.bak', TYPELESS_EXE); } catch (_) {}
-        return send(res, 500, { status: 'FAIL', msg: '打补丁失败:' + e.message + '(已从备份还原)' });
+        // 失败则从本次尝试前的快照还原,避免半改或跨版本 .bak 导致闪退。
+        try { if (fs.existsSync(rollbackAsar)) fs.copyFileSync(rollbackAsar, ASAR_PATH); } catch (_) {}
+        try { if (fs.existsSync(rollbackExe)) fs.copyFileSync(rollbackExe, TYPELESS_EXE); } catch (_) {}
+        patchError = e;
+      } finally {
+        try { fs.unlinkSync(rollbackAsar); } catch (_) {}
+        try { fs.unlinkSync(rollbackExe); } catch (_) {}
       }
+
+      let restartError = null;
+      try { await launchTypeless(); } catch (e) { restartError = e; }
+      if (patchError) {
+        const restartNote = restartError
+          ? ';Typeless 自动重启失败:' + restartError.message
+          : ';已从备份还原并重新启动 Typeless';
+        return send(res, 500, { status: 'FAIL', msg: '打补丁失败:' + patchError.message + restartNote });
+      }
+      if (restartError) return send(res, 500, { status: 'FAIL', msg: '补丁已完成,但 Typeless 自动重启失败:' + restartError.message });
+      return send(res, 200, { status: 'OK', data: result });
     }
     // 把主词库导入此账号(单向 master -> account,不导出)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/import-master')) {
