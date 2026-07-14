@@ -22,11 +22,12 @@ const {
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount,
   paywallStatus, patchPaywall,
-  detectCurrentAccountFromFile,
+  skipOnboarding, checkOnboardingStatus, detectCurrentAccountFromFile,
   log, sleep,
 } = C;
 
 const PORT = config.manager_port;
+const ACCOUNT_STATUS_CONCURRENCY = 3;
 
 // ---------- HTTP ----------
 function send(res, code, obj) {
@@ -53,6 +54,24 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`);
   const p = u.pathname; const m = req.method;
   try {
+    // 图标资源
+    if (m === 'GET' && (p === '/icon.png' || p === '/favicon.ico')) {
+      try {
+        var iconPath = path.join(C.CODE_DIR, 'icon', 'icon-rounded.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(C.CODE_DIR, 'icon.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(path.dirname(C.CODE_DIR), 'icon.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(C.CODE_DIR, 'icon', 'icon.png');
+        if (fs.existsSync(iconPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          });
+          return res.end(fs.readFileSync(iconPath));
+        }
+      } catch (e) {}
+      res.writeHead(404); return res.end('not found');
+    }
+
     // 前端首页
     if (m === 'GET' && (p === '/' || p === '/index.html' || p === '/manager.html')) {
       const html = fs.readFileSync(path.join(C.CODE_DIR, 'manager.html'), 'utf8');
@@ -62,8 +81,7 @@ const server = http.createServer(async (req, res) => {
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
       const accs = readAccounts();
-      // 限流:并发池避免账号多时一次 spawn 大量 curl(每账号 liveStatus 内部 4 个 curl)
-      const CONCURRENCY = 3;
+      // 上游 c5f784f:限制状态查询并发，避免账号多时瞬间启动大量 curl。
       const live = new Array(accs.length);
       let cursor = 0;
       const worker = async () => {
@@ -72,12 +90,15 @@ const server = http.createServer(async (req, res) => {
           live[i] = await liveStatus(accs[i]).catch(e => ({ token_valid: false, _err: e.message }));
         }
       };
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, accs.length) }, () => worker()));
+      await Promise.all(Array.from(
+        { length: Math.min(ACCOUNT_STATUS_CONCURRENCY, accs.length) },
+        () => worker()
+      ));
       const data = accs.map((a, i) => ({ ...a, live: live[i], has_snapshot: hasSnapshot(a.user_id) }));
       return send(res, 200, { status: 'OK', data });
     }
-    // 日常账号探测优先读取本地文件，不重启 Typeless，也不依赖调试端口。
-    // macOS 若文件暂不可读，保留上游已实测的 soft CDP 重连作为兜底。
+    // 当前账号优先从 app-storage.json 读取,日常检测不重启 Typeless、不依赖 CDP。
+    // macOS 若本地文件暂不可读,保留上游已实测的 soft CDP 重连作为兜底。
     if (m === 'GET' && p === '/api/current') {
       const info = detectCurrentAccountFromFile();
       if (info.found) return send(res, 200, { status: 'OK', data: { user_id: info.user_id, email: info.email, roles: info.roles } });
@@ -165,6 +186,24 @@ const server = http.createServer(async (req, res) => {
       }
       if (restartError) return send(res, 500, { status: 'FAIL', msg: '补丁已完成,但 Typeless 自动重启失败:' + restartError.message });
       return send(res, 200, { status: 'OK', data: result });
+    }
+    // 跳过新手引导(纯文件方式写 app-onboarding 完成标志)
+    if (m === 'POST' && p === '/api/skip-onboarding') {
+      try {
+        const r = await skipOnboarding();
+        return send(res, 200, { status: 'OK', data: r });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: '跳过新手引导失败:' + e.message });
+      }
+    }
+    // 查询新手引导状态
+    if (m === 'GET' && p === '/api/onboarding-status') {
+      try {
+        const r = await checkOnboardingStatus();
+        return send(res, 200, { status: 'OK', data: r });
+      } catch (e) {
+        return send(res, 200, { status: 'OK', data: { completed: false, reason: e.message } });
+      }
     }
     // 把主词库导入此账号(单向 master -> account,不导出)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/import-master')) {
