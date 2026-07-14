@@ -13,12 +13,12 @@ const { execSync, spawn } = require('child_process');
 
 const C = require('./lib/common');
 const {
-  config, ROOT, TYPELESS_EXE, CDP_PORT, ASAR_PATH, IS_MAC,
+  config, ROOT, TYPELESS_EXE, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts,
   saveSnapshot, restoreSnapshot, hasSnapshot,
-  killTypeless, launchTypeless, resetDevice,
+  killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   readMaster, writeMaster,
-  curlApi, ensureApp, captureTokenCDP,
+  curlApi, captureTokenCDP,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount,
   paywallStatus, patchPaywall,
@@ -264,10 +264,11 @@ const server = http.createServer(async (req, res) => {
       const r = backupData();
       return send(res, 200, { status: 'OK', data: r, msg: `已备份 ${r.files.length} 个文件到 backups/${r.stamp}` });
     }
-    // 启动 Typeless:已带调试端口则不动,否则以调试端口启动(若已开不带端口会重启带端口)
+    // 启动 Typeless：已运行则完全不打扰；未运行才以普通模式启动。
     if (m === 'POST' && p === '/api/launch') {
-      await ensureApp();
-      return send(res, 200, { status: 'OK', msg: 'Typeless 已就绪(调试端口 ' + CDP_PORT + ')' });
+      if (await isTypelessRunning()) return send(res, 200, { status: 'OK', msg: 'Typeless 已在运行' });
+      await launchTypeless();
+      return send(res, 200, { status: 'OK', msg: 'Typeless 已启动' });
     }
     send(res, 404, { status: 'FAIL', msg: 'not found: ' + p });
   } catch (e) { send(res, 500, { status: 'FAIL', msg: e.message }); }
