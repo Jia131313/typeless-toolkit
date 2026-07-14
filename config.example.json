@@ -8,7 +8,7 @@
   "api_base": "https://api.typeless.com",
   "master_csv": "Typeless词库主清单.csv",
   "paywall": {
-    "file_path": ["dist", "renderer", "static", "js", "2J71HyJ6.mjs"],
+    "file_path": [],
     "replacements": [
       ["gn(_0x1c3e62)", "(0,_0x1c3e62)"],
       ["gn(_0x2d6844)", "(0,_0x2d6844)"]

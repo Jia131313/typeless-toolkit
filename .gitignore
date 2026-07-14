@@ -23,6 +23,12 @@ WebView2Loader.dll
 icon/icon-rounded.png
 icon/tray-icon.ico
 
+# 发布目录与可能复制到根目录的图标
+release/
+icon.png
+icon-rounded.png
+tray-icon.ico
+
 # 备份与日志
 backups/
 *.log

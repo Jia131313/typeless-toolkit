@@ -78,7 +78,7 @@ class TrayApp
         if (!EnsureBackend())
         {
             MessageBox.Show(
-                "无法启动本地服务。\n\n" + (backendError ?? "请确认 server\\manager.js 存在；Portable 版还应包含 runtime\\node.exe，Lite 版则需要安装 Node.js 18+。"),
+                "无法启动本地服务。\n\n" + (backendError ?? "请确认 server\\manager.js 存在；Portable 版还应包含 runtime\\node.exe，Lite 版则需要安装 Node.js 22.12+。"),
                 AppTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error

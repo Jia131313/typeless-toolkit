@@ -7,13 +7,12 @@
  *   - 把主 CSV 中该账号还缺的词 → 批量导入该账号
  *   两个方向都做,结果:所有账号词库 == 主 CSV(并集),换号不丢词。
  *
- * 原理:通过 CDP 连接运行中的 Typeless,借应用启动时的鉴权请求抓取 token
- *   (长效 JWT,约 1 年有效),再用 https://api.typeless.com 的词库 API 操作。
- *   token 每次运行重新抓取,自动适配当前登录的账号。
+ * 原理:临时用 CDP 捕获当前登录账号的 token(长效 JWT,约 1 年有效),
+ *   再调用 Typeless 词库 API。抓取完成或失败后都会恢复普通启动。
  *
  * 用法:
- *   1. 用 --remote-debugging-port=9222 启动 Typeless(见「启动Typeless(带调试端口).bat」)。
- *   2. node typeless-dict-sync.js
+ *   1. 确认 Typeless 已登录且可以正常使用。
+ *   2. 运行 node typeless-dict-sync.js。
  *
  * 注意:脚本会重载一次主窗口以抓取 token;词库同步对账号无破坏性(只增不删)。
  *
@@ -22,7 +21,7 @@
 const path = require('path');
 // 用绝对路径 require,确保 cwd 无关
 const C = require(path.join(__dirname, 'lib', 'common'));
-const { curlApi, ensureApp, captureTokenCDP, readMaster, writeMaster, log } = C;
+const { curlApi, captureTokenCDP, readMaster, writeMaster, log } = C;
 
 // ---------- 词库 API(基于共享 curlApi) ----------
 async function exportWords(token) {
@@ -40,10 +39,8 @@ async function importWords(token, terms) {
 // ---------- 主流程 ----------
 async function main() {
   log('[sync] 主 CSV:', C.MASTER_CSV);
-  // 0. 确保 Typeless 带调试端口运行
-  await ensureApp();
-  // 1. 抓 token(注入捕获 + 重载 + 读 window.__captured)
-  log('[sync] 正在通过 CDP 抓取当前账号 token(会重载一次主窗口)…');
+  // 1. 临时抓 token；共享逻辑负责进入并恢复普通模式。
+  log('[sync] 正在抓取当前账号凭证（Typeless 会临时重启一次）…');
   const { token, origin, user_id } = await captureTokenCDP();
   log('[sync] 已连接:', origin, '账号 user_id:', user_id);
 
