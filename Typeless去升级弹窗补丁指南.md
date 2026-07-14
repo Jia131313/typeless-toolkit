@@ -11,15 +11,25 @@
 
 ## 二、原理
 
-付费墙由后端下发的 `paywall` 通知触发,渲染层调用局部函数 `gn()` 显示弹窗。`gn()` 在
-`app.asar` 内的 `dist/renderer/static/js/2J71HyJ6.mjs`(v1.8.0 路径,新版可能改名)中,
-被两处调用:
+付费墙由后端下发的 `paywall` 通知触发,渲染层在 handler 里调用局部函数显示弹窗。
+目标文件与函数名随版本混淆变化,例如:
 
-- `onImportantNotification` 处理器:`if(type==='paywall')gn(...)`
-- `onSessionInterrupt` 处理器:`if(type==='paywall')gn(...)`
+| 版本 | 文件 | 函数调用示例 |
+| --- | --- | --- |
+| v1.8.x | `dist/renderer/static/js/2J71HyJ6.mjs` | `gn(_0x…)` |
+| v2.0.0 | `…/BYriTiPi.mjs` | `_n(_0x…)` |
+| **v2.0.1** | `…/DnfpkdWz.mjs` | `mn(_0x3b8fd1)` / `mn(_0x478298)` |
 
-把这两处 `gn(...)` 调用改成无副作用的表达式(等长替换 `gn(_0x1c3e62)` → `(0,_0x1c3e62)`),
-弹窗就不再弹出,其余功能不受影响。
+两处调用:
+
+- `onImportantNotification`:`if(x['type']==='paywall')mn(x)`
+- `onSessionInterrupt`:`if(x['type']==='paywall')mn(x)`
+
+把这两处 `mn(...)` / `gn(...)` / `_n(...)` 改成无副作用的等长表达式
+(`mn(_0x3b8fd1)` → `(0,_0x3b8fd1)`),弹窗就不再弹出,其余功能不受影响。
+
+> 管理器从 适配 2.0.1 起支持**动态探测**:config 标记对不上时,会自动从
+> `if(x['type']==='paywall')fn(x)` 结构推导两个等长替换,无需每次手填。
 
 ## 三、两道完整性校验(关键坑)
 
