@@ -230,10 +230,13 @@ class TrayApp
     {
         try
         {
-            string dataDir = Path.Combine(exeDir, "data");
-            Directory.CreateDirectory(dataDir);
+            string logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "TypelessToolkit"
+            );
+            Directory.CreateDirectory(logDir);
             File.AppendAllText(
-                Path.Combine(dataDir, "launcher.log"),
+                Path.Combine(logDir, "launcher.log"),
                 DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message.Trim() + Environment.NewLine
             );
         }
