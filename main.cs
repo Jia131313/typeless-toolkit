@@ -18,9 +18,9 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyDescription("Typeless desktop account and dictionary toolkit")]
 [assembly: AssemblyCompany("Typeless Toolkit Contributors")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Typeless Toolkit Contributors")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
-[assembly: AssemblyInformationalVersion("1.3.1")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyInformationalVersion("1.4.0")]
 
 class TrayApp
 {

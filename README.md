@@ -75,8 +75,8 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 `build-release.bat` 用于更新本机自用包，会保留已有账号和快照。准备公开附件时必须运行
 `build-public-release.bat`，它会生成：
 
-- `TypelessToolkit-v1.3.1-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
-- `TypelessToolkit-v1.3.1-win-x64-lite.zip`：使用系统 Node.js 22.12+
+- `TypelessToolkit-v1.4.0-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
+- `TypelessToolkit-v1.4.0-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
 两个公开包都会强制使用示例账号和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
