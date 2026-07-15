@@ -10,8 +10,10 @@ set "WV2_DIR=.build\webview2\%WV2_VERSION%"
 set "WV2_CORE=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.Core.dll"
 set "WV2_WINFORMS=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.WinForms.dll"
 set "WV2_LOADER=%WV2_DIR%\runtimes\win-x64\native\WebView2Loader.dll"
+set "WINDOWS_OUT=.build\windows"
 
 if not exist ".build" mkdir ".build"
+if not exist "%WINDOWS_OUT%" mkdir "%WINDOWS_OUT%"
 
 if not exist "%CSC%" (
   echo [ERROR] .NET Framework C# compiler not found.
@@ -31,12 +33,12 @@ if not exist "%WV2_CORE%" (
 )
 
 echo [3/4] Compiling the single desktop application...
-"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:TypelessToolkit.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs
+"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs
 if errorlevel 1 exit /b 1
 
-copy /Y "%WV2_CORE%" . >nul
-copy /Y "%WV2_WINFORMS%" . >nul
-copy /Y "%WV2_LOADER%" . >nul
+copy /Y "%WV2_CORE%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.Core.dll" >nul
+copy /Y "%WV2_WINFORMS%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.WinForms.dll" >nul
+copy /Y "%WV2_LOADER%" "%WINDOWS_OUT%\WebView2Loader.dll" >nul
 
-echo [4/4] Done: TypelessToolkit.exe
+echo [4/4] Done: %WINDOWS_OUT%\TypelessToolkit.exe
 endlocal

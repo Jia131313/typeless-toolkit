@@ -25,7 +25,7 @@
 - `electron-main.js`：macOS Electron 宿主，复用同一个 `manager.js` 服务和 `manager.html`。
 - `gen-icon.cs`、`icon/`、`assets/`：Windows ICO/圆角 PNG 与 macOS SVG/ICNS 资源。
 - `test/`：Node 内置测试，当前覆盖付费墙目标检测和官方升级逻辑。
-- `build-tray.bat`：编译 Windows C# 宿主。
+- `build-tray.bat`：编译 Windows C# 宿主，产物统一写入 `.build/windows/`。
 - `build-release.bat`：更新本机自用 Windows 包，必须保留已有 `data/`。
 - `build-public-release.bat/.ps1`：生成脱敏的 Windows Lite/Portable ZIP 和 SHA256。
 
@@ -78,7 +78,7 @@ npm run build:mac:universal
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.4.1。
+- `package.json` 当前版本为 1.4.2。
 - 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；
   不要上传版本号不一致的附件。
 - GitHub Release 是独立发布动作。代码合并不会自动替换旧 Release 附件。
