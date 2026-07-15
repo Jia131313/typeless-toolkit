@@ -18,9 +18,9 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyDescription("Typeless desktop account and dictionary toolkit")]
 [assembly: AssemblyCompany("Typeless Toolkit Contributors")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Typeless Toolkit Contributors")]
-[assembly: AssemblyVersion("1.4.1.0")]
-[assembly: AssemblyFileVersion("1.4.1.0")]
-[assembly: AssemblyInformationalVersion("1.4.1")]
+[assembly: AssemblyVersion("1.4.2.0")]
+[assembly: AssemblyFileVersion("1.4.2.0")]
+[assembly: AssemblyInformationalVersion("1.4.2")]
 
 class TrayApp
 {
@@ -108,16 +108,39 @@ class TrayApp
         if (IsPortOpen())
         {
             if (ProbeToolkit()) return true;
-            backendError = "端口 " + managerPort + " 已被其他程序占用，且 /api/env 不是 Typeless Toolkit 服务。请修改 data\\config.json 中的 manager_port。";
-            return false;
+            int occupiedPort = managerPort;
+            if (!UseFallbackPort())
+            {
+                backendError = "端口 " + occupiedPort + " 已被其他程序占用，且找不到可用的回退端口。请修改 data\\config.json 中的 manager_port。";
+                return false;
+            }
+            AppendLauncherLog("端口 " + occupiedPort + " 已被其他程序占用，本次改用 " + managerPort + "。 ");
+        }
+        else if (!CanBindPort(managerPort))
+        {
+            int unavailablePort = managerPort;
+            if (!UseFallbackPort())
+            {
+                backendError = "端口 " + unavailablePort + " 无法绑定，且找不到可用的回退端口。该端口可能被 Windows 保留，请修改 data\\config.json 中的 manager_port。";
+                return false;
+            }
+            AppendLauncherLog("端口 " + unavailablePort + " 无法绑定（可能被 Windows 保留），本次改用 " + managerPort + "。 ");
         }
 
         string node = FindNode();
-        if (node == null) return false;
+        if (node == null)
+        {
+            backendError = "未找到 Node.js。Portable 版应包含 runtime\\node.exe；Lite 版需要安装 Node.js 22.12+。";
+            return false;
+        }
 
         string serverDir = Path.Combine(exeDir, "server");
         string manager = Path.Combine(serverDir, "manager.js");
-        if (!File.Exists(manager)) return false;
+        if (!File.Exists(manager))
+        {
+            backendError = "缺少后端文件：" + manager + "。请完整解压发行包，不要单独复制或运行源码根目录中的 EXE。";
+            return false;
+        }
 
         string dataDir = Path.Combine(exeDir, "data");
         Directory.CreateDirectory(dataDir);
@@ -128,10 +151,16 @@ class TrayApp
         nodeProcess.StartInfo.WorkingDirectory = serverDir;
         nodeProcess.StartInfo.CreateNoWindow = true;
         nodeProcess.StartInfo.UseShellExecute = false;
+        nodeProcess.StartInfo.RedirectStandardError = true;
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_DATA_DIR"] = dataDir;
+        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_MANAGER_PORT"] = managerPort.ToString();
 
         try { nodeProcess.Start(); }
-        catch { return false; }
+        catch (Exception error)
+        {
+            backendError = "无法启动 Node.js 后端：" + error.Message;
+            return false;
+        }
 
         for (int i = 0; i < 30; i++)
         {
@@ -142,10 +171,73 @@ class TrayApp
                 backendError = "端口 " + managerPort + " 已被其他程序占用，无法确认本地服务身份。";
                 return false;
             }
-            if (nodeProcess.HasExited) return false;
+            if (nodeProcess.HasExited)
+            {
+                string details = "";
+                try { details = nodeProcess.StandardError.ReadToEnd().Trim(); } catch { }
+                backendError = details.Length > 0
+                    ? "Node.js 后端启动失败：" + details
+                    : "Node.js 后端已退出，退出代码 " + nodeProcess.ExitCode + "。";
+                AppendLauncherLog(backendError);
+                return false;
+            }
         }
         backendError = "本地服务在端口 " + managerPort + " 上启动超时。";
         return false;
+    }
+
+    static bool CanBindPort(int port)
+    {
+        TcpListener listener = null;
+        try
+        {
+            listener = new TcpListener(IPAddress.Loopback, port);
+            listener.ExclusiveAddressUse = true;
+            listener.Start();
+            return true;
+        }
+        catch { return false; }
+        finally { if (listener != null) try { listener.Stop(); } catch { } }
+    }
+
+    static bool UseFallbackPort()
+    {
+        int preferred = managerPort;
+        for (int offset = 1; offset <= 100; offset++)
+        {
+            int candidate = preferred + offset;
+            if (candidate > 65535) break;
+            if (CanBindPort(candidate))
+            {
+                managerPort = candidate;
+                baseUrl = "http://127.0.0.1:" + managerPort;
+                return true;
+            }
+        }
+        for (int candidate = 17888; candidate <= 17988; candidate++)
+        {
+            if (CanBindPort(candidate))
+            {
+                managerPort = candidate;
+                baseUrl = "http://127.0.0.1:" + managerPort;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static void AppendLauncherLog(string message)
+    {
+        try
+        {
+            string dataDir = Path.Combine(exeDir, "data");
+            Directory.CreateDirectory(dataDir);
+            File.AppendAllText(
+                Path.Combine(dataDir, "launcher.log"),
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message.Trim() + Environment.NewLine
+            );
+        }
+        catch { }
     }
 
     static int ReadManagerPort()

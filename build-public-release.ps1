@@ -1,9 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
-$publicVersion = '1.4.1'
+$publicVersion = '1.4.2'
 $nodeVersion = '24.15.0'
 $nodeDist = "node-v$nodeVersion-win-x64"
 $sourceRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+$windowsBuildRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot '.build\windows'))
 $releaseRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot '..\release'))
 $baseName = "TypelessToolkit-v$publicVersion-win-x64"
 $liteTarget = [IO.Path]::GetFullPath((Join-Path $releaseRoot "$baseName-lite"))
@@ -43,15 +44,16 @@ function Copy-PublicFiles([string]$target) {
   New-Item -ItemType Directory -Force -Path (Join-Path $target 'server\lib') | Out-Null
   New-Item -ItemType Directory -Force -Path (Join-Path $target 'data\profiles') | Out-Null
 
-  $rootFiles = @(
+  $desktopFiles = @(
     'TypelessToolkit.exe',
     'Microsoft.Web.WebView2.Core.dll',
     'Microsoft.Web.WebView2.WinForms.dll',
-    'WebView2Loader.dll',
-    'LICENSE',
-    'README.md'
+    'WebView2Loader.dll'
   )
-  foreach ($file in $rootFiles) {
+  foreach ($file in $desktopFiles) {
+    Copy-Item -LiteralPath (Join-Path $windowsBuildRoot $file) -Destination (Join-Path $target $file) -Force
+  }
+  foreach ($file in @('LICENSE', 'README.md')) {
     Copy-Item -LiteralPath (Join-Path $sourceRoot $file) -Destination (Join-Path $target $file) -Force
   }
   Copy-Item -LiteralPath (Join-Path $sourceRoot '.build\webview2\1.0.4078.44\LICENSE.txt') -Destination (Join-Path $target 'WEBVIEW2-LICENSE.txt') -Force

@@ -2,7 +2,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
-const { currentUserFromStorage, locatePaywallTarget, resolvePaywallReplacements } = require('../lib/common');
+const {
+  currentUserFromStorage,
+  locatePaywallTarget,
+  resolveManagerPort,
+  resolvePaywallReplacements,
+} = require('../lib/common');
+
+test('lets the desktop host override an unavailable configured manager port', () => {
+  assert.equal(resolveManagerPort(7788, '7816'), 7816);
+  assert.equal(resolveManagerPort(7788, 'not-a-port'), 7788);
+  assert.equal(resolveManagerPort(7788, '70000'), 7788);
+});
 
 test('reads the current account from local Typeless storage without CDP', () => {
   assert.deepEqual(currentUserFromStorage({ userData: { user_id: 'user-1', email: 'user@example.com' } }), {
