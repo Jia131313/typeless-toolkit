@@ -209,6 +209,7 @@
       <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
       <button class="btn" onclick="openMaster()">✎ 主词库</button>
       <button class="btn" onclick="backup()">⇩ 备份数据</button>
+      <button class="btn" id="officialUpdateBtn" onclick="installOfficialUpdate()">⬆ 官方升级</button>
     </div>
     <div class="tool-group system-tools">
       <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
@@ -532,6 +533,28 @@ async function refreshOnboardingStatus(){
     else { btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
   }catch(e){ btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
 }
+async function refreshOfficialUpdate(){
+  const btn=document.getElementById('officialUpdateBtn');
+  try{
+    const r=await api('/api/official-update'), d=r.data||{};
+    if(!d.supported){ btn.disabled=true; btn.title=d.reason||'当前平台不支持'; return; }
+    if(d.available){ btn.disabled=false; btn.textContent='⬆ 升级到 '+d.pending.version; btn.classList.add('primary'); btn.title='已发现 '+d.pending.fileName; }
+    else { btn.disabled=false; btn.textContent='⬆ 官方升级'; btn.classList.remove('primary'); btn.title=d.reason||'检查官方升级'; }
+  }catch(e){ btn.disabled=false; btn.title='升级状态读取失败'; }
+}
+async function installOfficialUpdate(){
+  const btn=document.getElementById('officialUpdateBtn');
+  const st=await api('/api/official-update'), d=st.data||{};
+  if(!d.available){ toast(d.reason||'当前没有可安装的官方更新','err'); return; }
+  if(!confirm(`安装 Typeless 官方 ${d.pending.version}?\n\n将校验官方更新包与开发者签名,完整备份当前 Typeless.app 后再替换并重启。\n升级会清除当前弹窗补丁并恢复官方签名。`)) return;
+  btn.disabled=true; btn.textContent='正在校验并安装…';
+  try {
+    const r=await api('/api/official-update/install',{method:'POST'});
+    if(r.status==='OK'){ toast(r.msg||'官方升级完成','ok'); setTimeout(()=>{ refreshOfficialUpdate(); refreshPatchStatus(); detectCurrent(); },3000); }
+    else toast(r.msg||'官方升级失败','err');
+  } catch(e) { toast('官方升级请求失败:'+e.message,'err'); }
+  finally { btn.disabled=false; refreshOfficialUpdate(); }
+}
 async function backup(){
   toast('备份中…');
   const r=await api('/api/backup',{method:'POST'});
@@ -673,7 +696,7 @@ async function detectCurrent(manual=false){
 }
 
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on')); });
-loadAccounts().then(() => { refreshPatchStatus(); detectCurrent(); });
+loadAccounts().then(() => { refreshPatchStatus(); detectCurrent(); refreshOfficialUpdate(); });
 fetchEnv();
 refreshOnboardingStatus();
 // 每 20 秒自动探测一次,避免手动刷新

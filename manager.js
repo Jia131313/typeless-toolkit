@@ -12,9 +12,10 @@ const path = require('path');
 const { execSync, spawn } = require('child_process');
 
 const C = require('./lib/common');
+const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
 const {
   config, ROOT, TYPELESS_EXE, ASAR_PATH, IS_MAC,
-  readAccounts, writeAccounts,
+  readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   readMaster, writeMaster,
@@ -28,6 +29,12 @@ const {
 
 const PORT = config.manager_port;
 const ACCOUNT_STATUS_CONCURRENCY = 3;
+const TYPELESS_APP = TYPELESS_EXE ? String(TYPELESS_EXE).split('/Contents/')[0] : '';
+
+function isTrustedLocalOrigin(req) {
+  const origin = req.headers.origin;
+  return !origin || origin === `http://127.0.0.1:${PORT}` || origin === `http://localhost:${PORT}`;
+}
 
 // ---------- HTTP ----------
 function send(res, code, obj) {
@@ -98,12 +105,21 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { status: 'OK', data });
     }
     // 当前账号优先从 app-storage.json 读取,日常检测不重启 Typeless、不依赖 CDP。
-    // macOS 若本地文件暂不可读,保留上游已实测的 soft CDP 重连作为兜底。
+    // macOS 若本地文件暂不可读,保留 soft CDP 重连作为兜底；?reconnect=0 可强制纯探测。
     if (m === 'GET' && p === '/api/current') {
       const info = detectCurrentAccountFromFile();
-      if (info.found) return send(res, 200, { status: 'OK', data: { user_id: info.user_id, email: info.email, roles: info.roles } });
+      if (info.found) {
+        return send(res, 200, {
+          status: 'OK',
+          data: { user_id: info.user_id, email: info.email, roles: info.roles, source: 'local-storage' },
+        });
+      }
+      const local = readCurrentUser();
+      if (local) return send(res, 200, { status: 'OK', data: local });
       if (IS_MAC) {
-        try { const c = await captureTokenCDP(null, 'soft'); return send(res, 200, { status: 'OK', data: c }); }
+        const mode = u.searchParams.get('reconnect');
+        if (mode === '0') return send(res, 200, { status: 'FAIL', msg: info.error || '无法探测当前账号' });
+        try { const c = await captureTokenCDP(null, true); return send(res, 200, { status: 'OK', data: c }); }
         catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
       }
       return send(res, 200, { status: 'FAIL', msg: info.error || '无法探测当前账号' });
@@ -152,6 +168,16 @@ const server = http.createServer(async (req, res) => {
     // 查询去弹窗补丁状态(只读)
     if (m === 'GET' && p === '/api/paywall-status') {
       return send(res, 200, { status: 'OK', data: paywallStatus() });
+    }
+    // 查询 Typeless 官方 updater 已下载的更新包（macOS）
+    if (m === 'GET' && p === '/api/official-update') {
+      return send(res, 200, { status: 'OK', data: officialUpdateStatus({ typelessAppPath: TYPELESS_APP }) });
+    }
+    // 校验并安装官方更新包,恢复官方签名;当前应用先移到工具集数据目录备份
+    if (m === 'POST' && p === '/api/official-update/install') {
+      if (!isTrustedLocalOrigin(req)) return send(res, 403, { status: 'FAIL', msg: '拒绝来自外部网页的升级请求' });
+      const result = await installOfficialUpdate({ typelessAppPath: TYPELESS_APP, dataRoot: ROOT });
+      return send(res, 200, { status: 'OK', data: result, msg: result.msg });
     }
     // 解除升级弹窗；无论成功或失败都恢复 Typeless 普通启动。
     if (m === 'POST' && p === '/api/patch-paywall') {
@@ -333,4 +359,29 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { send(res, 500, { status: 'FAIL', msg: e.message }); }
 });
 
-server.listen(PORT, '127.0.0.1', () => { log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT); });
+function startServer() {
+  if (server.listening) return Promise.resolve(server);
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
+      resolve(server);
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(PORT, '127.0.0.1');
+  });
+}
+
+if (require.main === module) {
+  startServer().catch(error => {
+    console.error('[mgr] 启动失败:', error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { server, startServer, PORT };

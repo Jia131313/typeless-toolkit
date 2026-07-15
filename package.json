@@ -1,13 +1,9 @@
 {
   "name": "typeless-toolkit",
-  "version": "1.3.1",
-  "description": "Typeless 多账号管理、词库同步与桌面工具集。",
-  "main": "manager.js",
-  "scripts": {
-    "start": "node manager.js",
-    "sync": "node typeless-dict-sync.js",
-    "check": "node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js"
-  },
+  "version": "1.4.0",
+  "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Electron）。",
+  "main": "electron-main.js",
+  "author": "Typeless Toolkit contributors",
   "private": true,
   "repository": {
     "type": "git",
@@ -15,8 +11,73 @@
   },
   "license": "MIT",
   "type": "commonjs",
+  "scripts": {
+    "start": "node manager.js",
+    "start:electron": "electron .",
+    "sync": "node typeless-dict-sync.js",
+    "check": "node --check electron-main.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/official-update.js && node --test",
+    "build:mac": "npm run check && electron-builder --mac dmg --arm64",
+    "build:mac:universal": "npm run check && electron-builder --mac dmg --universal"
+  },
   "dependencies": {
     "@electron/fuses": "^2.1.3",
     "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "43.1.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.typeless-toolkit.manager",
+    "productName": "Typeless 工具集",
+    "asar": true,
+    "files": [
+      "electron-main.js",
+      "manager.js",
+      "manager.html",
+      "typeless-dict-sync.js",
+      "lib/**/*",
+      "config.json",
+      "LICENSE",
+      "node_modules/ws/**/*",
+      "node_modules/@electron/fuses/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.icns",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Typeless 工具集 ${version}",
+      "artifactName": "Typeless-Toolkit-${version}-${arch}.${ext}",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 185
+        },
+        {
+          "x": 400,
+          "y": 185,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }
