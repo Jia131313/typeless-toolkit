@@ -21,9 +21,11 @@ const {
   readMaster, writeMaster,
   curlApi, captureTokenCDP,
   fetchAllWords, dictToText, backupData, envInfo,
-  liveStatus, syncAccount,
+  liveStatus, syncAccount, syncAllAccounts,
   paywallStatus, patchPaywall,
   skipOnboarding, checkOnboardingStatus, detectCurrentAccountFromFile,
+  applyOnboardingCompleteToLiveFiles, healOnboardingAfterRestore,
+  finishNewAccountWizard,
   log, sleep,
 } = C;
 
@@ -129,7 +131,7 @@ const server = http.createServer(async (req, res) => {
       try { const c = await captureTokenCDP(); return send(res, 200, { status: 'OK', data: c }); }
       catch (e) { return send(res, 500, { status: 'FAIL', msg: e.message }); }
     }
-    // 保存账号
+    // 保存账号(写入前尽量固化新手引导完成状态,再存快照)
     if (m === 'POST' && p === '/api/accounts') {
       const b = await readBody(req);
       const accs = readAccounts();
@@ -142,28 +144,112 @@ const server = http.createServer(async (req, res) => {
       };
       if (idx >= 0) accs[idx] = rec; else accs.push(rec);
       writeAccounts(accs);
-      saveSnapshot(b.user_id); // 保存登录态快照,供切换账号用
+      // 不杀进程地补写引导完成,再快照,避免「添加时教程未完成」写进 profiles
+      try { applyOnboardingCompleteToLiveFiles(); } catch (e) { log('[accounts] onboarding patch:', e.message); }
+      saveSnapshot(b.user_id);
       return send(res, 200, { status: 'OK', data: rec });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/snapshot')) {
       const id = decodeURIComponent(p.split('/')[3]);
+      try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
       saveSnapshot(id);
       return send(res, 200, { status: 'OK', msg: '快照已保存', has_snapshot: hasSnapshot(id) });
     }
-    // 切换到此账号(还原快照 + 重启 Typeless)
+    // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/switch')) {
       const id = decodeURIComponent(p.split('/')[3]);
       if (!hasSnapshot(id)) return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
+      // 切换前:若当前号在跑,先把当前状态存回(尽量不丢)
+      try {
+        const cur = detectCurrentAccountFromFile();
+        if (cur.found && cur.user_id && cur.user_id !== id) {
+          try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
+          saveSnapshot(cur.user_id);
+        }
+      } catch (e) {}
       killTypeless(); await sleep(1500);
       restoreSnapshot(id);
+      const heal = healOnboardingAfterRestore(id);
       await launchTypeless();
-      return send(res, 200, { status: 'OK', msg: '已切换并重启 Typeless' });
+      return send(res, 200, {
+        status: 'OK',
+        msg: heal.healed
+          ? '已切换并补写新手引导完成标记,Typeless 已重启'
+          : '已切换并重启 Typeless',
+        data: heal,
+      });
     }
     // 解除设备限制(重置设备 ID,准备注册新账号)
     if (m === 'POST' && p === '/api/reset-device') {
+      // 重置前尽量保存当前号快照
+      try {
+        const cur = detectCurrentAccountFromFile();
+        if (cur.found && cur.user_id) {
+          try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
+          saveSnapshot(cur.user_id);
+        }
+      } catch (e) {}
       await resetDevice();
       return send(res, 200, { status: 'OK', msg: '设备已重置,Typeless 已以新设备 ID 启动(登录页),可注册新账号' });
+    }
+    // 注册新号向导·开始:保存当前快照 → 解除设备 → 启动登录页
+    if (m === 'POST' && p === '/api/register-wizard/start') {
+      const prev = detectCurrentAccountFromFile();
+      let snapshot_saved = false;
+      if (prev.found && prev.user_id) {
+        try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
+        saveSnapshot(prev.user_id);
+        snapshot_saved = true;
+      }
+      await resetDevice();
+      return send(res, 200, {
+        status: 'OK',
+        data: {
+          previous_user_id: prev.found ? prev.user_id : null,
+          previous_email: prev.found ? prev.email : null,
+          snapshot_saved,
+        },
+        msg: '已解除设备限制。请在 Typeless 中注册或登录新账号,完成后回到管理器点「完成」。',
+      });
+    }
+    // 注册新号向导·探测是否已登录新号
+    if (m === 'GET' && p === '/api/register-wizard/status') {
+      const prevId = u.searchParams.get('previous_user_id') || '';
+      const cur = detectCurrentAccountFromFile();
+      if (!cur.found) {
+        return send(res, 200, {
+          status: 'OK',
+          data: { logged_in: false, waiting: true, msg: '尚未检测到登录,请在 Typeless 完成注册/登录' },
+        });
+      }
+      const isNew = !prevId || cur.user_id !== prevId;
+      return send(res, 200, {
+        status: 'OK',
+        data: {
+          logged_in: true,
+          is_new_account: isNew,
+          user_id: cur.user_id,
+          email: cur.email,
+          roles: cur.roles,
+          msg: isNew
+            ? `已检测到账号 ${cur.email || cur.user_id},可点完成`
+            : '当前仍是原账号,请注册/登录另一个号,或继续用完成流程刷新凭证',
+        },
+      });
+    }
+    // 注册新号向导·收尾:跳过教程 + 抓 token + 入库 + 可选灌主词库
+    if (m === 'POST' && p === '/api/register-wizard/finish') {
+      try {
+        const b = await readBody(req);
+        const result = await finishNewAccountWizard({
+          import_master: b.import_master !== false,
+          nickname: b.nickname || '',
+        });
+        return send(res, 200, { status: 'OK', data: result, msg: result.msg });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: '完成新号流程失败:' + e.message });
+      }
     }
     // 查询去弹窗补丁状态(只读)
     if (m === 'GET' && p === '/api/paywall-status') {
@@ -213,11 +299,11 @@ const server = http.createServer(async (req, res) => {
       if (restartError) return send(res, 500, { status: 'FAIL', msg: '补丁已完成,但 Typeless 自动重启失败:' + restartError.message });
       return send(res, 200, { status: 'OK', data: result });
     }
-    // 跳过新手引导(纯文件方式写 app-onboarding 完成标志)
+    // 跳过新手引导(双写本地文件 + 写入当前账号快照)
     if (m === 'POST' && p === '/api/skip-onboarding') {
       try {
-        const r = await skipOnboarding();
-        return send(res, 200, { status: 'OK', data: r });
+        const r = await skipOnboarding({ restart: true, saveSnap: true });
+        return send(res, 200, { status: 'OK', data: r, msg: r.note });
       } catch (e) {
         return send(res, 500, { status: 'FAIL', msg: '跳过新手引导失败:' + e.message });
       }
@@ -231,21 +317,13 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { status: 'OK', data: { completed: false, reason: e.message } });
       }
     }
-    // 把主词库导入此账号(单向 master -> account,不导出)
+    // 把主词库导入此账号(走完整 sync 回灌校验)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/import-master')) {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const master = readMaster();
-      const dl = await fetchAllWords(acc.token);
-      const have = new Set((dl.words || []).map(w => w.term));
-      const missing = master.filter(w => !have.has(w));
-      let imported = 0;
-      if (missing.length) {
-        const r = await curlApi('POST', '/user/dictionary/bulk-import', acc.token, { content: missing.join('\n') });
-        imported = r.data?.success_count ?? 0;
-      }
-      return send(res, 200, { status: 'OK', data: { master: master.length, already: master.length - missing.length, imported } });
+      const r = await syncAccount(acc);
+      return send(res, 200, { status: r.aligned ? 'OK' : 'FAIL', data: r, msg: r.msg });
     }
     // 从源账号复制词库到此账号
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.includes('/copy-from/')) {
@@ -293,23 +371,29 @@ const server = http.createServer(async (req, res) => {
       const name = (acc.nickname || id).replace(/[\\/:*?"<>|]/g, '_');
       return sendDownload(res, `Typeless词库_${name}.txt`, dictToText(dl.words));
     }
-    // 单账号同步
+    // 单账号同步(分批导入 + 回拉校验)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/sync')) {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const r = await syncAccount(acc);
-      return send(res, 200, { status: 'OK', data: r });
+      return send(res, 200, { status: r.aligned ? 'OK' : 'FAIL', data: r, msg: r.msg });
     }
-    // 全部同步
+    // 全部同步(含第二遍收敛 + 对账摘要)
     if (m === 'POST' && p === '/api/sync-all') {
-      const accs = readAccounts();
-      const results = [];
-      for (const a of accs) {
-        try { results.push({ user_id: a.user_id, nickname: a.nickname, ...(await syncAccount(a)) }); }
-        catch (e) { results.push({ user_id: a.user_id, nickname: a.nickname, error: e.message }); }
-      }
-      return send(res, 200, { status: 'OK', data: results });
+      const r = await syncAllAccounts();
+      return send(res, 200, {
+        status: r.all_aligned ? 'OK' : 'FAIL',
+        data: r.results,
+        summary: {
+          master_count: r.master_count,
+          account_count: r.account_count,
+          aligned_count: r.aligned_count,
+          failed_count: r.failed_count,
+          all_aligned: r.all_aligned,
+        },
+        msg: r.msg,
+      });
     }
     // 给账号加单个词
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/word')) {

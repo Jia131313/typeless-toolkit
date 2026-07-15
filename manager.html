@@ -212,6 +212,7 @@
       <button class="btn" id="officialUpdateBtn" onclick="installOfficialUpdate()">⬆ 官方升级</button>
     </div>
     <div class="tool-group system-tools">
+      <button class="btn primary" onclick="openRegisterWizard()">＋ 注册新号向导</button>
       <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
       <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
       <button class="btn info" id="skipOnbBtn" onclick="skipOnboarding()">✈ 跳过新手教程</button>
@@ -302,6 +303,47 @@
           <span id="addExist" style="font-size:12px;color:var(--warn);align-self:center;"></span>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 注册新号向导 -->
+<div class="mask" id="regWizardMask" onclick="if(event.target===this)closeModal('regWizardMask')">
+  <div class="modal" style="width:min(520px,96vw)">
+    <div class="hd"><h3>注册新号向导</h3><button class="icon-btn" onclick="closeRegisterWizard()">✕</button></div>
+    <div class="bd">
+      <div class="hint" style="margin-bottom:12px;">
+        官方设备绑定导致「一机多号」必须换设备 ID。本向导会：保存当前号快照 → 解除设备限制 → 等你注册/登录 → 自动跳过教程 → 抓取凭证入库 → 可选灌入主词库。
+      </div>
+      <ol style="margin:0 0 14px 18px;padding:0;font-size:13px;line-height:1.7;color:var(--text)">
+        <li>点「开始」后 Typeless 会重启到登录页</li>
+        <li>在 Typeless 里完成新号注册或登录</li>
+        <li>回到此处点「完成」(自动跳教程并添加账号)</li>
+      </ol>
+      <div class="field" style="margin-bottom:10px">
+        <label><input type="checkbox" id="regImportMaster" checked> 完成后从主词库灌入词条</label>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>昵称(可选)</label>
+        <input class="fld" id="regNick" placeholder="默认用邮箱">
+      </div>
+      <div id="regWizardStatus" style="font-size:12px;color:var(--sub);min-height:40px;margin-bottom:12px;white-space:pre-wrap"></div>
+      <div class="row-btns">
+        <button class="btn primary" id="regStartBtn" onclick="registerWizardStart()">① 开始(解设备)</button>
+        <button class="btn" id="regPollBtn" onclick="registerWizardPoll()" disabled>刷新登录状态</button>
+        <button class="btn primary" id="regFinishBtn" onclick="registerWizardFinish()" disabled>② 完成(跳教程+添加)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 同步结果 -->
+<div class="mask" id="syncResultMask" onclick="if(event.target===this)closeModal('syncResultMask')">
+  <div class="modal" style="width:min(640px,96vw)">
+    <div class="hd"><h3>同步结果</h3><button class="icon-btn" onclick="closeModal('syncResultMask')">✕</button></div>
+    <div class="bd">
+      <div id="syncResultSummary" class="hint" style="margin-bottom:12px"></div>
+      <div id="syncResultTable" style="overflow:auto;max-height:50vh"></div>
     </div>
   </div>
 </div>
@@ -466,34 +508,155 @@ async function delWord(term){
   if(r.status==='OK'){ toast('已删除','ok'); curWords=curWords.filter(w=>w.term!==term); renderDict(); } else toast('失败','err');
 }
 function exportDict(){ if(!curDetail) return; window.location.href='/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary/export'; }
+function showSyncResults(rows, summary, msg){
+  const sum=document.getElementById('syncResultSummary');
+  const box=document.getElementById('syncResultTable');
+  if(summary){
+    sum.textContent=msg||`主库 ${summary.master_count} 词 · 对齐 ${summary.aligned_count}/${summary.account_count}`+(summary.all_aligned?' · 全部对齐':' · 仍有差异');
+  }else sum.textContent=msg||'';
+  const list=Array.isArray(rows)?rows:[];
+  let html='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    +'<th style="text-align:left;padding:6px;border-bottom:1px solid var(--line)">账号</th>'
+    +'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--line)">前</th>'
+    +'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--line)">后</th>'
+    +'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--line)">导入</th>'
+    +'<th style="text-align:right;padding:6px;border-bottom:1px solid var(--line)">仍缺</th>'
+    +'<th style="text-align:left;padding:6px;border-bottom:1px solid var(--line)">状态</th>'
+    +'</tr></thead><tbody>';
+  for(const x of list){
+    const name=esc(x.nickname||x.email||(x.user_id||'').slice(0,8));
+    if(x.error){
+      html+=`<tr><td style="padding:6px">${name}</td><td colspan="4"></td><td style="padding:6px;color:var(--danger)">失败: ${esc(x.error)}</td></tr>`;
+      continue;
+    }
+    const ok=!!x.aligned;
+    const miss=(x.missing_terms||[]).slice(0,5).join(', ');
+    html+=`<tr>
+      <td style="padding:6px">${name}</td>
+      <td style="padding:6px;text-align:right">${x.before_count??x.exported??'-'}</td>
+      <td style="padding:6px;text-align:right">${x.after_count??'-'}</td>
+      <td style="padding:6px;text-align:right">${x.imported??0}</td>
+      <td style="padding:6px;text-align:right">${x.missing_after??0}</td>
+      <td style="padding:6px;color:${ok?'var(--ok)':'var(--warn)'}">${ok?'已对齐':('未齐'+(miss?(' · '+esc(miss)):''))}</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  box.innerHTML=html;
+  openModal('syncResultMask');
+}
 async function syncOne(){
-  if(!curDetail) return; toast('同步中…');
-  const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/sync',{method:'POST'});
-  if(r.status==='OK') toast(`同步完成:导出 ${r.data.exported} · 导入 ${r.data.imported} · 主库 ${r.data.master_count}`,'ok');
-  else toast('失败: '+(r.msg||''),'err');
+  if(!curDetail) return; toast('同步中…将回拉校验');
+  const r=await apiTimed('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/sync',{method:'POST'},120000);
+  if(r.data) showSyncResults([r.data], {master_count:r.data.master_count,aligned_count:r.data.aligned?1:0,account_count:1,all_aligned:!!r.data.aligned}, r.msg||r.data.msg);
+  if(r.status==='OK') toast(r.msg||'同步完成并对齐','ok');
+  else toast(r.msg||'同步未完全对齐','err');
   await loadAccounts();
 }
 async function syncAll(){
-  if(!confirm('对全部账号执行词库同步?\n(各账号词库合并进主库,再把缺失词回灌各账号,只增不删)')) return;
-  toast('全部同步中…可能需要一会儿');
-  const r=await api('/api/sync-all',{method:'POST'});
-  if(r.status==='OK'){ const d=r.data||[]; const imp=d.reduce((s,x)=>s+(x.imported||0),0); toast(`完成 ${d.length} 个账号,共导入 ${imp} 个词`,'ok'); await loadAccounts(); }
-  else toast('失败','err');
+  if(!confirm('对全部账号执行词库同步?\n\n会合并进主库、分批回灌缺失词,并回拉校验是否对齐。只增不删。')) return;
+  toast('全部同步中…可能需要一两分钟');
+  const r=await apiTimed('/api/sync-all',{method:'POST'},300000);
+  showSyncResults(r.data||[], r.summary, r.msg);
+  if(r.status==='OK') toast(r.msg||'全部对齐','ok');
+  else toast(r.msg||'部分账号未对齐,详见弹窗','err');
+  await loadAccounts();
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
-  if(!confirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。')) return;
+  if(!confirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。\n若该号快照教程未完成,会自动补写跳过标记。')) return;
   toast('切换中…Typeless 将重启');
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/switch',{method:'POST'});
   toast(r.msg||'已切换','ok');
-  setTimeout(()=>{ loadAccounts(); detectCurrent(); }, 6000);
+  setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); }, 6000);
 }
 async function resetDevice(){
-  if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。')) return;
+  if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。\n\n推荐改用「注册新号向导」,可自动跳教程并添加账号。')) return;
   toast('重置中…');
   const r=await api('/api/reset-device',{method:'POST'});
   toast(r.msg||'已重置','ok');
   setTimeout(()=>{ loadAccounts(); detectCurrent(); }, 7000);
+}
+
+/* —— 注册新号向导 —— */
+let regWizardPrevId=null, regWizardTimer=null;
+function setRegStatus(t){ const el=document.getElementById('regWizardStatus'); if(el) el.textContent=t; }
+function openRegisterWizard(){
+  regWizardPrevId=null;
+  if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
+  document.getElementById('regStartBtn').disabled=false;
+  document.getElementById('regPollBtn').disabled=true;
+  document.getElementById('regFinishBtn').disabled=true;
+  document.getElementById('regNick').value='';
+  document.getElementById('regImportMaster').checked=true;
+  setRegStatus('尚未开始。');
+  openModal('regWizardMask');
+}
+function closeRegisterWizard(){
+  if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
+  closeModal('regWizardMask');
+}
+async function registerWizardStart(){
+  if(!confirm('开始注册新号向导?\n\n1. 保存当前账号快照\n2. 解除设备限制并打开登录页\n3. 请你在 Typeless 注册/登录新号\n4. 再点「完成」')) return;
+  document.getElementById('regStartBtn').disabled=true;
+  setRegStatus('正在保存快照并解除设备限制…');
+  try{
+    const r=await apiTimed('/api/register-wizard/start',{method:'POST'},60000);
+    if(r.status!=='OK'){ setRegStatus(r.msg||'启动失败'); document.getElementById('regStartBtn').disabled=false; toast(r.msg||'失败','err'); return; }
+    regWizardPrevId=r.data?.previous_user_id||'';
+    setRegStatus((r.msg||'已解设备')+'\n原账号: '+(r.data?.previous_email||r.data?.previous_user_id||'无')+'\n请在 Typeless 中注册或登录新号,然后点「刷新」或等待自动检测。');
+    document.getElementById('regPollBtn').disabled=false;
+    document.getElementById('regFinishBtn').disabled=false;
+    toast('请在 Typeless 登录新号','ok');
+    if(regWizardTimer) clearInterval(regWizardTimer);
+    regWizardTimer=setInterval(()=>{ registerWizardPoll(true); }, 4000);
+  }catch(e){
+    setRegStatus('启动失败: '+(e.message||e));
+    document.getElementById('regStartBtn').disabled=false;
+    toast('启动失败','err');
+  }
+}
+async function registerWizardPoll(silent){
+  try{
+    const q=regWizardPrevId?('?previous_user_id='+encodeURIComponent(regWizardPrevId)):'';
+    const r=await api('/api/register-wizard/status'+q);
+    const d=r.data||{};
+    setRegStatus(d.msg||JSON.stringify(d));
+    if(d.logged_in && d.is_new_account){
+      document.getElementById('regFinishBtn').disabled=false;
+      if(!silent) toast('已检测到新登录','ok');
+    }
+  }catch(e){ if(!silent) setRegStatus('探测失败: '+(e.message||e)); }
+}
+async function registerWizardFinish(){
+  if(!confirm('确认 Typeless 已登录目标新号?\n将自动:跳过教程 → 抓取凭证 → 写入管理器'+(document.getElementById('regImportMaster').checked?' → 灌主词库':'')+'。')) return;
+  if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
+  document.getElementById('regFinishBtn').disabled=true;
+  setRegStatus('进行中:跳过教程并抓取凭证,请稍候 30～90 秒…');
+  toast('完成中,请勿关闭…');
+  try{
+    const r=await apiTimed('/api/register-wizard/finish',{
+      method:'POST',
+      body:JSON.stringify({
+        import_master:!!document.getElementById('regImportMaster').checked,
+        nickname:document.getElementById('regNick').value.trim(),
+      }),
+    },180000);
+    if(r.status==='OK'){
+      setRegStatus((r.msg||'完成')+'\n'+(r.data?.account?.email||'')+'\n词库: '+(r.data?.sync?.msg||r.data?.sync?.error||'未同步'));
+      toast(r.msg||'新号已添加','ok');
+      await loadAccounts();
+      refreshOnboardingStatus();
+      detectCurrent();
+    }else{
+      setRegStatus(r.msg||'失败');
+      document.getElementById('regFinishBtn').disabled=false;
+      toast(r.msg||'失败','err');
+    }
+  }catch(e){
+    setRegStatus('失败: '+(e.message||e));
+    document.getElementById('regFinishBtn').disabled=false;
+    toast('完成失败','err');
+  }
 }
 async function patchPaywall(){
   let st={};
@@ -517,20 +680,26 @@ async function refreshPatchStatus(){
 async function skipOnboarding(){
   try{ await api('/api/onboarding-status'); }
   catch(e){ toast('无法读取 Typeless 新手引导状态','err'); return; }
-  if(!confirm('跳过新手引导?\n\n设置完成后会自动重启 Typeless 使修改生效。\n再次启动后将不再显示新手教程。')) return;
-  toast('正在跳过并重启 Typeless…');
+  if(!confirm('跳过新手引导?\n\n将同时写入:\n· app-onboarding.json\n· app-storage 用户 onboarding 标记\n· 当前账号 profiles 快照\n\n然后重启 Typeless。切换账号回来也不应再强制教程。')) return;
+  toast('正在跳过并写入快照…');
   const r=await api('/api/skip-onboarding',{method:'POST'});
-  if(r.status==='OK'){ toast('✅ 已跳过新手引导,正在重启 Typeless','ok'); setTimeout(()=>{ loadAccounts(); refreshOnboardingStatus(); detectCurrent(); }, 6000); }
-  else toast(r.msg||'跳过失败','err');
+  if(r.status==='OK'){
+    toast(r.msg||r.data?.note||'✅ 已跳过','ok');
+    setTimeout(()=>{ loadAccounts(); refreshOnboardingStatus(); detectCurrent(); }, 6000);
+  } else toast(r.msg||'跳过失败','err');
 }
 async function refreshOnboardingStatus(){
   const btn=document.getElementById('skipOnbBtn');
   if(!btn) return;
   try{
     const r=await api('/api/onboarding-status');
-    if(r.data?.completed){ btn.className='btn info done'; btn.disabled=true; btn.innerHTML='✓ 已跳过教程'; }
+    if(r.data?.completed){
+      btn.className='btn info done'; btn.disabled=true;
+      btn.innerHTML='✓ 已跳过教程';
+      btn.title='local='+!!r.data.local_completed+' storage='+!!r.data.storage_completed;
+    }
     else if(r.data?.reason==='page_not_ready'){ setTimeout(()=>refreshOnboardingStatus(), 3000); }
-    else { btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
+    else { btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; btn.title=''; }
   }catch(e){ btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
 }
 async function refreshOfficialUpdate(){
