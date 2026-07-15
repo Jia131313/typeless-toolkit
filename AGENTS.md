@@ -6,10 +6,11 @@
 ## 仓库与协作流程
 
 - 正式仓库：`Jia131313/typeless-toolkit`，本地远端名为 `origin`。
-- `ygttygtt/typeless-toolkit` 仅作为历史 fork，本地远端名为 `fork`。
-- `main` 是受保护的集成基线。即使拥有写权限，也默认从最新 `origin/main` 创建功能分支，
-  推送后通过 PR 合并；不要直接推送 `main`。
-- 开发前执行 `git switch main`、`git pull --ff-only origin main`，再创建 `codex/<topic>` 或清晰命名的功能分支。
+- `ygttygtt/typeless-toolkit` 已归档，仅作为历史 fork，本地远端名为 `fork`。
+- `main` 是两位协作者共同维护的集成基线。版本同步、明确的文档修正等无分歧维护工作，
+  可在确认工作区干净并执行 `git pull --ff-only origin main` 后直接提交到 `main`。
+- 新功能、行为变化、存在不同实现方向或改动范围较大时，从最新 `origin/main` 创建
+  `codex/<topic>` 或清晰命名的功能分支，推送后通过 PR 合并。
 - 2026-07-15：PR #5 已将 Windows 桌面壳、多账号体验与双发布包完整并入；PR #6 又加入
   macOS Electron 客户端和官方升级功能。后续开发必须以当前上游代码为准，不从旧 fork 重放整套实现。
 
@@ -77,9 +78,9 @@ npm run build:mac:universal
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.4.0。
-- Windows 发布脚本和 `main.cs` 中仍可能保留 1.3.1 常量。创建下一次 Release 前必须统一
-  package、程序集、脚本文件名、README 和标签版本；不要上传版本号不一致的附件。
+- `package.json` 当前版本为 1.4.1。
+- 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；
+  不要上传版本号不一致的附件。
 - GitHub Release 是独立发布动作。代码合并不会自动替换旧 Release 附件。
 
 ## 实现偏好

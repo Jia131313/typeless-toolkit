@@ -1,6 +1,6 @@
 {
   "name": "typeless-toolkit",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Electron）。",
   "main": "electron-main.js",
   "author": "Typeless Toolkit contributors",

@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$publicVersion = '1.4.0'
+$publicVersion = '1.4.1'
 $nodeVersion = '24.15.0'
 $nodeDist = "node-v$nodeVersion-win-x64"
 $sourceRoot = [IO.Path]::GetFullPath($PSScriptRoot)
@@ -64,11 +64,22 @@ function Copy-PublicFiles([string]$target) {
   }
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'icon\icon-rounded.png') -Destination (Join-Path $target 'server\icon.png') -Force
   Copy-Item -Path (Join-Path $sourceRoot 'lib\*') -Destination (Join-Path $target 'server\lib') -Recurse -Force
-  Copy-Item -LiteralPath (Join-Path $sourceRoot 'node_modules') -Destination (Join-Path $target 'server\node_modules') -Recurse -Force
 
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'config.example.json') -Destination (Join-Path $target 'data\config.json') -Force
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'accounts.example.json') -Destination (Join-Path $target 'data\accounts.example.json') -Force
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'accounts.example.json') -Destination (Join-Path $target 'data\accounts.json') -Force
+}
+
+function Install-ProductionDependencies([string]$target) {
+  $serverDir = Join-Path $target 'server'
+  & npm.cmd --prefix $serverDir ci --omit=dev --ignore-scripts --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw "npm ci --omit=dev failed with exit code $LASTEXITCODE" }
+
+  foreach ($devModule in @('electron', 'electron-builder', 'app-builder-lib')) {
+    if (Test-Path -LiteralPath (Join-Path $serverDir "node_modules\$devModule")) {
+      throw "Development dependency leaked into public package: $devModule"
+    }
+  }
 }
 
 function Assert-PublicData([string]$target) {
@@ -106,6 +117,7 @@ foreach ($path in @($liteZip, $portableZip, $liteSha, $portableSha)) { Remove-Bu
 
 Write-Host '[public] Creating sanitized Lite package...'
 Copy-PublicFiles $liteTarget
+Install-ProductionDependencies $liteTarget
 Assert-PublicData $liteTarget
 if (Test-Path (Join-Path $liteTarget 'runtime\node.exe')) { throw 'Lite package unexpectedly contains Node.js' }
 

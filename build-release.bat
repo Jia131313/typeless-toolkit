@@ -7,7 +7,7 @@ cd /d "%~dp0"
 call build-tray.bat
 if errorlevel 1 exit /b 1
 
-set "RELEASE=..\release\TypelessToolkit-v1.4.0"
+set "RELEASE=..\release\TypelessToolkit-v1.4.1"
 if not exist "%RELEASE%" mkdir "%RELEASE%"
 if not exist "%RELEASE%\server" mkdir "%RELEASE%\server"
 if not exist "%RELEASE%\server\lib" mkdir "%RELEASE%\server\lib"
