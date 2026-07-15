@@ -83,6 +83,13 @@ npm run build:mac:universal
   不要上传版本号不一致的附件。
 - GitHub Release 是独立发布动作。代码合并不会自动替换旧 Release 附件。
 
+## 已知待办
+
+- 下次修改管理界面时顺手整理“官方升级”入口：Windows 上隐藏该按钮；macOS 上改成
+  “安装 Typeless 官方更新”等不易误解的名称，并说明它只安装 Typeless updater 已下载的
+  本地缓存包，不负责更新 Typeless Toolkit。未来若增加基于 GitHub Release 的 Toolkit
+  自更新，必须使用独立入口和命名，不能与此功能混用。
+
 ## 实现偏好
 
 - 优先扩展已有模块，避免平行实现相同功能。
