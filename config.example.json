@@ -8,10 +8,10 @@
   "api_base": "https://api.typeless.com",
   "master_csv": "Typeless词库主清单.csv",
   "paywall": {
-    "file_path": ["dist", "renderer", "static", "js", "2J71HyJ6.mjs"],
+    "file_path": ["dist", "renderer", "static", "js", "DnfpkdWz.mjs"],
     "replacements": [
-      ["gn(_0x1c3e62)", "(0,_0x1c3e62)"],
-      ["gn(_0x2d6844)", "(0,_0x2d6844)"]
+      ["mn(_0x3b8fd1)", "(0,_0x3b8fd1)"],
+      ["mn(_0x478298)", "(0,_0x478298)"]
     ],
     "auto_detect_file": true
   }

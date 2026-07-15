@@ -1,6 +1,6 @@
 {
   "name": "typeless-toolkit",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "description": "Typeless 多账号与词库管理 macOS 客户端",
   "main": "electron-main.js",
   "author": "Typeless Toolkit contributors",

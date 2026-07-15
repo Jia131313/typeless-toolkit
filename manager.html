@@ -574,7 +574,19 @@ async function fetchEnv(){
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
     const osName={windows:'Windows',macos:'macOS'}[e.platform]||e.platform;
-    if(e.exe_found){ b.textContent=osName; b.title='平台 '+osName+' · Typeless: '+e.typeless_exe; }
+    if(e.exe_found){
+      b.textContent=osName+(e.typeless_running?' · 运行中':'');
+      const tips=['平台 '+osName, 'Typeless: '+e.typeless_exe];
+      if(e.platform==='macos'){
+        tips.push('用户数据: '+e.userdata_dir+(e.userdata_exists?' ✓':' ✗'));
+        tips.push('设备缓存: '+e.device_cache_dir+(e.device_cache_exists?' ✓':' ✗'));
+        tips.push('凭据: '+e.credential_target);
+        tips.push('CDP: '+e.cdp_port);
+      } else {
+        tips[0]='平台 '+osName+' · Typeless: '+e.typeless_exe;
+      }
+      b.title=e.platform==='macos'?tips.join('\n'):('平台 '+osName+' · Typeless: '+e.typeless_exe);
+    }
     else { b.textContent=osName+' ⚠ 未找到 Typeless'; b.className='badge invalid'; b.title='未探测到 Typeless 可执行文件,请在 config.json 里配置 typeless_exe。当前探测:'+(e.typeless_exe||'无'); }
   }catch(err){}
 }
@@ -582,14 +594,20 @@ async function fetchEnv(){
 async function detectCurrent(){
   const dot=document.getElementById('curDot'), txt=document.getElementById('curText');
   txt.textContent='检测中…'; dot.className='dot';
+  // macOS soft 重连:从 Dock 启动无调试端口时,后端会自动以调试端口重启再抓 token
   const r=await api('/api/current');
-  if(r.status!=='OK'){ dot.className='dot off'; txt.textContent='未识别当前账号(点此重试)'; CUR_ID=null; render(); return; }
+  if(r.status!=='OK'){
+    dot.className='dot off';
+    txt.textContent=r.msg||'Typeless 未连接(点此重试)';
+    CUR_ID=null; render(); return;
+  }
   const d=r.data; CUR_ID=d.user_id;
   const ui=d.user_info||{};
   const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
   dot.className='dot on';
   txt.textContent='当前: '+(matched?matched.nickname:(ui.email||d.user_id))+(matched?'':' (未收录)');
   render();
+  fetchEnv();
 }
 
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on')); });

@@ -14,7 +14,7 @@ const { execSync, spawn } = require('child_process');
 const C = require('./lib/common');
 const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
 const {
-  config, ROOT, TYPELESS_EXE, CDP_PORT, ASAR_PATH,
+  config, ROOT, TYPELESS_EXE, CDP_PORT, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot,
   killTypeless, launchTypeless, resetDevice,
@@ -68,15 +68,32 @@ const server = http.createServer(async (req, res) => {
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
       const accs = readAccounts();
-      const live = await Promise.all(accs.map(a => liveStatus(a).catch(e => ({ token_valid: false, _err: e.message }))));
+      // 限流:并发池避免账号多时一次 spawn 大量 curl(每账号 liveStatus 内部 4 个 curl)
+      const CONCURRENCY = 3;
+      const live = new Array(accs.length);
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < accs.length) {
+          const i = cursor++;
+          live[i] = await liveStatus(accs[i]).catch(e => ({ token_valid: false, _err: e.message }));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, accs.length) }, () => worker()));
       const data = accs.map((a, i) => ({ ...a, live: live[i], has_snapshot: hasSnapshot(a.user_id) }));
       return send(res, 200, { status: 'OK', data });
     }
-    // 从 Typeless 本地状态识别当前账号,不重启应用、不依赖 CDP
+    // 当前登录账号探测:
+    //   macOS 默认 soft —— Dock 启动无调试端口时自动以调试端口重启再抓
+    //   Windows 保持原行为(autoRestart=false,不杀进程)
+    //   ?reconnect=0 强制纯探测;?reconnect=1 强制 soft(仅 mac 生效)
     if (m === 'GET' && p === '/api/current') {
       const current = readCurrentUser();
       if (current) return send(res, 200, { status: 'OK', data: current });
-      return send(res, 200, { status: 'FAIL', msg: '未在 Typeless 本地状态中识别到已登录账号' });
+      const mode = u.searchParams.get('reconnect');
+      let auto = false;
+      if (IS_MAC) auto = mode === '0' ? false : 'soft';
+      try { const c = await captureTokenCDP(null, auto); return send(res, 200, { status: 'OK', data: c }); }
+      catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
     }
     // 抓取当前账号(准备添加)
     if (m === 'POST' && p === '/api/capture') {
@@ -111,7 +128,7 @@ const server = http.createServer(async (req, res) => {
       if (!hasSnapshot(id)) return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
       killTypeless(); await sleep(1500);
       restoreSnapshot(id);
-      launchTypeless();
+      await launchTypeless();
       return send(res, 200, { status: 'OK', msg: '已切换并重启 Typeless' });
     }
     // 解除设备限制(重置设备 ID,准备注册新账号)
@@ -138,7 +155,7 @@ const server = http.createServer(async (req, res) => {
       killTypeless(); await sleep(1500);
       try {
         const r = patchPaywall();
-        launchTypeless(); // 重启使补丁生效
+        await launchTypeless(); // 重启使补丁生效
         return send(res, 200, { status: 'OK', data: r });
       } catch (e) {
         // 失败则从备份还原,避免半改导致闪退
