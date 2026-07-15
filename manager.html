@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Typeless 多账号管理</title>
+<link rel="icon" type="image/png" sizes="256x256" href="/icon.png?v=3">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -21,20 +22,23 @@
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; }
-  .wrap { max-width:1240px; margin:0 auto; padding:0 20px 64px; }
+  .wrap { max-width:1400px; margin:0 auto; padding:0 20px 64px; }
 
   /* 顶栏 */
   .topbar { position:sticky; top:0; z-index:30; background:color-mix(in srgb,var(--bg) 82%,transparent); backdrop-filter:saturate(160%) blur(12px); border-bottom:1px solid var(--line); }
-  .topbar .inner { max-width:1240px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:14px; }
+  .topbar .inner { max-width:1400px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:14px; }
   .logo { display:flex; align-items:center; gap:10px; }
   .logo .mark { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; box-shadow:0 4px 12px rgba(53,99,255,.35); }
   .logo h1 { font-size:16px; font-weight:700; margin:0; letter-spacing:.2px; }
   .logo .sub { font-size:11.5px; color:var(--sub); margin-top:1px; }
   .topbar .spacer { flex:1; }
-  .status-pill { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:20px; cursor:pointer; max-width:340px; }
+  .status-pill { display:inline-flex; align-items:center; gap:7px; min-width:0; font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:20px; max-width:420px; cursor:pointer; transition:.14s; }
   .status-pill:hover { border-color:var(--accent); }
+  .status-pill:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .status-pill.busy { cursor:wait; opacity:.78; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--sub); flex:none; }
   .dot.on { background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .dot.warn { background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft); }
   .dot.off { background:var(--err); box-shadow:0 0 0 3px var(--err-soft); }
   .status-pill b { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .icon-btn { width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--sub); cursor:pointer; font-size:16px; display:inline-flex; align-items:center; justify-content:center; }
@@ -49,13 +53,18 @@
   .stat .foot { font-size:11.5px; color:var(--sub); margin-top:3px; }
 
   /* 工具栏 */
-  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:18px 0 14px; }
-  .toolbar .gap { flex:1; }
+  .toolbar { display:flex; gap:10px 18px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin:18px 0 14px; }
+  .tool-group { display:flex; gap:8px; align-items:center; flex-wrap:nowrap; }
+  .tool-group.primary-tools { flex:0 0 auto; }
+  .tool-group.system-tools { flex:0 0 auto; justify-content:flex-end; margin-left:auto; }
   .btn { background:var(--card); border:1px solid var(--line); color:var(--text); padding:8px 14px; border-radius:10px; font-size:13px; cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
   .btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
   .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; box-shadow:0 4px 14px rgba(53,99,255,.3); }
   .btn.primary:hover { color:#fff; filter:brightness(1.05); }
   .btn.danger:hover { border-color:var(--err); color:var(--err); }
+  .btn.info { border-color:var(--accent2); color:var(--accent2); }
+  .btn.info:hover { background:var(--accent2); color:#fff; }
+  .btn.info.done { opacity:.6; cursor:default; pointer-events:none; border-color:var(--ok); color:var(--ok); }
   .btn.small { padding:6px 11px; font-size:12px; border-radius:9px; }
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .divider { width:1px; height:24px; background:var(--line); margin:0 2px; }
@@ -152,14 +161,25 @@
   .toast.ok { background:var(--ok); color:#fff; }
   a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
   a.link:hover { text-decoration:underline; }
-  @media (max-width:720px){ .stats{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:960px){ .stats{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:860px){
+    .tool-group { flex-wrap:wrap; }
+    .tool-group.primary-tools { flex:1 1 100%; }
+    .tool-group.system-tools { flex:1 1 100%; justify-content:flex-start; margin-left:0; }
+  }
+  @media (max-width:720px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .topbar .inner { gap:9px; }
+    .logo .sub { display:none; }
+    .status-pill { max-width:min(310px,45vw); }
+  }
 </style>
 </head>
 <body>
 <div class="topbar">
   <div class="inner">
     <div class="logo">
-      <div class="mark">T</div>
+      <img src="/icon.png?v=3" width="34" height="34" style="border-radius:10px;box-shadow:0 4px 12px rgba(53,99,255,.35);" alt="Typeless Toolkit">
       <div>
         <h1>Typeless 多账号管理</h1>
         <div class="sub">账号切换 · 词库同步 · 额度总览</div>
@@ -167,7 +187,7 @@
     </div>
     <div class="spacer"></div>
     <span class="badge" id="envBadge" title="运行环境" style="cursor:help">…</span>
-    <div class="status-pill" id="curPill" onclick="detectCurrent()">
+    <div class="status-pill" id="curPill" role="button" tabindex="0" onclick="detectCurrent(true)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();detectCurrent(true)}" title="点击重新检测当前 Typeless 登录账号">
       <span class="dot" id="curDot"></span>
       <b id="curText">检测当前登录…</b>
     </div>
@@ -181,16 +201,20 @@
 
   <!-- 工具栏 -->
   <div class="toolbar">
-    <button class="btn primary" onclick="launch()">⏻ 启动 Typeless</button>
-    <button class="btn" onclick="addAccount()">＋ 添加当前账号</button>
-    <div class="divider"></div>
-    <button class="btn" onclick="loadAccounts()">↻ 刷新</button>
-    <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
-    <button class="btn" onclick="openMaster()">✎ 主词库</button>
-    <button class="btn" onclick="backup()">⇩ 备份数据</button>
-    <div class="gap"></div>
-    <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
-    <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
+    <div class="tool-group primary-tools">
+      <button class="btn primary" onclick="launch()">⏻ 启动 Typeless</button>
+      <button class="btn" onclick="addAccount()">＋ 添加当前账号</button>
+      <div class="divider"></div>
+      <button class="btn" onclick="loadAccounts()">↻ 刷新</button>
+      <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
+      <button class="btn" onclick="openMaster()">✎ 主词库</button>
+      <button class="btn" onclick="backup()">⇩ 备份数据</button>
+    </div>
+    <div class="tool-group system-tools">
+      <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
+      <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
+      <button class="btn info" id="skipOnbBtn" onclick="skipOnboarding()">✈ 跳过新手教程</button>
+    </div>
   </div>
 
   <!-- 搜索排序 -->
@@ -264,8 +288,9 @@
     <div class="hd"><h3>添加账号</h3><button class="icon-btn" onclick="closeModal('addMask')">✕</button></div>
     <div class="bd">
       <div id="addStep1">
-        <div class="hint" style="margin-bottom:14px;">先在 Typeless 里登录要添加的账号,然后点下方按钮。工具会自动抓取当前登录账号的凭证(会重载一次主窗口)。</div>
+        <div class="hint" style="margin-bottom:14px;">先确认 Typeless 已登录且可以正常使用。抓取时 Typeless 会临时重启并重载一次，完成或失败后都会自动恢复普通启动，通常需要 10～30 秒。</div>
         <button class="btn primary" onclick="doCapture()" id="capBtn">抓取当前账号</button>
+        <div id="capStatus" style="font-size:12px;color:var(--sub);margin-top:10px;min-height:18px;"></div>
       </div>
       <div id="addStep2" style="display:none">
         <div class="field"><label>昵称</label><input class="fld" id="addNick"></div>
@@ -284,7 +309,12 @@
 
 <script>
 const api = (p, opt={}) => fetch(p, { headers:{'Content-Type':'application/json'}, ...opt }).then(r=>r.json());
-let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [];
+async function apiTimed(p,opt={},timeoutMs=30000){
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{ return await api(p,{...opt,signal:controller.signal}); }
+  finally{ clearTimeout(timer); }
+}
+let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy = false, currentBusy = false;
 
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function openModal(id){ document.getElementById(id).classList.add('on'); }
@@ -294,7 +324,11 @@ function pct(v,l){ return l? Math.min(100, Math.round(v/l*100)):0; }
 function nfmt(n){ return (n||0).toLocaleString(); }
 
 /* 主题 */
-function applyTheme(t){ document.documentElement.setAttribute('data-theme',t); document.getElementById('themeBtn').textContent = t==='dark'?'☀':'◐'; }
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('themeBtn').textContent = t==='dark'?'☀':'◐';
+  try{ window.chrome.webview.postMessage('theme:'+t); }catch(e){}
+}
 function toggleTheme(){ const cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'; localStorage.setItem('tl_theme',cur); applyTheme(cur); }
 applyTheme(localStorage.getItem('tl_theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
 
@@ -464,15 +498,39 @@ async function patchPaywall(){
   let st={};
   try{ st=await api('/api/paywall-status'); }catch(e){}
   if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
-  if(!confirm('解除升级弹窗?\n\n将修改 app.asar + Typeless.exe(等长字节替换,并同步两层完整性哈希)。\n首次会自动备份 .bak。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。')) return;
+  let msg='解除升级弹窗?\n\n程序会自动定位付费墙调用、修改 app.asar，并处理 Electron 完整性校验。\n首次会自动备份 .bak。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。';
+  if(st.data?.autoDetected) msg+='\n\n🔍 已自动检测到你版本的新函数名,将自动适配并写入配置。';
+  if(!confirm(msg)) return;
   toast('打补丁中…');
   const r=await api('/api/patch-paywall',{method:'POST'});
-  if(r.status==='OK') toast(r.data?.already?'已是补丁版,无需重打':'补丁完成,已重启 Typeless','ok');
+  if(r.status==='OK') toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
   else toast(r.msg||'打补丁失败','err');
   setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); }, 7000);
 }
 async function refreshPatchStatus(){
-  try{ const st=await api('/api/paywall-status'); if(st.data?.patched) document.getElementById('patchLabel').textContent='✓ 弹窗已解除'; }catch(e){}
+  try{ const st=await api('/api/paywall-status');
+    if(st.data?.patched) document.getElementById('patchLabel').textContent='✓ 弹窗已解除';
+    else if(st.data?.autoDetected) document.getElementById('patchLabel').textContent='⊘ 解除弹窗(可自动适配)';
+  }catch(e){}
+}
+async function skipOnboarding(){
+  try{ await api('/api/onboarding-status'); }
+  catch(e){ toast('无法读取 Typeless 新手引导状态','err'); return; }
+  if(!confirm('跳过新手引导?\n\n设置完成后会自动重启 Typeless 使修改生效。\n再次启动后将不再显示新手教程。')) return;
+  toast('正在跳过并重启 Typeless…');
+  const r=await api('/api/skip-onboarding',{method:'POST'});
+  if(r.status==='OK'){ toast('✅ 已跳过新手引导,正在重启 Typeless','ok'); setTimeout(()=>{ loadAccounts(); refreshOnboardingStatus(); detectCurrent(); }, 6000); }
+  else toast(r.msg||'跳过失败','err');
+}
+async function refreshOnboardingStatus(){
+  const btn=document.getElementById('skipOnbBtn');
+  if(!btn) return;
+  try{
+    const r=await api('/api/onboarding-status');
+    if(r.data?.completed){ btn.className='btn info done'; btn.disabled=true; btn.innerHTML='✓ 已跳过教程'; }
+    else if(r.data?.reason==='page_not_ready'){ setTimeout(()=>refreshOnboardingStatus(), 3000); }
+    else { btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
+  }catch(e){ btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
 }
 async function backup(){
   toast('备份中…');
@@ -507,22 +565,39 @@ async function saveSnap(){
 }
 function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
 
-function addAccount(){ openModal('addMask'); document.getElementById('addStep1').style.display='block'; document.getElementById('addStep2').style.display='none'; document.getElementById('addExist').textContent=''; }
+function addAccount(){
+  openModal('addMask');
+  document.getElementById('addStep1').style.display='block';
+  document.getElementById('addStep2').style.display='none';
+  document.getElementById('addExist').textContent='';
+  document.getElementById('capStatus').textContent='';
+}
 async function doCapture(){
-  const btn=document.getElementById('capBtn'); btn.disabled=true; btn.textContent='抓取中…(主窗口将重载)';
-  const r=await api('/api/capture',{method:'POST'});
-  btn.disabled=false; btn.textContent='抓取当前账号';
-  if(r.status!=='OK'){ toast('抓取失败: '+(r.msg||''),'err'); return; }
-  const d=r.data; window._cap=d;
-  const ui=d.user_info||{};
-  d.email=ui.email; d.role=ui.roles?.[0]?.name; d.nickname=ui.email||d.user_id;
-  document.getElementById('addStep1').style.display='none';
-  document.getElementById('addStep2').style.display='block';
-  document.getElementById('addNick').value=d.nickname||'';
-  document.getElementById('addEmail').value=d.email||'';
-  document.getElementById('addMeta').value=(d.role||'未知')+' · '+d.user_id;
-  const exist=ACCOUNTS.find(x=>x.user_id===d.user_id);
-  document.getElementById('addExist').textContent=exist?'该账号已存在,保存将更新 token':'';
+  if(captureBusy) return;
+  captureBusy=true;
+  const btn=document.getElementById('capBtn'), status=document.getElementById('capStatus');
+  btn.disabled=true; btn.textContent='正在抓取…'; status.textContent='Typeless 将临时重启，请稍候，不要重复点击。';
+  try{
+    const r=await apiTimed('/api/capture',{method:'POST'},45000);
+    if(r.status!=='OK') throw new Error(r.msg||'未知错误');
+    const d=r.data; window._cap=d;
+    const ui=d.user_info||{};
+    d.email=ui.email||''; d.role=ui.roles?.[0]?.name||''; d.nickname=ui.email||d.user_id;
+    document.getElementById('addStep1').style.display='none';
+    document.getElementById('addStep2').style.display='block';
+    document.getElementById('addNick').value=d.nickname||'';
+    document.getElementById('addEmail').value=d.email||'';
+    document.getElementById('addMeta').value=(d.role||'未知')+' · '+d.user_id;
+    const exist=ACCOUNTS.find(x=>x.user_id===d.user_id);
+    document.getElementById('addExist').textContent=exist?'该账号已存在，保存将更新凭证':'';
+  }catch(err){
+    const msg=err?.name==='AbortError'?'抓取超时，Typeless 正在恢复普通启动，请稍后重试':(err?.message||'抓取失败');
+    status.textContent=msg;
+    toast('抓取失败：'+msg,'err');
+  }finally{
+    captureBusy=false; btn.disabled=false; btn.textContent='抓取当前账号';
+    setTimeout(detectCurrent,2500);
+  }
 }
 async function saveAccount(){
   const d=window._cap; if(!d) return;
@@ -568,29 +643,41 @@ async function fetchEnv(){
   }catch(err){}
 }
 
-async function detectCurrent(){
-  const dot=document.getElementById('curDot'), txt=document.getElementById('curText');
-  txt.textContent='检测中…'; dot.className='dot';
-  // macOS soft 重连:从 Dock 启动无调试端口时,后端会自动以调试端口重启再抓 token
-  const r=await api('/api/current');
-  if(r.status!=='OK'){
-    dot.className='dot off';
-    txt.textContent=r.msg||'Typeless 未连接(点此重试)';
-    CUR_ID=null; render(); return;
+async function detectCurrent(manual=false){
+  if(currentBusy) return;
+  currentBusy=true;
+  const pill=document.getElementById('curPill'), dot=document.getElementById('curDot'), txt=document.getElementById('curText');
+  pill.classList.add('busy'); pill.setAttribute('aria-busy','true');
+  txt.textContent='正在检测登录账号…'; dot.className='dot';
+  try{
+    const r=await apiTimed('/api/current',{},6000);
+    if(r.status!=='OK'){
+      dot.className='dot off'; txt.textContent='未检测到登录账号'; pill.title=(r.msg||'请先启动并登录 Typeless')+'；点击重新检测'; CUR_ID=null; render(); return;
+    }
+    const d=r.data; CUR_ID=d.user_id;
+    const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
+    if(matched){
+      dot.className='dot on'; txt.textContent='当前账号：'+matched.nickname;
+      pill.title='当前登录：'+(d.email||matched.email||matched.nickname)+'（已收录）；点击重新检测';
+    }else{
+      dot.className='dot warn'; txt.textContent='已登录，但该账号尚未收录';
+      pill.title='当前登录：'+(d.email||d.user_id)+'。如需收录，请点击工具栏“添加当前账号”；点击此处可重新检测。';
+    }
+    render();
+  }catch(err){
+    dot.className='dot off'; txt.textContent='登录状态检测失败'; pill.title=err?.message||'检测失败';
+  }finally{
+    currentBusy=false; pill.classList.remove('busy'); pill.removeAttribute('aria-busy');
+    if(manual) toast('当前账号状态已更新','ok');
   }
-  const d=r.data; CUR_ID=d.user_id;
-  const ui=d.user_info||{};
-  const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
-  dot.className='dot on';
-  txt.textContent='当前: '+(matched?matched.nickname:(ui.email||d.user_id))+(matched?'':' (未收录)');
-  render();
-  fetchEnv();
 }
 
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on')); });
-loadAccounts().then(refreshPatchStatus);
+loadAccounts().then(() => { refreshPatchStatus(); detectCurrent(); });
 fetchEnv();
-detectCurrent();
+refreshOnboardingStatus();
+// 每 20 秒自动探测一次,避免手动刷新
+setInterval(detectCurrent, 20000);
 </script>
 </body>
 </html>

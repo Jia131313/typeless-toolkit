@@ -6,13 +6,5 @@
   "cdp_port": 9222,
   "manager_port": 7788,
   "api_base": "https://api.typeless.com",
-  "master_csv": "Typeless词库主清单.csv",
-  "paywall": {
-    "file_path": ["dist", "renderer", "static", "js", "DnfpkdWz.mjs"],
-    "replacements": [
-      ["mn(_0x3b8fd1)", "(0,_0x3b8fd1)"],
-      ["mn(_0x478298)", "(0,_0x478298)"]
-    ],
-    "auto_detect_file": true
-  }
+  "master_csv": "Typeless词库主清单.csv"
 }

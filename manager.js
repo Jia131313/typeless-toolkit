@@ -13,19 +13,21 @@ const { execSync, spawn } = require('child_process');
 
 const C = require('./lib/common');
 const {
-  config, ROOT, TYPELESS_EXE, CDP_PORT, ASAR_PATH, IS_MAC,
+  config, ROOT, TYPELESS_EXE, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts,
   saveSnapshot, restoreSnapshot, hasSnapshot,
-  killTypeless, launchTypeless, resetDevice,
+  killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   readMaster, writeMaster,
-  curlApi, ensureApp, captureTokenCDP,
+  curlApi, captureTokenCDP,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount,
   paywallStatus, patchPaywall,
+  skipOnboarding, checkOnboardingStatus, detectCurrentAccountFromFile,
   log, sleep,
 } = C;
 
 const PORT = config.manager_port;
+const ACCOUNT_STATUS_CONCURRENCY = 3;
 
 // ---------- HTTP ----------
 function send(res, code, obj) {
@@ -52,6 +54,24 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`);
   const p = u.pathname; const m = req.method;
   try {
+    // 图标资源
+    if (m === 'GET' && (p === '/icon.png' || p === '/favicon.ico')) {
+      try {
+        var iconPath = path.join(C.CODE_DIR, 'icon', 'icon-rounded.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(C.CODE_DIR, 'icon.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(path.dirname(C.CODE_DIR), 'icon.png');
+        if (!fs.existsSync(iconPath)) iconPath = path.join(C.CODE_DIR, 'icon', 'icon.png');
+        if (fs.existsSync(iconPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          });
+          return res.end(fs.readFileSync(iconPath));
+        }
+      } catch (e) {}
+      res.writeHead(404); return res.end('not found');
+    }
+
     // 前端首页
     if (m === 'GET' && (p === '/' || p === '/index.html' || p === '/manager.html')) {
       const html = fs.readFileSync(path.join(C.CODE_DIR, 'manager.html'), 'utf8');
@@ -61,8 +81,7 @@ const server = http.createServer(async (req, res) => {
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
       const accs = readAccounts();
-      // 限流:并发池避免账号多时一次 spawn 大量 curl(每账号 liveStatus 内部 4 个 curl)
-      const CONCURRENCY = 3;
+      // 上游 c5f784f:限制状态查询并发，避免账号多时瞬间启动大量 curl。
       const live = new Array(accs.length);
       let cursor = 0;
       const worker = async () => {
@@ -71,20 +90,23 @@ const server = http.createServer(async (req, res) => {
           live[i] = await liveStatus(accs[i]).catch(e => ({ token_valid: false, _err: e.message }));
         }
       };
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, accs.length) }, () => worker()));
+      await Promise.all(Array.from(
+        { length: Math.min(ACCOUNT_STATUS_CONCURRENCY, accs.length) },
+        () => worker()
+      ));
       const data = accs.map((a, i) => ({ ...a, live: live[i], has_snapshot: hasSnapshot(a.user_id) }));
       return send(res, 200, { status: 'OK', data });
     }
-    // 当前登录账号探测:
-    //   macOS 默认 soft —— Dock 启动无调试端口时自动以调试端口重启再抓
-    //   Windows 保持原行为(autoRestart=false,不杀进程)
-    //   ?reconnect=0 强制纯探测;?reconnect=1 强制 soft(仅 mac 生效)
+    // 当前账号优先从 app-storage.json 读取,日常检测不重启 Typeless、不依赖 CDP。
+    // macOS 若本地文件暂不可读,保留上游已实测的 soft CDP 重连作为兜底。
     if (m === 'GET' && p === '/api/current') {
-      const mode = u.searchParams.get('reconnect');
-      let auto = false;
-      if (IS_MAC) auto = mode === '0' ? false : 'soft';
-      try { const c = await captureTokenCDP(null, auto); return send(res, 200, { status: 'OK', data: c }); }
-      catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
+      const info = detectCurrentAccountFromFile();
+      if (info.found) return send(res, 200, { status: 'OK', data: { user_id: info.user_id, email: info.email, roles: info.roles } });
+      if (IS_MAC) {
+        try { const c = await captureTokenCDP(null, 'soft'); return send(res, 200, { status: 'OK', data: c }); }
+        catch (e) { return send(res, 200, { status: 'FAIL', msg: e.message }); }
+      }
+      return send(res, 200, { status: 'FAIL', msg: info.error || '无法探测当前账号' });
     }
     // 抓取当前账号(准备添加)
     if (m === 'POST' && p === '/api/capture') {
@@ -131,18 +153,56 @@ const server = http.createServer(async (req, res) => {
     if (m === 'GET' && p === '/api/paywall-status') {
       return send(res, 200, { status: 'OK', data: paywallStatus() });
     }
-    // 解除升级弹窗(打 asar+exe 两层补丁,失败自动从备份还原)
+    // 解除升级弹窗；无论成功或失败都恢复 Typeless 普通启动。
     if (m === 'POST' && p === '/api/patch-paywall') {
       killTypeless(); await sleep(1500);
+      // 每次尝试都备份“当前版本”用于事务回滚。不能直接依赖长期 .bak：
+      // Typeless 更新后旧 .bak 可能属于上一版本，失败时覆盖回来会造成版本错配。
+      const rollbackAsar = ASAR_PATH + '.toolkit-rollback';
+      const rollbackExe = TYPELESS_EXE + '.toolkit-rollback';
+      let result = null;
+      let patchError = null;
       try {
-        const r = patchPaywall();
-        await launchTypeless(); // 重启使补丁生效
+        fs.copyFileSync(ASAR_PATH, rollbackAsar);
+        fs.copyFileSync(TYPELESS_EXE, rollbackExe);
+        result = await patchPaywall();
+      } catch (e) {
+        // 失败则从本次尝试前的快照还原,避免半改或跨版本 .bak 导致闪退。
+        try { if (fs.existsSync(rollbackAsar)) fs.copyFileSync(rollbackAsar, ASAR_PATH); } catch (_) {}
+        try { if (fs.existsSync(rollbackExe)) fs.copyFileSync(rollbackExe, TYPELESS_EXE); } catch (_) {}
+        patchError = e;
+      } finally {
+        try { fs.unlinkSync(rollbackAsar); } catch (_) {}
+        try { fs.unlinkSync(rollbackExe); } catch (_) {}
+      }
+
+      let restartError = null;
+      try { await launchTypeless(); } catch (e) { restartError = e; }
+      if (patchError) {
+        const restartNote = restartError
+          ? ';Typeless 自动重启失败:' + restartError.message
+          : ';已从备份还原并重新启动 Typeless';
+        return send(res, 500, { status: 'FAIL', msg: '打补丁失败:' + patchError.message + restartNote });
+      }
+      if (restartError) return send(res, 500, { status: 'FAIL', msg: '补丁已完成,但 Typeless 自动重启失败:' + restartError.message });
+      return send(res, 200, { status: 'OK', data: result });
+    }
+    // 跳过新手引导(纯文件方式写 app-onboarding 完成标志)
+    if (m === 'POST' && p === '/api/skip-onboarding') {
+      try {
+        const r = await skipOnboarding();
         return send(res, 200, { status: 'OK', data: r });
       } catch (e) {
-        // 失败则从备份还原,避免半改导致闪退
-        try { if (fs.existsSync(ASAR_PATH + '.bak')) fs.copyFileSync(ASAR_PATH + '.bak', ASAR_PATH); } catch (_) {}
-        try { if (TYPELESS_EXE && fs.existsSync(TYPELESS_EXE + '.bak')) fs.copyFileSync(TYPELESS_EXE + '.bak', TYPELESS_EXE); } catch (_) {}
-        return send(res, 500, { status: 'FAIL', msg: '打补丁失败:' + e.message + '(已从备份还原)' });
+        return send(res, 500, { status: 'FAIL', msg: '跳过新手引导失败:' + e.message });
+      }
+    }
+    // 查询新手引导状态
+    if (m === 'GET' && p === '/api/onboarding-status') {
+      try {
+        const r = await checkOnboardingStatus();
+        return send(res, 200, { status: 'OK', data: r });
+      } catch (e) {
+        return send(res, 200, { status: 'OK', data: { completed: false, reason: e.message } });
       }
     }
     // 把主词库导入此账号(单向 master -> account,不导出)
@@ -263,10 +323,11 @@ const server = http.createServer(async (req, res) => {
       const r = backupData();
       return send(res, 200, { status: 'OK', data: r, msg: `已备份 ${r.files.length} 个文件到 backups/${r.stamp}` });
     }
-    // 启动 Typeless:已带调试端口则不动,否则以调试端口启动(若已开不带端口会重启带端口)
+    // 启动 Typeless：已运行则完全不打扰；未运行才以普通模式启动。
     if (m === 'POST' && p === '/api/launch') {
-      await ensureApp();
-      return send(res, 200, { status: 'OK', msg: 'Typeless 已就绪(调试端口 ' + CDP_PORT + ')' });
+      if (await isTypelessRunning()) return send(res, 200, { status: 'OK', msg: 'Typeless 已在运行' });
+      await launchTypeless();
+      return send(res, 200, { status: 'OK', msg: 'Typeless 已启动' });
     }
     send(res, 404, { status: 'FAIL', msg: 'not found: ' + p });
   } catch (e) { send(res, 500, { status: 'FAIL', msg: e.message }); }

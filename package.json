@@ -1,0 +1,22 @@
+{
+  "name": "typeless-toolkit",
+  "version": "1.3.1",
+  "description": "Typeless 多账号管理、词库同步与桌面工具集。",
+  "main": "manager.js",
+  "scripts": {
+    "start": "node manager.js",
+    "sync": "node typeless-dict-sync.js",
+    "check": "node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jia131313/typeless-toolkit.git"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@electron/fuses": "^2.1.3",
+    "ws": "^8.21.0"
+  }
+}
