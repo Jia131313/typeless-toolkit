@@ -553,7 +553,7 @@ async function syncOne(){
   await loadAccounts();
 }
 async function syncAll(){
-  if(!confirm('对全部账号执行词库同步?\n\n会合并进主库、分批回灌缺失词,并回拉校验是否对齐。只增不删。')) return;
+  if(!confirm('对全部账号执行词库同步?\n\n先收集各号词库并集写入主库,再统一回灌缺失词并回拉校验。只增不删。')) return;
   toast('全部同步中…可能需要一两分钟');
   const r=await apiTimed('/api/sync-all',{method:'POST'},300000);
   showSyncResults(r.data||[], r.summary, r.msg);

@@ -379,7 +379,7 @@ const server = http.createServer(async (req, res) => {
       const r = await syncAccount(acc);
       return send(res, 200, { status: r.aligned ? 'OK' : 'FAIL', data: r, msg: r.msg });
     }
-    // 全部同步(含第二遍收敛 + 对账摘要)
+    // 全部同步(先全量并集主库,再统一回灌 + 对账摘要)
     if (m === 'POST' && p === '/api/sync-all') {
       const r = await syncAllAccounts();
       return send(res, 200, {
