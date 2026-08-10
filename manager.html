@@ -64,7 +64,8 @@
   .btn.danger:hover { border-color:var(--err); color:var(--err); }
   .btn.info { border-color:var(--accent2); color:var(--accent2); }
   .btn.info:hover { background:var(--accent2); color:#fff; }
-  .btn.info.done { opacity:.6; cursor:default; pointer-events:none; border-color:var(--ok); color:var(--ok); }
+  .btn.info.done { opacity:.85; cursor:pointer; pointer-events:auto; border-color:var(--ok); color:var(--ok); }
+  .btn.info.done:hover { background:var(--ok); border-color:var(--ok); color:#fff; }
   .btn.small { padding:6px 11px; font-size:12px; border-radius:9px; }
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .divider { width:1px; height:24px; background:var(--line); margin:0 2px; }
@@ -209,10 +210,10 @@
       <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
       <button class="btn" onclick="openMaster()">✎ 主词库</button>
       <button class="btn" onclick="backup()">⇩ 备份数据</button>
-      <button class="btn" id="officialUpdateBtn" onclick="installOfficialUpdate()">⬆ 官方升级</button>
+      <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 安装 Typeless 官方更新</button>
     </div>
     <div class="tool-group system-tools">
-      <button class="btn primary" onclick="openRegisterWizard()">＋ 注册新号向导</button>
+      <button class="btn primary" onclick="openRegisterWizard()">＋ 注册并添加新账号</button>
       <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
       <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
       <button class="btn info" id="skipOnbBtn" onclick="skipOnboarding()">✈ 跳过新手教程</button>
@@ -307,31 +308,32 @@
   </div>
 </div>
 
-<!-- 注册新号向导 -->
+<!-- 注册并添加新账号 -->
 <div class="mask" id="regWizardMask" onclick="if(event.target===this)closeModal('regWizardMask')">
   <div class="modal" style="width:min(520px,96vw)">
-    <div class="hd"><h3>注册新号向导</h3><button class="icon-btn" onclick="closeRegisterWizard()">✕</button></div>
+    <div class="hd"><h3>注册并添加新账号</h3><button class="icon-btn" onclick="closeRegisterWizard()">✕</button></div>
     <div class="bd">
       <div class="hint" style="margin-bottom:12px;">
-        官方设备绑定导致「一机多号」必须换设备 ID。本向导会：保存当前号快照 → 解除设备限制 → 等你注册/登录 → 自动跳过教程 → 抓取凭证入库 → 可选灌入主词库。
+        这个流程把“解除设备限制”和“添加当前账号”串在一起。它不会只凭名称创建账号：你在 Typeless 完成注册或登录后，工具仍会抓取当前账号的 user_id、邮箱和 token，抓取成功才会将账号加入管理器。
       </div>
       <ol style="margin:0 0 14px 18px;padding:0;font-size:13px;line-height:1.7;color:var(--text)">
-        <li>点「开始」后 Typeless 会重启到登录页</li>
-        <li>在 Typeless 里完成新号注册或登录</li>
-        <li>回到此处点「完成」(自动跳教程并添加账号)</li>
+        <li>保存当前账号快照，重置设备 ID，并让 Typeless 回到登录页</li>
+        <li>在 Typeless 中完成新账号注册或登录</li>
+        <li>回到这里抓取凭证；成功后跳过教程并添加到账号列表</li>
       </ol>
       <div class="field" style="margin-bottom:10px">
         <label><input type="checkbox" id="regImportMaster" checked> 完成后从主词库灌入词条</label>
       </div>
       <div class="field" style="margin-bottom:10px">
-        <label>昵称(可选)</label>
-        <input class="fld" id="regNick" placeholder="默认用邮箱">
+        <label>本地备注名（可选，不是登录用户名）</label>
+        <input class="fld" id="regNick" placeholder="留空则使用抓取到的账号邮箱">
+        <div class="hint" style="margin-top:5px">只用于工具集里的卡片显示和搜索，不参与注册、登录或凭证抓取。</div>
       </div>
       <div id="regWizardStatus" style="font-size:12px;color:var(--sub);min-height:40px;margin-bottom:12px;white-space:pre-wrap"></div>
       <div class="row-btns">
-        <button class="btn primary" id="regStartBtn" onclick="registerWizardStart()">① 开始(解设备)</button>
-        <button class="btn" id="regPollBtn" onclick="registerWizardPoll()" disabled>刷新登录状态</button>
-        <button class="btn primary" id="regFinishBtn" onclick="registerWizardFinish()" disabled>② 完成(跳教程+添加)</button>
+        <button class="btn primary" id="regStartBtn" onclick="registerWizardStart()">① 准备注册</button>
+        <button class="btn" id="regPollBtn" onclick="registerWizardPoll()" disabled>检测新号登录</button>
+        <button class="btn primary" id="regFinishBtn" onclick="registerWizardFinish()" disabled>② 抓取凭证并添加</button>
       </div>
     </div>
   </div>
@@ -370,6 +372,7 @@ function nfmt(n){ return (n||0).toLocaleString(); }
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   document.getElementById('themeBtn').textContent = t==='dark'?'☀':'◐';
+  try{ window.typelessToolkitDesktop?.setTheme(t); }catch(e){}
   try{ window.chrome.webview.postMessage('theme:'+t); }catch(e){}
 }
 function toggleTheme(){ const cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'; localStorage.setItem('tl_theme',cur); applyTheme(cur); }
@@ -570,14 +573,14 @@ async function switchTo(id){
   setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); }, 6000);
 }
 async function resetDevice(){
-  if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。\n\n推荐改用「注册新号向导」,可自动跳教程并添加账号。')) return;
+  if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。\n\n如果你准备注册后直接加入账号列表，推荐改用「注册并添加新账号」，它会在登录后继续抓取凭证。')) return;
   toast('重置中…');
   const r=await api('/api/reset-device',{method:'POST'});
   toast(r.msg||'已重置','ok');
   setTimeout(()=>{ loadAccounts(); detectCurrent(); }, 7000);
 }
 
-/* —— 注册新号向导 —— */
+/* —— 注册并添加新账号 —— */
 let regWizardPrevId=null, regWizardTimer=null;
 function setRegStatus(t){ const el=document.getElementById('regWizardStatus'); if(el) el.textContent=t; }
 function openRegisterWizard(){
@@ -596,14 +599,14 @@ function closeRegisterWizard(){
   closeModal('regWizardMask');
 }
 async function registerWizardStart(){
-  if(!confirm('开始注册新号向导?\n\n1. 保存当前账号快照\n2. 解除设备限制并打开登录页\n3. 请你在 Typeless 注册/登录新号\n4. 再点「完成」')) return;
+  if(!confirm('开始注册并添加新账号?\n\n1. 保存当前账号快照\n2. 重置设备 ID 并打开登录页\n3. 请你在 Typeless 注册或登录目标账号\n4. 回到工具集抓取凭证并添加\n\n本地备注名不会代替凭证抓取。')) return;
   document.getElementById('regStartBtn').disabled=true;
   setRegStatus('正在保存快照并解除设备限制…');
   try{
     const r=await apiTimed('/api/register-wizard/start',{method:'POST'},60000);
     if(r.status!=='OK'){ setRegStatus(r.msg||'启动失败'); document.getElementById('regStartBtn').disabled=false; toast(r.msg||'失败','err'); return; }
     regWizardPrevId=r.data?.previous_user_id||'';
-    setRegStatus((r.msg||'已解设备')+'\n原账号: '+(r.data?.previous_email||r.data?.previous_user_id||'无')+'\n请在 Typeless 中注册或登录新号,然后点「刷新」或等待自动检测。');
+    setRegStatus((r.msg||'已准备注册')+'\n原账号: '+(r.data?.previous_email||r.data?.previous_user_id||'无')+'\n请在 Typeless 中注册或登录目标账号，然后点「检测新号登录」或等待自动检测。');
     document.getElementById('regPollBtn').disabled=false;
     document.getElementById('regFinishBtn').disabled=false;
     toast('请在 Typeless 登录新号','ok');
@@ -628,10 +631,10 @@ async function registerWizardPoll(silent){
   }catch(e){ if(!silent) setRegStatus('探测失败: '+(e.message||e)); }
 }
 async function registerWizardFinish(){
-  if(!confirm('确认 Typeless 已登录目标新号?\n将自动:跳过教程 → 抓取凭证 → 写入管理器'+(document.getElementById('regImportMaster').checked?' → 灌主词库':'')+'。')) return;
+  if(!confirm('确认 Typeless 已登录目标账号?\n将自动抓取 user_id、邮箱和 token，成功后跳过教程并写入管理器'+(document.getElementById('regImportMaster').checked?'，再灌入主词库':'')+'。\n\n本地备注名只影响显示，不参与账号识别。')) return;
   if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
   document.getElementById('regFinishBtn').disabled=true;
-  setRegStatus('进行中:跳过教程并抓取凭证,请稍候 30～90 秒…');
+  setRegStatus('正在跳过教程、抓取当前登录凭证并添加账号，请稍候 30～90 秒…');
   toast('完成中,请勿关闭…');
   try{
     const r=await apiTimed('/api/register-wizard/finish',{
@@ -662,13 +665,21 @@ async function patchPaywall(){
   let st={};
   try{ st=await api('/api/paywall-status'); }catch(e){}
   if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
-  let msg='解除升级弹窗?\n\n程序会自动定位付费墙调用、修改 app.asar，并处理 Electron 完整性校验。\n首次会自动备份 .bak。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。';
+  let msg='解除升级弹窗?\n\n程序会自动定位付费墙调用、修改 app.asar，并处理 Electron 完整性校验。\n修改前会创建当前平台的回滚备份（Windows 文件快照；macOS 完整 Typeless.app）。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。';
   if(st.data?.autoDetected) msg+='\n\n🔍 已自动检测到你版本的新函数名,将自动适配并写入配置。';
   if(!confirm(msg)) return;
   toast('打补丁中…');
   const r=await api('/api/patch-paywall',{method:'POST'});
-  if(r.status==='OK') toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
-  else toast(r.msg||'打补丁失败','err');
+  if(r.status==='OK'){
+    toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
+    if(r.data?.resign?.accessibility_regrant_required){
+      alert('补丁已经完成。\n\n由于 macOS 会按代码签名识别辅助功能权限，修改后的 Typeless 可能需要重新授权一次。若系统设置里虽然显示已开启但仍弹出提示，请先移除旧的 Typeless 项，再用“+”添加 /Applications/Typeless.app 并开启。');
+    }
+  }
+  else {
+    toast('补丁失败，已执行安全回滚','err');
+    alert(r.msg||'打补丁失败，详细原因未返回');
+  }
   setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); }, 7000);
 }
 async function refreshPatchStatus(){
@@ -678,10 +689,12 @@ async function refreshPatchStatus(){
   }catch(e){}
 }
 async function skipOnboarding(){
-  try{ await api('/api/onboarding-status'); }
+  let status={};
+  try{ const current=await api('/api/onboarding-status'); status=current.data||{}; }
   catch(e){ toast('无法读取 Typeless 新手引导状态','err'); return; }
-  if(!confirm('跳过新手引导?\n\n将同时写入:\n· app-onboarding.json\n· app-storage 用户 onboarding 标记\n· 当前账号 profiles 快照\n\n然后重启 Typeless。切换账号回来也不应再强制教程。')) return;
-  toast('正在跳过并写入快照…');
+  const action=status.completed?'重新修复新手引导状态':'跳过新手引导';
+  if(!confirm(action+'?\n\n将同时写入:\n· app-onboarding.json 全部完成标记\n· app-storage 当前平台 onboarding 标记\n· 当前账号 profiles 快照\n\n然后重启 Typeless。该操作可重复执行，用于修复升级或切号后回潮。')) return;
+  toast(status.completed?'正在重新写入并校验引导状态…':'正在跳过并写入快照…');
   const r=await api('/api/skip-onboarding',{method:'POST'});
   if(r.status==='OK'){
     toast(r.msg||r.data?.note||'✅ 已跳过','ok');
@@ -694,22 +707,31 @@ async function refreshOnboardingStatus(){
   try{
     const r=await api('/api/onboarding-status');
     if(r.data?.completed){
-      btn.className='btn info done'; btn.disabled=true;
-      btn.innerHTML='✓ 已跳过教程';
-      btn.title='local='+!!r.data.local_completed+' storage='+!!r.data.storage_completed;
+      btn.className='btn info done'; btn.disabled=false;
+      btn.innerHTML='✓ 已跳过教程（可修复）';
+      btn.title='本地引导文件、账号存储和当前账号快照均已完成；点击可重新写入修复';
     }
     else if(r.data?.reason==='page_not_ready'){ setTimeout(()=>refreshOnboardingStatus(), 3000); }
-    else { btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; btn.title=''; }
+    else {
+      btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过/修复新手教程';
+      const missing=[];
+      if(!r.data?.local_completed) missing.push('app-onboarding');
+      if(!r.data?.storage_completed) missing.push('app-storage');
+      if(r.data?.snapshot_completed===false) missing.push('账号快照');
+      btn.title=missing.length?'待修复：'+missing.join('、'):'';
+    }
   }catch(e){ btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 跳过新手教程'; }
 }
 async function refreshOfficialUpdate(){
   const btn=document.getElementById('officialUpdateBtn');
   try{
     const r=await api('/api/official-update'), d=r.data||{};
-    if(!d.supported){ btn.disabled=true; btn.title=d.reason||'当前平台不支持'; return; }
-    if(d.available){ btn.disabled=false; btn.textContent='⬆ 升级到 '+d.pending.version; btn.classList.add('primary'); btn.title='已发现 '+d.pending.fileName; }
-    else { btn.disabled=false; btn.textContent='⬆ 官方升级'; btn.classList.remove('primary'); btn.title=d.reason||'检查官方升级'; }
-  }catch(e){ btn.disabled=false; btn.title='升级状态读取失败'; }
+    if(!d.supported){ btn.style.display='none'; return; }
+    btn.style.display='';
+    const localPackageNote='仅安装 Typeless updater 已下载的本地缓存包，不更新 Typeless Toolkit。';
+    if(d.available){ btn.disabled=false; btn.textContent='⬆ 安装 Typeless '+d.pending.version; btn.classList.add('primary'); btn.title='已发现 '+d.pending.fileName+'\n'+localPackageNote; }
+    else { btn.disabled=false; btn.textContent='⬆ 安装 Typeless 官方更新'; btn.classList.remove('primary'); btn.title=(d.reason||'未发现可安装更新')+'\n'+localPackageNote; }
+  }catch(e){ btn.disabled=false; btn.title='Typeless 官方更新状态读取失败'; }
 }
 async function installOfficialUpdate(){
   const btn=document.getElementById('officialUpdateBtn');
@@ -817,6 +839,8 @@ async function fetchEnv(){
   try{
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
+    const updateBtn=document.getElementById('officialUpdateBtn');
+    if(updateBtn) updateBtn.style.display=e.platform==='macos'?'':'none';
     const osName={windows:'Windows',macos:'macOS'}[e.platform]||e.platform;
     if(e.exe_found){
       b.textContent=osName+(e.typeless_running?' · 运行中':'');

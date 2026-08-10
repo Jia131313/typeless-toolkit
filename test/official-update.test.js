@@ -10,6 +10,7 @@ const {
   findPendingUpdate,
   pendingVersionFromFileName,
   sha512Base64,
+  openArgsForApp,
 } = require('../lib/official-update');
 
 test('compares dotted Typeless versions numerically', () => {
@@ -43,4 +44,15 @@ test('finds a pending update and verifies its SHA-512 representation', t => {
   assert.equal(pending.version, '2.0.1');
   assert.equal(pending.packagePath, packagePath);
   assert.equal(sha512Base64(packagePath), sha512);
+});
+
+test('official update relaunch keeps a configured macOS user data directory', () => {
+  assert.deepEqual(openArgsForApp('/Applications/Typeless.app', ''), [
+    '/Applications/Typeless.app',
+  ]);
+  assert.deepEqual(openArgsForApp('/Users/test/Apps/Typeless.app', '/tmp/Typeless custom data'), [
+    '/Users/test/Apps/Typeless.app',
+    '--args',
+    '--user-data-dir=/tmp/Typeless custom data',
+  ]);
 });

@@ -15,10 +15,13 @@ test('lets the desktop host override an unavailable configured manager port', ()
   assert.equal(resolveManagerPort(7788, '70000'), 7788);
 });
 
-test('reads the current account from local Typeless storage without CDP', () => {
-  assert.deepEqual(currentUserFromStorage({ userData: { user_id: 'user-1', email: 'user@example.com' } }), {
+test('reads a sanitized current account from local Typeless storage without CDP', () => {
+  assert.deepEqual(currentUserFromStorage({ userData: {
+    user_id: 'user-1', email: 'user@example.com', token: 'must-not-leak', roles: [{ name: 'free' }],
+  } }), {
     user_id: 'user-1',
-    user_info: { user_id: 'user-1', email: 'user@example.com' },
+    email: 'user@example.com',
+    roles: 'free',
     source: 'local-storage',
   });
   assert.equal(currentUserFromStorage({ userData: {} }), null);

@@ -78,7 +78,7 @@ npm run build:mac:universal
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.4.2。
+- `package.json` 当前版本为 1.5.0。
 - 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；
   不要上传版本号不一致的附件。
 - GitHub Release 是独立发布动作。代码合并不会自动替换旧 Release 附件。
@@ -96,4 +96,3 @@ npm run build:mac:universal
 - C# 由 .NET Framework 4.x `csc.exe` 编译，按现有兼容语法书写；不要引入需要新 SDK 的语言特性。
 - 不恢复手工拆 asar、打开 DevTools、填写混淆变量的旧指南。无法自动适配时返回明确错误并要求提供版本/错误信息。
 - 不把个人工作站路径、账号或令牌写入跟踪文件；本机差异只放 `LOCAL_DEVELOPMENT.md`。
-

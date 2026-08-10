@@ -1,6 +1,6 @@
 {
   "name": "typeless-toolkit",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Electron）。",
   "main": "electron-main.js",
   "author": "Typeless Toolkit contributors",
@@ -15,9 +15,14 @@
     "start": "node manager.js",
     "start:electron": "electron .",
     "sync": "node typeless-dict-sync.js",
-    "check": "node --check electron-main.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/official-update.js && node --test",
-    "build:mac": "npm run check && electron-builder --mac dmg --arm64",
-    "build:mac:universal": "npm run check && electron-builder --mac dmg --universal"
+    "check": "node --check electron-main.js && node --check electron-preload.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/desktop-host.js && node --check lib/official-update.js && node --check scripts/prepare-mac-build.js && node --check scripts/hide-mac-build-app.js && node --check scripts/write-mac-checksum.js && node --check scripts/install-mac-build.js && node --test",
+    "prepare:mac": "node scripts/prepare-mac-build.js",
+    "hide:mac-build": "node scripts/hide-mac-build-app.js",
+    "generate:icon:mac": "swift scripts/generate-mac-icon.swift",
+    "build:mac": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --arm64 && npm run hide:mac-build && node scripts/write-mac-checksum.js arm64",
+    "build:mac:universal": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --universal && npm run hide:mac-build && node scripts/write-mac-checksum.js universal",
+    "install:mac": "node scripts/install-mac-build.js arm64",
+    "deploy:mac": "npm run build:mac && npm run install:mac"
   },
   "dependencies": {
     "@electron/fuses": "^2.1.3",
@@ -33,8 +38,11 @@
     "asar": true,
     "files": [
       "electron-main.js",
+      "electron-preload.js",
       "manager.js",
       "manager.html",
+      "assets/icon-rounded.png",
+      "icon/icon.png",
       "typeless-dict-sync.js",
       "lib/**/*",
       "config.json",
@@ -49,7 +57,9 @@
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "assets/icon.icns",
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": true,
+      "strictVerify": true,
       "target": [
         {
           "target": "dmg",
