@@ -19,8 +19,8 @@
     "prepare:mac": "node scripts/prepare-mac-build.js",
     "hide:mac-build": "node scripts/hide-mac-build-app.js",
     "generate:icon:mac": "swift scripts/generate-mac-icon.swift",
-    "build:mac": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --arm64 && npm run hide:mac-build && node scripts/write-mac-checksum.js arm64",
-    "build:mac:universal": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --universal && npm run hide:mac-build && node scripts/write-mac-checksum.js universal",
+    "build:mac": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --arm64 --publish never && npm run hide:mac-build && node scripts/write-mac-checksum.js arm64",
+    "build:mac:universal": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --universal --publish never && npm run hide:mac-build && node scripts/write-mac-checksum.js universal",
     "install:mac": "node scripts/install-mac-build.js arm64",
     "deploy:mac": "npm run build:mac && npm run install:mac"
   },
