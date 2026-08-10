@@ -14,7 +14,7 @@ macOS 可选 Electron 客户端与 DMG。源码同时支持 Windows 与 macOS。
   再回灌到每个账号,换号不丢词。
 - **解除设备限制**:重置设备 ID,准备注册新账号。
 - **去升级/会员弹窗**:自动定位 Electron 渲染层的付费墙调用并打等长补丁,关掉相关弹窗。
-- **安装官方升级**(macOS):校验 Typeless 官方 updater 已下载的更新包,备份当前应用后恢复官方版本与签名。
+- **安装 Typeless 官方更新**(macOS):校验 Typeless 官方 updater 已下载的本地缓存包,备份当前应用后恢复官方版本与签名；此入口不更新 Typeless Toolkit。
 
 ## 原理简述
 
@@ -36,6 +36,10 @@ Windows Release 同时提供两个 ZIP，功能完全相同：
 - **Portable（推荐）**：内置 Node.js，解压后直接双击 `TypelessToolkit.exe`。
 - **Lite**：体积更小，适合电脑上已经安装 Node.js 22.12+ 的用户。
 
+macOS Release 提供 Universal DMG，同时支持 Apple Silicon 与 Intel Mac。将“Typeless 工具集”
+拖入“应用程序”即可；升级只替换 App 本体，账号、快照、词库和配置继续保存在
+`~/Library/Application Support/Typeless 工具集/data/`。每个附件均提供独立 SHA-256 校验文件。
+
 两个版本都只有一个需要操作的入口，并会把账号、配置和快照保存在解压目录的 `data/` 中。
 升级时请保留该目录。除此之外还需要：
 
@@ -56,7 +60,7 @@ Windows Release 同时提供两个 ZIP，功能完全相同：
 3. **添加账号**:在 Typeless 里登录第一个账号 → 管理器点「添加当前账号」(会自动抓 token)。
 4. **同步词库**:点「全部同步」,各账号词库自动对齐到主 CSV。
 5. **切换账号**:账号卡片点「切换到此号」(从快照还原 + 重启 Typeless)。
-6. **解除弹窗**:点「解除弹窗提示」(首次自动备份 `.bak`,失败自动还原)。
+6. **解除弹窗**:点「解除弹窗提示」(Windows 保留文件级 `.bak`;macOS 会先在工具集数据目录外置备份完整 `Typeless.app`,失败自动还原)。
 
 源码模式也可以直接运行 `同步词库.bat` 或 `node typeless-dict-sync.js`。
 
@@ -75,8 +79,8 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 `build-release.bat` 用于更新本机自用包，会保留已有账号和快照。准备公开附件时必须运行
 `build-public-release.bat`，它会生成：
 
-- `TypelessToolkit-v1.4.2-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
-- `TypelessToolkit-v1.4.2-win-x64-lite.zip`：使用系统 Node.js 22.12+
+- `TypelessToolkit-v1.5.0-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
+- `TypelessToolkit-v1.5.0-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
 两个公开包都会强制使用示例账号和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
@@ -95,10 +99,10 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 | 搜索 / 排序 | 管理器 | 账号超过 3 个时,按昵称/额度/剩余/词库数排序,支持搜索 |
 | 深色模式 | 管理器 | 跟随系统或手动切换,偏好本地记忆 |
 | 解除设备限制 | 管理器 | 重置设备 ID,准备注册新账号 |
-| 注册新账号向导 | 管理器 | 保存当前号快照,解除设备限制,登录新号后跳过教程、保存凭证并可选同步主词库 |
+| 注册并添加新账号 | 管理器 | 保存当前号快照并解除设备限制；登录目标账号后抓取真实凭证，成功才会收录，可选同步主词库；备注名仅用于本地显示 |
 | 去升级弹窗 | 管理器 | 自动定位付费墙调用、处理完整性校验并显示实时状态 |
 | 跳过新手引导 | 管理器 | 双写 onboarding 状态并保存到账号快照,切号后自动修复,再重启 Typeless |
-| 官方升级 | 管理器(macOS) | 校验 SHA-512、版本、Bundle ID、Developer ID 与 Gatekeeper 后安装官方更新包,失败自动回滚 |
+| 安装 Typeless 官方更新 | 管理器(macOS) | 校验 SHA-512、版本、Bundle ID、Developer ID 与 Gatekeeper 后安装 Typeless updater 已下载的本地缓存包,失败自动回滚；不更新 Toolkit |
 
 ## 配置说明
 
@@ -133,7 +137,7 @@ A: 点击右上角的账号状态条（或聚焦后按 Enter/空格）。该操�
 
 **Q: 打补丁后 Typeless 闪退?**
 A: 日志若出现 `FATAL:asar_util.cc ... Integrity check failed`，说明完整性处理没有适配当前版本。
-管理器会自动从 `.bak` 还原。若自动检测提示当前 Typeless 版本暂不支持，请更新工具或提交 issue
+管理器会自动回滚：Windows 从本次文件快照还原，macOS 从补丁前的完整 `Typeless.app` 还原。若自动检测提示当前 Typeless 版本暂不支持，请更新工具或提交 issue
 并附上 Typeless 版本和完整错误文本，不需要自行修改 asar。
 
 **Q: Typeless 自动更新后弹窗又回来了?**
@@ -151,11 +155,24 @@ A: **Windows 与 macOS 都支持**(平台差异集中在 `lib/platform.js`)。Li
 
 平台相关差异(进程、路径、凭据、原始文件复制、重签名)全部封装在 `lib/platform.js`,
 Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Windows 的 `.exe` 命名)。
+账号管理、账号切换、快照、词库增删/导出/同步、主词库、备份、设备重置、注册向导、
+弹窗补丁和跳过新手引导均复用同一套 API 与管理页面；只有桌面宿主和系统调用按平台实现。
 
-- **启动**:用 `启动管理器.command` / `同步词库.command`
-  (首次需在终端执行 `chmod +x *.command` 赋可执行权限;或右键→打开)。
-- **连接**:从 Dock / Finder 启动的 Typeless 不会带调试端口。管理器在 macOS 上会 soft 重连
-  (检测到进程在跑但 CDP 不通时,自动以 `--remote-debugging-port` 重启再抓 token)。
+- **启动**:可用 `启动管理器.command` / `同步词库.command` 运行源码
+  (首次需在终端执行 `chmod +x *.command` 赋可执行权限;或右键→打开)，也可运行
+  `npm run build:mac` 构建 DMG。开发机可运行 `npm run deploy:mac` 一次完成构建、签名校验、
+  替换 `/Applications` 中的旧 App 和启动验证；成功后旧 App 会被删除，外置用户数据不会改动。
+  工具集使用个人 ad-hoc 签名而非 Developer ID/公证签名，
+  首次打开若被 macOS 拦截，请在 Finder 中右键应用选择“打开”。Mac 的 ICNS、Web logo/favicon
+  与 Windows 桌面壳均从 `icon/icon.png` 生成，避免不同平台出现两套图标。macOS Electron 宿主
+  支持单实例恢复；配置端口已由其他 Toolkit 占用时验证 `/api/env` 后复用，被其他程序占用时
+  自动选择回退端口。macOS 使用 Dock 的原生窗口生命周期，不机械复制 Windows 系统托盘。
+- **连接**:日常账号检测只读取 `app-storage.json`,不会启动调试端口或重启 Typeless。
+  仅在「添加当前账号」或注册新号收尾需要更新凭证时，管理器才会临时以
+  `--remote-debugging-port` 重启抓取 token，并在 `finally` 中恢复普通模式。
+- **跳过教程**:同时写入 `app-onboarding.json`、`app-storage.json` 当前平台标记和当前账号快照。
+  完成后按钮仍可点击“重新修复”，用于 Typeless 升级或切号后状态回潮；切换账号恢复快照时也会
+  自动检查并补齐全部完成标记。
 - **进程 / 路径 / 凭据**(Typeless 2.0 实测默认,可在 `config.json` 覆盖):
 
   | 项 | macOS 默认 | config 覆盖字段 |
@@ -165,14 +182,26 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   | 设备缓存 | `~/Library/Application Support/now.typeless.desktop` | `device_cache_dir` |
   | 设备 ID 凭据 | Keychain 通用密码 `now.typeless.desktop.deviceIdentifier` | `credential_target` |
 
-- **去弹窗补丁(实验性)**:改 Mach-O 可执行文件后会破坏代码签名,补丁流程会自动执行
-  `codesign --force --deep --sign -` 做 ad-hoc 重签名并移除隔离属性;若自动重签名失败,
-  需手动执行 `codesign --force --deep --sign - /Applications/Typeless.app`。补丁会使 Typeless
-  原生自动安装升级失效,后续版本使用管理器的「官方升级」安装。
+- **去弹窗补丁(实验性)**:修改前会把完整 `Typeless.app` 备份到工具集数据目录下的
+  `backups/typeless-app/paywall-patch-时间戳/`，备份位于 `.app` 外，不会污染代码签名。
+  备份 Bundle 使用 `.app.backup` 后缀并放在 `.noindex` 目录，且备份根目录带 Spotlight 排除标记，避免系统快速搜索
+  把备份误显示成第二个可启动的 Typeless。
+  `@electron/fuses` 会同时改动主程序和 `Electron Framework.framework`，因此修改后只对该 Framework
+  与 App 根 Bundle 做定向 ad-hoc 重签名；根程序保留原 Bundle ID、JIT、麦克风、网络与 Hardened Runtime，
+  并增加加载定向改签 Framework 所需的 Library Validation 例外。Renderer/GPU/Plugin 等其他 Helper
+  继续保留官方签名。随后仅清除该 App 的下载隔离标记，并立即执行严格验证及启动检查。不要手工使用
+  `codesign --deep --sign -`，它会递归改签内部组件并可能丢失 JIT、麦克风等权限。任一步失败都会
+  自动恢复完整备份；失败版本会留在同一备份目录，错误阶段和完整原因写入数据目录的 `logs/`。
+  ad-hoc 签名的指定要求会随补丁内容变化，因此 macOS 可能把修改后的 Typeless 视为新的辅助功能
+  身份。若设置里旧开关已开启但仍提示授权，应移除旧项，再用“+”重新选择
+  `/Applications/Typeless.app`；后续官方更新并重新打补丁时可能需要再次执行一次。
+  补丁会使 Typeless 原生自动安装升级
+  失效，后续版本使用管理器的「安装 Typeless 官方更新」入口安装。
 
-- **官方升级**:Typeless 即使因补丁无法自行完成安装,仍会把官方更新包下载到 updater 缓存。
+- **安装 Typeless 官方更新**:Typeless 即使因补丁无法自行完成安装,仍会把官方更新包下载到 updater 缓存。
   管理器会先校验更新包 SHA-512、Bundle ID、Developer ID、官方 Team ID、代码签名和 Gatekeeper,
   再把当前应用完整移动到工具集数据目录备份并安装新版本。升级会清除弹窗补丁并恢复官方签名。
+  该入口只消费本机已有的 Typeless 更新缓存，不会检查或更新 Typeless Toolkit 自身。
 
 - **排错**:管理器顶栏会显示当前平台徽章;若显示「⚠ 未找到 Typeless」,访问
   `http://127.0.0.1:7788/api/env` 查看探测到的各路径,按上表在 `config.json` 里改正。
