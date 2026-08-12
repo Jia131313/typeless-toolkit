@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } = require('electron');
 const { preferredManagerPort, selectManagerEndpoint } = require('./lib/desktop-host');
 
@@ -72,6 +73,54 @@ ipcMain.on('typeless-toolkit:set-theme', (event, theme) => {
   if (theme !== 'light' && theme !== 'dark') return;
   nativeTheme.themeSource = theme;
   mainWindow.setBackgroundColor(theme === 'dark' ? '#0f1420' : '#f5f6f9');
+});
+
+ipcMain.on('typeless-toolkit:open-privacy-settings', (event, section) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+  if (process.platform !== 'darwin') return;
+  const panes = {
+    'app-management': 'Privacy_AppBundles',
+    accessibility: 'Privacy_Accessibility',
+    microphone: 'Privacy_Microphone',
+  };
+  const pane = panes[section];
+  if (!pane) return;
+  shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${pane}`);
+});
+
+ipcMain.handle('typeless-toolkit:reset-privacy-permissions', (event, target) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    return { ok: false, message: '无效的窗口请求' };
+  }
+  if (process.platform !== 'darwin') return { ok: false, message: '仅支持 macOS' };
+
+  const plans = {
+    toolkit: {
+      bundleId: 'com.typeless-toolkit.manager',
+      services: ['SystemPolicyAppBundles'],
+      appName: 'Typeless 工具集',
+    },
+    typeless: {
+      bundleId: 'now.typeless.desktop',
+      services: ['Accessibility', 'Microphone'],
+      appName: 'Typeless',
+    },
+  };
+  const plan = plans[target];
+  if (!plan) return { ok: false, message: '未知的权限目标' };
+
+  const failures = [];
+  for (const service of plan.services) {
+    try {
+      execFileSync('/usr/bin/tccutil', ['reset', service, plan.bundleId], { stdio: 'ignore' });
+    } catch (error) {
+      failures.push(service);
+    }
+  }
+  if (failures.length) {
+    return { ok: false, message: `无法清除 ${plan.appName} 的 ${failures.join('、')} 权限记录` };
+  }
+  return { ok: true, message: `已清除 ${plan.appName} 的旧权限记录，请重新启动并按系统提示授权` };
 });
 
 async function launch() {
