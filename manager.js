@@ -46,12 +46,13 @@ function isTrustedLocalHost(req) {
 
 function accountForClient(account, live, hasSnapshotValue, snap) {
   const { token, ...safe } = account || {};
-  return {
-    ...safe, live, has_snapshot: hasSnapshotValue,
-    snapshot_ok: snap && snap.snapshot_ok,
-    snapshot_mismatch: snap && snap.snapshot_mismatch,
-    snapshot_email: snap && snap.snapshot_email,
-  };
+  const out = { ...safe, live, has_snapshot: hasSnapshotValue };
+  if (snap) {
+    out.snapshot_ok = snap.snapshot_ok;
+    out.snapshot_mismatch = snap.snapshot_mismatch;
+    out.snapshot_email = snap.snapshot_email;
+  }
+  return out;
 }
 
 function accountDeleteId(pathname) {

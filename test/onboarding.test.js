@@ -20,6 +20,8 @@ test('onboarding repair completes both live files and the current account snapsh
   fs.writeFileSync(path.join(userData, 'app-storage.json'), JSON.stringify({
     userData: { user_id: 'fixture-user', onboarding: {} },
   }));
+  // 远端 #10 起 restoreSnapshot 要求 user-data.json 存在作为快照完整性前提
+  fs.writeFileSync(path.join(userData, 'user-data.json'), JSON.stringify({ token: 'fixture-token' }));
 
   const script = `
     const fs = require('fs');
