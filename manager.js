@@ -15,7 +15,7 @@ const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-
 const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
-  saveSnapshot, restoreSnapshot, hasSnapshot,
+  saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
   readMaster, writeMaster,
@@ -26,6 +26,7 @@ const {
   skipOnboarding, checkOnboardingStatus, detectCurrentAccountFromFile,
   applyOnboardingCompleteToLiveFiles, healOnboardingAfterRestore,
   finishNewAccountWizard,
+  getFeatureShortcuts, setFeatureShortcuts,
   log, sleep,
 } = C;
 
@@ -43,9 +44,14 @@ function isTrustedLocalHost(req) {
   return host === `127.0.0.1:${PORT}` || host === `localhost:${PORT}`;
 }
 
-function accountForClient(account, live, hasSnapshotValue) {
+function accountForClient(account, live, hasSnapshotValue, snap) {
   const { token, ...safe } = account || {};
-  return { ...safe, live, has_snapshot: hasSnapshotValue };
+  return {
+    ...safe, live, has_snapshot: hasSnapshotValue,
+    snapshot_ok: snap && snap.snapshot_ok,
+    snapshot_mismatch: snap && snap.snapshot_mismatch,
+    snapshot_email: snap && snap.snapshot_email,
+  };
 }
 
 function accountDeleteId(pathname) {
@@ -149,7 +155,10 @@ const server = http.createServer(async (req, res) => {
         { length: Math.min(ACCOUNT_STATUS_CONCURRENCY, accs.length) },
         () => worker()
       ));
-      const data = accs.map((a, i) => accountForClient(a, live[i], hasSnapshot(a.user_id)));
+      const data = accs.map((a, i) => {
+        const snap = inspectSnapshot(a.user_id);
+        return accountForClient(a, live[i], snap.has_snapshot, snap);
+      });
       return send(res, 200, { status: 'OK', data });
     }
     // 当前账号只读 app-storage.json；页面每 20 秒轮询也绝不能因此重启 Typeless。
@@ -191,39 +200,79 @@ const server = http.createServer(async (req, res) => {
       writeAccounts(accs);
       // 不杀进程地补写引导完成,再快照,避免「添加时教程未完成」写进 profiles
       try { applyOnboardingCompleteToLiveFiles(); } catch (e) { log('[accounts] onboarding patch:', e.message); }
-      saveSnapshot(b.user_id);
-      return send(res, 200, { status: 'OK', data: accountForClient(rec, null, hasSnapshot(rec.user_id)) });
+      try {
+        saveSnapshot(b.user_id);
+      } catch (e) {
+        return send(res, 400, {
+          status: 'FAIL',
+          msg: `账号已记录,但快照未写入: ${e.message}`,
+          data: rec,
+        });
+      }
+      const snap = inspectSnapshot(rec.user_id);
+      return send(res, 200, { status: 'OK', data: accountForClient(rec, null, snap.has_snapshot, snap) });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/snapshot')) {
       const id = decodeURIComponent(p.split('/')[3]);
-      try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
-      saveSnapshot(id);
-      return send(res, 200, { status: 'OK', msg: '快照已保存', has_snapshot: hasSnapshot(id) });
+      try {
+        try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
+        saveSnapshot(id);
+        const snap = inspectSnapshot(id);
+        return send(res, 200, {
+          status: 'OK',
+          msg: '快照已保存',
+          has_snapshot: snap.has_snapshot,
+          snapshot_ok: snap.snapshot_ok,
+        });
+      } catch (e) {
+        return send(res, 400, { status: 'FAIL', msg: e.message });
+      }
     }
     // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/switch')) {
       const id = decodeURIComponent(p.split('/')[3]);
-      if (!hasSnapshot(id)) return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
-      // 切换前:若当前号在跑,先把当前状态存回(尽量不丢)
+      {
+        // 先校验目标快照身份,避免「点 A 却还原成 B」
+        const snap = inspectSnapshot(id);
+        if (!snap.has_snapshot) {
+          return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
+        }
+        if (snap.snapshot_mismatch) {
+          const who = snap.snapshot_email || snap.snapshot_user_id;
+          return send(res, 400, {
+            status: 'FAIL',
+            msg: `该账号快照已串号(内容实际是 ${who})。请先在 Typeless 登录正确账号,再点「更新快照」覆盖。`,
+          });
+        }
+        if (!snap.snapshot_ok) {
+          return send(res, 400, { status: 'FAIL', msg: '该账号快照无效,请重新登录该号后更新快照' });
+        }
+      }
+      // 切换前:若当前号在跑,先把当前状态存回(尽量不丢);身份不匹配时跳过,绝不串写
       try {
         const cur = detectCurrentAccountFromFile();
         if (cur.found && cur.user_id && cur.user_id !== id) {
           try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
-          saveSnapshot(cur.user_id);
+          try { saveSnapshot(cur.user_id); }
+          catch (e) { log('[switch] 保存当前号快照跳过:', e.message); }
         }
       } catch (e) {}
       killTypeless(); await sleep(1500);
-      restoreSnapshot(id);
-      const heal = healOnboardingAfterRestore(id);
-      await launchTypeless();
-      return send(res, 200, {
-        status: 'OK',
-        msg: heal.healed
-          ? '已切换并补写新手引导完成标记,Typeless 已重启'
-          : '已切换并重启 Typeless',
-        data: heal,
-      });
+      try {
+        restoreSnapshot(id);
+        const heal = healOnboardingAfterRestore(id);
+        await launchTypeless();
+        return send(res, 200, {
+          status: 'OK',
+          msg: heal.healed
+            ? '已切换并补写新手引导完成标记,Typeless 已重启'
+            : '已切换并重启 Typeless',
+          data: heal,
+        });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: e.message || '切换失败' });
+      }
     }
     // 解除设备限制(重置设备 ID,准备注册新账号)
     if (m === 'POST' && p === '/api/reset-device') {
@@ -542,6 +591,23 @@ const server = http.createServer(async (req, res) => {
       if (await isTypelessRunning()) return send(res, 200, { status: 'OK', msg: 'Typeless 已在运行' });
       await launchTypeless();
       return send(res, 200, { status: 'OK', msg: 'Typeless 已启动' });
+    }
+    // 功能快捷键:直接读写 app-settings.json,可绕过设置页冲突黑名单(如单独 RightCtrl)
+    if (m === 'GET' && p === '/api/shortcuts') {
+      try {
+        return send(res, 200, { status: 'OK', data: getFeatureShortcuts() });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: e.message });
+      }
+    }
+    if (m === 'POST' && p === '/api/shortcuts') {
+      try {
+        const b = await readBody(req);
+        const result = await setFeatureShortcuts(b.bindings || b, { restart: b.restart !== false });
+        return send(res, 200, { status: 'OK', data: result, msg: result.msg });
+      } catch (e) {
+        return send(res, 400, { status: 'FAIL', msg: e.message });
+      }
     }
     send(res, 404, { status: 'FAIL', msg: 'not found: ' + p });
   } catch (e) { send(res, 500, { status: 'FAIL', msg: e.message }); }

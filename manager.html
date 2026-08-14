@@ -70,6 +70,21 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .divider { width:1px; height:24px; background:var(--line); margin:0 2px; }
 
+  /* 快捷键编辑 */
+  .sc-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .sc-row:last-child { border-bottom:0; }
+  .sc-meta { flex:1; min-width:140px; }
+  .sc-meta .name { font-weight:650; font-size:13.5px; }
+  .sc-meta .desc { font-size:12px; color:var(--sub); margin-top:2px; }
+  .sc-bind { font-family:ui-monospace,Consolas,monospace; font-size:13px; background:var(--bg2); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:9px; min-width:168px; text-align:center; letter-spacing:.2px; }
+  .sc-bind.empty { color:var(--sub); font-style:italic; }
+  .sc-bind.recording { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); animation:scPulse 1s ease-in-out infinite; }
+  @keyframes scPulse { 50% { opacity:.72; } }
+  .sc-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .sc-manual { width:100%; margin-top:4px; display:none; }
+  .sc-manual.on { display:flex; gap:8px; align-items:center; }
+  .sc-manual input { flex:1; }
+
   /* 搜索 / 排序 */
   .filterbar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
   .search { position:relative; flex:1; min-width:200px; }
@@ -210,6 +225,7 @@
       <button class="btn" onclick="syncAll()">⇄ 全部同步</button>
       <button class="btn" onclick="openMaster()">✎ 主词库</button>
       <button class="btn" onclick="backup()">⇩ 备份数据</button>
+      <button class="btn" onclick="openShortcuts()">⌨ 快捷键</button>
       <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 安装 Typeless 官方更新</button>
     </div>
     <div class="tool-group system-tools">
@@ -350,6 +366,28 @@
   </div>
 </div>
 
+<!-- 功能快捷键(直接写 app-settings,可绕过设置页冲突) -->
+<div class="mask" id="shortcutMask" onclick="if(event.target===this)closeShortcuts()">
+  <div class="modal" style="width:min(620px,96vw)">
+    <div class="hd"><h3>功能快捷键</h3><button class="icon-btn" onclick="closeShortcuts()">✕</button></div>
+    <div class="bd">
+      <div class="hint" style="margin-bottom:12px;">
+        直接写入 Typeless 的 <code>app-settings.json</code>，可设置官方设置页会判定冲突的键
+        （例如单独的 <b>Right Ctrl</b>）。新设置支持 <b>单键</b> 或 <b>两键组合</b>
+        （已有的三键绑定若不改动会原样保留）。保存时若 Typeless 在运行会自动重启以生效。
+      </div>
+      <div id="shortcutList"></div>
+      <div id="shortcutStatus" style="font-size:12px;color:var(--sub);min-height:18px;margin-top:10px"></div>
+      <div class="row-btns" style="margin-top:14px">
+        <button class="btn small" onclick="reloadShortcuts()">↻ 重新读取</button>
+        <button class="btn small primary" onclick="saveShortcuts()">保存并重启</button>
+        <div class="gap" style="flex:1"></div>
+        <button class="btn small" onclick="closeShortcuts()">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -360,6 +398,22 @@ async function apiTimed(p,opt={},timeoutMs=30000){
   finally{ clearTimeout(timer); }
 }
 let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy = false, currentBusy = false;
+let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
+const SC_CODE_MAP = {
+  ControlLeft:'LeftCtrl', ControlRight:'RightCtrl',
+  ShiftLeft:'LeftShift', ShiftRight:'RightShift',
+  AltLeft:'LeftAlt', AltRight:'RightAlt',
+  MetaLeft:'LeftWin', MetaRight:'RightWin',
+  Space:'Space', Insert:'Insert', Delete:'Delete', Backspace:'Backspace',
+  Escape:'Escape', Enter:'Enter', Tab:'Tab', CapsLock:'CapsLock',
+  ArrowLeft:'Left', ArrowRight:'Right', ArrowUp:'Up', ArrowDown:'Down',
+  Home:'Home', End:'End', PageUp:'PageUp', PageDown:'PageDown',
+  PrintScreen:'PrintScreen', ScrollLock:'ScrollLock', NumLock:'NumLock', Pause:'Pause',
+  NumpadAdd:'NumpadAdd', NumpadSubtract:'NumpadSubtract',
+  NumpadMultiply:'NumpadMultiply', NumpadDivide:'NumpadDivide',
+  NumpadDecimal:'NumpadDecimal', NumpadEnter:'Enter',
+  ContextMenu:'ContextMenu',
+};
 
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function openModal(id){ document.getElementById(id).classList.add('on'); }
@@ -446,10 +500,10 @@ function render(){
         <div class="m"><div class="k">凭证有效</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
       <div class="cfoot">
-        <span class="snap ${a.has_snapshot?'has':''}"><span class="d"></span>${a.has_snapshot?'快照已存':'未存快照'}</span>
+        <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照')}</span>
         <div class="acts">
           <button class="btn small" onclick="event.stopPropagation();openDetail('${a.user_id}')">详情</button>
-          <button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot?'':'disabled'}>切换</button>
+          <button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot&&a.snapshot_ok!==false?'':'disabled'}>切换</button>
         </div>
       </div>
     </div>`;
@@ -566,11 +620,20 @@ async function syncAll(){
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
+  if(a.snapshot_mismatch || a.snapshot_ok===false){
+    toast('该账号快照已串号或无效,请先登录该号后点「更新快照」','err');
+    return;
+  }
   if(!confirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。\n若该号快照教程未完成,会自动补写跳过标记。')) return;
   toast('切换中…Typeless 将重启');
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/switch',{method:'POST'});
-  toast(r.msg||'已切换','ok');
-  setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); }, 6000);
+  if(r.status==='OK'){
+    toast(r.msg||'已切换','ok');
+    setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); }, 6000);
+  } else {
+    toast(r.msg||'切换失败','err');
+    await loadAccounts();
+  }
 }
 async function resetDevice(){
   if(!confirm('解除设备限制?\n\n将重置设备 ID(删凭据+device.cache+user-data+清登录态),Typeless 重启到登录页,即可注册新账号。\n当前账号会被登出(若已存快照可随时切回)。\n\n如果你准备注册后直接加入账号列表，推荐改用「注册并添加新账号」，它会在登录后继续抓取凭证。')) return;
@@ -775,7 +838,9 @@ async function copyFrom(){
 async function saveSnap(){
   if(!curDetail) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/snapshot',{method:'POST'});
-  toast(r.msg||'已保存','ok'); await loadAccounts();
+  if(r.status==='OK') toast(r.msg||'已保存','ok');
+  else toast(r.msg||'保存失败','err');
+  await loadAccounts();
 }
 function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
 
@@ -835,6 +900,228 @@ async function saveMaster(){
   if(r.status==='OK'){ document.getElementById('masterArea').value=r.data.join('\n'); document.getElementById('masterCnt').textContent=r.data.length+' 条'; toast('已保存','ok'); }
 }
 
+/* ---------- 功能快捷键(绕过 Typeless 设置页冲突) ---------- */
+function scCodeToName(code, key){
+  if(code==='MetaLeft'||code==='OSLeft') return /Mac|iPhone|iPad/i.test(navigator.platform||navigator.userAgent||'')?'LeftCmd':'LeftWin';
+  if(code==='MetaRight'||code==='OSRight') return /Mac|iPhone|iPad/i.test(navigator.platform||navigator.userAgent||'')?'RightCmd':'RightWin';
+  if(SC_CODE_MAP[code]) return SC_CODE_MAP[code];
+  if(/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if(/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if(/^Numpad[0-9]$/.test(code)) return 'Numpad'+code.slice(6);
+  if(/^F([1-9]|1[0-2])$/.test(code)) return code;
+  if(key && key.length===1 && /[A-Za-z0-9]/.test(key)) return key.toUpperCase();
+  return null;
+}
+function scIsModifier(name){
+  return /^(Left|Right)(Ctrl|Shift|Alt|Win|Cmd|Meta|Option)$/.test(name||'');
+}
+function scCurrentBinding(id){
+  if(SC_STATE.draft[id]!=null) return SC_STATE.draft[id];
+  const list=SC_STATE.bindings[id];
+  return Array.isArray(list)&&list[0] ? String(list[0]) : '';
+}
+function scSetDraft(id, binding){
+  SC_STATE.draft[id]=binding;
+  renderShortcutList();
+}
+function renderShortcutList(){
+  const box=document.getElementById('shortcutList');
+  if(!box) return;
+  const features=SC_STATE.features||[];
+  if(!features.length){
+    box.innerHTML='<div class="empty" style="padding:20px">无法读取快捷键配置</div>';
+    return;
+  }
+  box.innerHTML=features.map(f=>{
+    const bind=scCurrentBinding(f.id);
+    const rec=SC_STATE.recordingId===f.id;
+    const empty=!bind;
+    return `<div class="sc-row" data-id="${esc(f.id)}">
+      <div class="sc-meta"><div class="name">${esc(f.label)}</div><div class="desc">${esc(f.desc||'')}</div></div>
+      <div class="sc-bind ${empty?'empty':''} ${rec?'recording':''}" id="scBind-${esc(f.id)}">${rec?'请按下快捷键…':(bind||'未设置')}</div>
+      <div class="sc-actions">
+        <button class="btn small ${rec?'primary':''}" onclick="toggleRecordShortcut('${esc(f.id)}')">${rec?'停止':'录制'}</button>
+        <button class="btn small" onclick="toggleManualShortcut('${esc(f.id)}')">手输</button>
+        <button class="btn small" onclick="clearShortcut('${esc(f.id)}')" ${bind?'':'disabled'}>清除</button>
+      </div>
+      <div class="sc-manual" id="scManual-${esc(f.id)}">
+        <input class="fld" id="scInput-${esc(f.id)}" placeholder="例如 RightCtrl 或 RightCtrl+RightShift" value="${esc(bind)}">
+        <button class="btn small primary" onclick="applyManualShortcut('${esc(f.id)}')">应用</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function openShortcuts(){
+  openModal('shortcutMask');
+  document.getElementById('shortcutStatus').textContent='读取中…';
+  await reloadShortcuts();
+}
+function closeShortcuts(){
+  stopRecordShortcut();
+  closeModal('shortcutMask');
+}
+async function reloadShortcuts(){
+  stopRecordShortcut();
+  SC_STATE.draft={};
+  try{
+    const r=await api('/api/shortcuts');
+    if(r.status!=='OK'){
+      document.getElementById('shortcutStatus').textContent=r.msg||'读取失败';
+      toast(r.msg||'读取快捷键失败','err');
+      return;
+    }
+    SC_STATE.features=r.data.features||[];
+    SC_STATE.bindings=r.data.bindings||{};
+    SC_STATE.max_parts=r.data.max_parts||2;
+    document.getElementById('shortcutStatus').textContent=r.data.exists
+      ? ('来源: '+r.data.path)
+      : '尚未找到 app-settings.json,保存时会创建';
+    renderShortcutList();
+  }catch(e){
+    document.getElementById('shortcutStatus').textContent='读取失败: '+e.message;
+    toast('读取快捷键失败','err');
+  }
+}
+function clearShortcut(id){
+  // 清除=要求用户重新设;保存时不允许空。本地草稿标为空串,保存前校验
+  scSetDraft(id,'');
+  toast('已清空草稿,请录制或手输新键后再保存','ok');
+}
+function toggleManualShortcut(id){
+  const el=document.getElementById('scManual-'+id);
+  if(!el) return;
+  el.classList.toggle('on');
+  if(el.classList.contains('on')){
+    const input=document.getElementById('scInput-'+id);
+    if(input){ input.value=scCurrentBinding(id); input.focus(); input.select(); }
+  }
+}
+function applyManualShortcut(id){
+  const input=document.getElementById('scInput-'+id);
+  if(!input) return;
+  const raw=(input.value||'').trim();
+  if(!raw){ toast('请输入快捷键','err'); return; }
+  const parts=raw.split('+').map(s=>s.trim()).filter(Boolean);
+  if(parts.length<1||parts.length> (SC_STATE.max_parts||2)){
+    toast('只支持 1～'+(SC_STATE.max_parts||2)+' 个键','err');
+    return;
+  }
+  for(const p of parts){
+    if(!/^[A-Za-z][A-Za-z0-9]*$/.test(p)){
+      toast('键名格式不对: '+p,'err');
+      return;
+    }
+  }
+  scSetDraft(id, parts.join('+'));
+  const man=document.getElementById('scManual-'+id);
+  if(man) man.classList.remove('on');
+  toast('已更新草稿(尚未保存)','ok');
+}
+function stopRecordShortcut(){
+  if(!SC_STATE.recordingId) return;
+  SC_STATE.recordingId=null;
+  SC_STATE._recParts=null;
+  document.removeEventListener('keydown', scOnKeyDown, true);
+  document.removeEventListener('keyup', scOnKeyUp, true);
+  renderShortcutList();
+}
+function toggleRecordShortcut(id){
+  if(SC_STATE.recordingId===id){ stopRecordShortcut(); return; }
+  stopRecordShortcut();
+  SC_STATE.recordingId=id;
+  SC_STATE._recParts=[];
+  SC_STATE._recCodes=new Set();
+  document.addEventListener('keydown', scOnKeyDown, true);
+  document.addEventListener('keyup', scOnKeyUp, true);
+  renderShortcutList();
+  toast('请按下目标键(单键松手即完成;两键则依次按下)','ok');
+}
+function scOnKeyDown(e){
+  if(!SC_STATE.recordingId) return;
+  // 录制时吞掉按键,避免触发页面其它快捷键
+  e.preventDefault(); e.stopPropagation();
+  if(e.repeat) return;
+  const name=scCodeToName(e.code, e.key);
+  if(!name){ toast('无法识别此键('+e.code+'),可改用手输','err'); return; }
+  if(SC_STATE._recCodes.has(e.code)) return;
+  const max=SC_STATE.max_parts||2;
+  if(SC_STATE._recParts.length>=max){
+    // 已满则用当前序列完成
+    scFinishRecord();
+    return;
+  }
+  SC_STATE._recCodes.add(e.code);
+  SC_STATE._recParts.push(name);
+  const el=document.getElementById('scBind-'+SC_STATE.recordingId);
+  if(el) el.textContent=SC_STATE._recParts.join('+')+'…';
+  // 非修饰键按下且已有内容:立即完成(如 Ctrl+A 的 A)
+  if(!scIsModifier(name) && SC_STATE._recParts.length>=1){
+    scFinishRecord();
+  }
+}
+function scOnKeyUp(e){
+  if(!SC_STATE.recordingId) return;
+  e.preventDefault(); e.stopPropagation();
+  // 修饰键单独作为快捷键:全部抬起且已有 parts 时完成
+  if(SC_STATE._recParts && SC_STATE._recParts.length){
+    // 若仍有其它键按着,等全部抬起 — 用 codes 集合粗略判断
+    SC_STATE._recCodes.delete(e.code);
+    if(SC_STATE._recCodes.size===0) scFinishRecord();
+  }
+}
+function scFinishRecord(){
+  if(!SC_STATE.recordingId || !SC_STATE._recParts || !SC_STATE._recParts.length){
+    stopRecordShortcut();
+    return;
+  }
+  const id=SC_STATE.recordingId;
+  const parts=SC_STATE._recParts.slice(0, SC_STATE.max_parts||2);
+  // 去重保序
+  const seen=new Set(); const uniq=[];
+  for(const p of parts){ if(seen.has(p)) continue; seen.add(p); uniq.push(p); }
+  const binding=uniq.join('+');
+  SC_STATE.recordingId=null;
+  SC_STATE._recParts=null;
+  SC_STATE._recCodes=null;
+  document.removeEventListener('keydown', scOnKeyDown, true);
+  document.removeEventListener('keyup', scOnKeyUp, true);
+  scSetDraft(id, binding);
+  toast('已录制 '+binding+' (尚未保存)','ok');
+}
+async function saveShortcuts(){
+  stopRecordShortcut();
+  const bindings={};
+  const features=SC_STATE.features||[];
+  for(const f of features){
+    const b=scCurrentBinding(f.id);
+    if(!b){
+      toast('「'+f.label+'」还没有快捷键,请录制或手输','err');
+      return;
+    }
+    bindings[f.id]=[b];
+  }
+  if(!confirm('将快捷键写入 Typeless 配置并重启 Typeless?\n\n'+features.map(f=>f.label+': '+scCurrentBinding(f.id)).join('\n'))) return;
+  document.getElementById('shortcutStatus').textContent='保存中…';
+  toast('保存快捷键中…');
+  try{
+    const r=await api('/api/shortcuts',{method:'POST',body:JSON.stringify({bindings, restart:true})});
+    if(r.status==='OK'){
+      SC_STATE.bindings=r.data?.bindings||bindings;
+      SC_STATE.draft={};
+      renderShortcutList();
+      document.getElementById('shortcutStatus').textContent=r.msg||'已保存';
+      toast(r.msg||'快捷键已保存','ok');
+      setTimeout(()=>{ detectCurrent(); }, 4000);
+    } else {
+      document.getElementById('shortcutStatus').textContent=r.msg||'保存失败';
+      toast(r.msg||'保存失败','err');
+    }
+  }catch(e){
+    document.getElementById('shortcutStatus').textContent='保存失败: '+e.message;
+    toast('保存失败','err');
+  }
+}
+
 async function fetchEnv(){
   try{
     const r=await api('/api/env'); if(r.status!=='OK') return;
@@ -888,7 +1175,14 @@ async function detectCurrent(manual=false){
   }
 }
 
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.querySelectorAll('.mask.on').forEach(m=>m.classList.remove('on')); });
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  if(SC_STATE.recordingId){ stopRecordShortcut(); return; }
+  document.querySelectorAll('.mask.on').forEach(m=>{
+    if(m.id==='shortcutMask') closeShortcuts();
+    else m.classList.remove('on');
+  });
+});
 loadAccounts().then(() => { refreshPatchStatus(); detectCurrent(); refreshOfficialUpdate(); });
 fetchEnv();
 refreshOnboardingStatus();
