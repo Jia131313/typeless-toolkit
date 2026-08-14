@@ -171,6 +171,11 @@
   .master-edit textarea:focus { border-color:var(--accent); }
   .hint { font-size:12px; color:var(--sub); line-height:1.7; }
   .row-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; align-items:center; }
+  .permission-intro { background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line)); border-radius:12px; padding:12px 14px; font-size:12px; line-height:1.7; margin-bottom:12px; }
+  .permission-step { border:1px solid var(--line); border-radius:12px; padding:13px 14px; margin-top:10px; }
+  .permission-step .step-title { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; margin-bottom:5px; }
+  .permission-step .step-copy { color:var(--sub); font-size:12px; line-height:1.65; }
+  .permission-step .step-app { color:var(--accent); }
   .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--card); padding:11px 20px; border-radius:11px; font-size:13px; z-index:80; opacity:0; transition:.25s; pointer-events:none; box-shadow:var(--shadow-lg); max-width:80vw; }
   .toast.on { opacity:1; transform:translateX(-50%) translateY(0); }
   .toast.err { background:var(--err); color:#fff; }
@@ -229,6 +234,7 @@
       <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 安装 Typeless 官方更新</button>
     </div>
     <div class="tool-group system-tools">
+      <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()">🔐 macOS 权限说明</button>
       <button class="btn primary" onclick="openRegisterWizard()">＋ 注册并添加新账号</button>
       <button class="btn danger" onclick="resetDevice()">⊘ 解除设备限制</button>
       <button class="btn danger" onclick="patchPaywall()"><span id="patchLabel">⊘ 解除弹窗</span></button>
@@ -388,6 +394,40 @@
   </div>
 </div>
 
+<!-- macOS 权限说明 -->
+<div class="mask" id="macPermissionMask" onclick="if(event.target===this)closeModal('macPermissionMask')">
+  <div class="modal" style="width:min(600px,96vw)">
+    <div class="hd"><h3>macOS 权限说明</h3><button class="icon-btn" onclick="closeModal('macPermissionMask')">✕</button></div>
+    <div class="bd">
+      <div class="permission-intro">
+        这里涉及两个独立 App，并不是同一个权限要按顺序开两次。<b>Typeless 工具集</b>只负责修改或管理 Typeless App；<b>Typeless</b>自己负责听写和粘贴文字。Typeless 的辅助功能与麦克风互相独立，但它的新手设置页会按步骤依次询问，所以看起来像有先后依赖。
+      </div>
+      <div class="permission-step">
+        <div class="step-title">① <span class="step-app">Typeless 工具集.app</span> · App 管理</div>
+        <div class="step-copy">仅在安装官方更新或解除弹窗、需要写入 <code>/Applications/Typeless.app</code> 时使用。工具集不需要麦克风，也不需要辅助功能。若系统提示“访问其他 App 的数据”或“管理其他 App”，请允许工具集。</div>
+        <div class="row-btns">
+          <button class="btn small" onclick="openMacPrivacySettings('app-management')">打开“App 管理”设置</button>
+          <button class="btn small danger" onclick="resetMacPermissions('toolkit')">清除工具集旧权限</button>
+        </div>
+      </div>
+      <div class="permission-step">
+        <div class="step-title">② <span class="step-app">Typeless.app</span> · 辅助功能</div>
+        <div class="step-copy">Typeless 用它把听写结果输入到其他应用。这里只需要开启 Typeless，不要把工具集也手动添加进去。</div>
+        <div class="row-btns"><button class="btn small" onclick="openMacPrivacySettings('accessibility')">打开“辅助功能”设置</button></div>
+      </div>
+      <div class="permission-step">
+        <div class="step-title">③ <span class="step-app">Typeless.app</span> · 麦克风</div>
+        <div class="step-copy">Typeless 用它录入语音。辅助功能开启后，回到 Typeless 继续下一步；系统随后才弹出麦克风请求是正常的，不代表权限存在依赖关系。</div>
+        <div class="row-btns"><button class="btn small" onclick="openMacPrivacySettings('microphone')">打开“麦克风”设置</button></div>
+      </div>
+      <div class="hint" style="margin-top:14px">
+        如果开关已经开启但 Typeless 仍显示未授权，说明设置中可能残留旧签名身份。点击下面的按钮可代替手工选中并点减号：它只清除 Typeless 的辅助功能和麦克风授权记录，不删除账号或应用数据。清除后完全退出再重新启动 Typeless，按它的页面顺序重新授权即可。
+        <div class="row-btns"><button class="btn danger" onclick="resetMacPermissions('typeless')">清除 Typeless 旧权限并重新授权</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -418,6 +458,27 @@ const SC_CODE_MAP = {
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function openModal(id){ document.getElementById(id).classList.add('on'); }
 function closeModal(id){ document.getElementById(id).classList.remove('on'); }
+function openMacPermissionGuide(){ openModal('macPermissionMask'); }
+function openMacPrivacySettings(section){
+  if(window.typelessToolkitDesktop?.openPrivacySettings){
+    window.typelessToolkitDesktop.openPrivacySettings(section);
+  }else{
+    toast('请在系统设置 → 隐私与安全性中打开对应权限','err');
+  }
+}
+async function resetMacPermissions(target){
+  const appName=target==='toolkit'?'Typeless 工具集':'Typeless';
+  const scope=target==='toolkit'?'App 管理':'辅助功能和麦克风';
+  if(!confirm(`清除 ${appName} 的旧${scope}权限记录?\n\n这相当于在系统设置里删除旧条目，不会删除应用、账号、词库或快照。清除后需要重新启动 ${appName} 并再次授权。`)) return;
+  try{
+    const result=await window.typelessToolkitDesktop?.resetPrivacyPermissions?.(target);
+    if(result?.ok){
+      toast(result.message,'ok');
+      if(target==='typeless') openMacPrivacySettings('accessibility');
+      else openMacPrivacySettings('app-management');
+    }else toast(result?.message||'权限记录清除失败','err');
+  }catch(e){ toast('权限记录清除失败: '+(e.message||e),'err'); }
+}
 function esc(s){ return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 function pct(v,l){ return l? Math.min(100, Math.round(v/l*100)):0; }
 function nfmt(n){ return (n||0).toLocaleString(); }
@@ -736,7 +797,7 @@ async function patchPaywall(){
   if(r.status==='OK'){
     toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
     if(r.data?.resign?.accessibility_regrant_required){
-      alert('补丁已经完成。\n\n由于 macOS 会按代码签名识别辅助功能权限，修改后的 Typeless 可能需要重新授权一次。若系统设置里虽然显示已开启但仍弹出提示，请先移除旧的 Typeless 项，再用“+”添加 /Applications/Typeless.app 并开启。');
+      openMacPermissionGuide();
     }
   }
   else {
@@ -1127,7 +1188,9 @@ async function fetchEnv(){
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
     const updateBtn=document.getElementById('officialUpdateBtn');
+    const permissionBtn=document.getElementById('macPermissionBtn');
     if(updateBtn) updateBtn.style.display=e.platform==='macos'?'':'none';
+    if(permissionBtn) permissionBtn.style.display=e.platform==='macos'?'':'none';
     const osName={windows:'Windows',macos:'macOS'}[e.platform]||e.platform;
     if(e.exe_found){
       b.textContent=osName+(e.typeless_running?' · 运行中':'');
