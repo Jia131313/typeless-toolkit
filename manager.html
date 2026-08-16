@@ -400,14 +400,14 @@
     <div class="hd"><h3>macOS 权限说明</h3><button class="icon-btn" onclick="closeModal('macPermissionMask')">✕</button></div>
     <div class="bd">
       <div class="permission-intro">
-        这里涉及两个独立 App，并不是同一个权限要按顺序开两次。<b>Typeless 工具集</b>只负责修改或管理 Typeless App；<b>Typeless</b>自己负责听写和粘贴文字。Typeless 的辅助功能与麦克风互相独立，但它的新手设置页会按步骤依次询问，所以看起来像有先后依赖。
+        这里涉及两个独立 App。<b>Typeless 工具集</b>只负责修改或管理 Typeless App；<b>Typeless</b>自己负责听写和粘贴文字。新版工具集会通过 macOS LaunchServices 启动 Typeless，账号注册、切换和抓取凭证不应再让工具集冒充权限申请者。
       </div>
       <div class="permission-step">
         <div class="step-title">① <span class="step-app">Typeless 工具集.app</span> · App 管理</div>
-        <div class="step-copy">仅在安装官方更新或解除弹窗、需要写入 <code>/Applications/Typeless.app</code> 时使用。工具集不需要麦克风，也不需要辅助功能。若系统提示“访问其他 App 的数据”或“管理其他 App”，请允许工具集。</div>
+        <div class="step-copy">仅在安装官方更新或解除弹窗、需要写入 <code>/Applications/Typeless.app</code> 时使用。工具集不需要麦克风，也不需要辅助功能。新版工具集启动时会按代码身份自动清理旧 App 管理记录和历史误加的辅助功能项；下次真正修改 Typeless 时重新允许当前工具集一次即可。</div>
         <div class="row-btns">
           <button class="btn small" onclick="openMacPrivacySettings('app-management')">打开“App 管理”设置</button>
-          <button class="btn small danger" onclick="resetMacPermissions('toolkit')">清除工具集旧权限</button>
+          <button class="btn small danger" onclick="resetMacPermissions('toolkit')">清除工具集旧权限与误加项</button>
         </div>
       </div>
       <div class="permission-step">
@@ -421,7 +421,7 @@
         <div class="row-btns"><button class="btn small" onclick="openMacPrivacySettings('microphone')">打开“麦克风”设置</button></div>
       </div>
       <div class="hint" style="margin-top:14px">
-        如果开关已经开启但 Typeless 仍显示未授权，说明设置中可能残留旧签名身份。点击下面的按钮可代替手工选中并点减号：它只清除 Typeless 的辅助功能和麦克风授权记录，不删除账号或应用数据。清除后完全退出再重新启动 Typeless，按它的页面顺序重新授权即可。
+        解除弹窗或从 ad-hoc 版本恢复官方版本时，工具集会检测代码身份是否变化；只有发生变化时才自动清除旧的辅助功能和麦克风记录。这样系统设置不会继续显示一个已经失效的“开启”开关。若你正在处理旧版本留下的卡死状态，可手动执行下面的一次性清理；不会删除账号、词库或快照。
         <div class="row-btns"><button class="btn danger" onclick="resetMacPermissions('typeless')">清除 Typeless 旧权限并重新授权</button></div>
       </div>
     </div>
@@ -468,7 +468,7 @@ function openMacPrivacySettings(section){
 }
 async function resetMacPermissions(target){
   const appName=target==='toolkit'?'Typeless 工具集':'Typeless';
-  const scope=target==='toolkit'?'App 管理':'辅助功能和麦克风';
+  const scope=target==='toolkit'?'App 管理及误加的辅助功能':'辅助功能和麦克风';
   if(!confirm(`清除 ${appName} 的旧${scope}权限记录?\n\n这相当于在系统设置里删除旧条目，不会删除应用、账号、词库或快照。清除后需要重新启动 ${appName} 并再次授权。`)) return;
   try{
     const result=await window.typelessToolkitDesktop?.resetPrivacyPermissions?.(target);
@@ -797,6 +797,9 @@ async function patchPaywall(){
   if(r.status==='OK'){
     toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
     if(r.data?.resign?.accessibility_regrant_required){
+      if(r.data?.resign?.privacy_reset?.ok){
+        alert('Typeless 的代码身份已经变化。旧的辅助功能和麦克风记录已自动清除。\n\n接下来只需按系统提示给 Typeless.app 本体重新授权一次；不要给“Typeless 工具集”开启麦克风或辅助功能。');
+      }
       openMacPermissionGuide();
     }
   }
@@ -865,7 +868,18 @@ async function installOfficialUpdate(){
   btn.disabled=true; btn.textContent='正在校验并安装…';
   try {
     const r=await api('/api/official-update/install',{method:'POST'});
-    if(r.status==='OK'){ toast(r.msg||'官方升级完成','ok'); setTimeout(()=>{ refreshOfficialUpdate(); refreshPatchStatus(); detectCurrent(); },3000); }
+    if(r.status==='OK'){
+      toast(r.msg||'官方升级完成','ok');
+      if(r.data?.identity_changed){
+        if(r.data?.privacy_reset?.ok){
+          alert('Typeless 已恢复新的官方代码身份，旧权限记录已自动清除。\n\n请按系统提示给 Typeless.app 本体重新授权一次；之后注册和切换账号不会重复要求授权。');
+        }else{
+          alert('Typeless 的代码身份已经变化，但旧权限记录未能自动清除。\n\n请在接下来的“macOS 权限说明”中执行一次“清除 Typeless 旧权限并重新授权”。');
+        }
+        openMacPermissionGuide();
+      }
+      setTimeout(()=>{ refreshOfficialUpdate(); refreshPatchStatus(); detectCurrent(); },3000);
+    }
     else toast(r.msg||'官方升级失败','err');
   } catch(e) { toast('官方升级请求失败:'+e.message,'err'); }
   finally { btn.disabled=false; refreshOfficialUpdate(); }
