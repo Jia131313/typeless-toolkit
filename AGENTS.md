@@ -78,7 +78,7 @@ npm run build:mac:universal
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.5.0。
+- `package.json` 当前版本为 1.6.0。
 - 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；
   不要上传版本号不一致的附件。
 - GitHub Release 是独立发布动作。代码合并不会自动替换旧 Release 附件。
