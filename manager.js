@@ -18,7 +18,8 @@ const {
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
-  readMaster, writeMaster,
+  readMaster, replaceMasterTerms,
+  recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount, syncAllAccounts,
@@ -33,6 +34,137 @@ const {
 const PORT = config.manager_port;
 const ACCOUNT_STATUS_CONCURRENCY = 3;
 const TYPELESS_APP = TYPELESS_EXE ? String(TYPELESS_EXE).split('/Contents/')[0] : '';
+const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+const AUTO_SYNC_STARTUP_DELAY_MS = 6000;
+const AUTO_SYNC_DEBOUNCE_MS = 1200;
+
+function createDictionarySyncController(syncFn, opts = {}) {
+  const intervalMs = opts.intervalMs || AUTO_SYNC_INTERVAL_MS;
+  const startupDelayMs = opts.startupDelayMs ?? AUTO_SYNC_STARTUP_DELAY_MS;
+  const debounceMs = opts.debounceMs ?? AUTO_SYNC_DEBOUNCE_MS;
+  const now = opts.now || (() => Date.now());
+  const setTimeoutFn = opts.setTimeoutFn || setTimeout;
+  const clearTimeoutFn = opts.clearTimeoutFn || clearTimeout;
+  const setIntervalFn = opts.setIntervalFn || setInterval;
+  const clearIntervalFn = opts.clearIntervalFn || clearInterval;
+  const pendingReasons = new Set();
+  let debounceTimer = null;
+  let intervalTimer = null;
+  let inFlight = null;
+  let started = false;
+  let state = {
+    state: 'waiting',
+    running: false,
+    last_started_at: null,
+    last_finished_at: null,
+    last_success_at: null,
+    next_check_at: null,
+    reasons: [],
+    summary: null,
+    error: null,
+    msg: '等待首次自动检查',
+  };
+
+  const iso = value => new Date(value).toISOString();
+  const unref = timer => { if (timer && typeof timer.unref === 'function') timer.unref(); return timer; };
+  const snapshot = () => ({ ...state, reasons: [...state.reasons] });
+
+  const schedule = (reason = 'change', delayMs = debounceMs) => {
+    pendingReasons.add(reason);
+    if (inFlight) return snapshot();
+    if (debounceTimer) clearTimeoutFn(debounceTimer);
+    const runAt = now() + Math.max(0, delayMs);
+    state = { ...state, next_check_at: iso(runAt), reasons: [...pendingReasons] };
+    debounceTimer = unref(setTimeoutFn(() => {
+      debounceTimer = null;
+      run().catch(error => log('[dict-sync] 自动同步失败:', error.message));
+    }, Math.max(0, delayMs)));
+    return snapshot();
+  };
+
+  const run = async (reason) => {
+    if (inFlight) return inFlight;
+    if (reason) pendingReasons.add(reason);
+    if (debounceTimer) {
+      clearTimeoutFn(debounceTimer);
+      debounceTimer = null;
+    }
+    const reasons = [...pendingReasons];
+    pendingReasons.clear();
+    state = {
+      ...state,
+      state: 'checking',
+      running: true,
+      last_started_at: iso(now()),
+      next_check_at: null,
+      reasons,
+      error: null,
+      msg: '正在检查并对齐词库',
+    };
+    inFlight = (async () => {
+      try {
+        const result = await syncFn();
+        const finishedAt = iso(now());
+        const empty = result.account_count === 0;
+        const ok = empty || result.all_aligned;
+        state = {
+          ...state,
+          state: empty ? 'waiting' : (ok ? 'aligned' : 'partial'),
+          running: false,
+          last_finished_at: finishedAt,
+          last_success_at: ok ? finishedAt : state.last_success_at,
+          summary: {
+            master_count: result.master_count,
+            account_count: result.account_count,
+            aligned_count: result.aligned_count,
+            failed_count: result.failed_count,
+            all_aligned: result.all_aligned,
+          },
+          error: null,
+          msg: empty ? '尚无账号，添加后会自动对齐' : result.msg,
+        };
+        return { ok, result, status: snapshot() };
+      } catch (error) {
+        state = {
+          ...state,
+          state: 'error',
+          running: false,
+          last_finished_at: iso(now()),
+          error: error.message || String(error),
+          msg: '自动对齐失败，将在下次检查时重试',
+        };
+        return { ok: false, error: state.error, status: snapshot() };
+      } finally {
+        inFlight = null;
+        if (pendingReasons.size) schedule('queued-change', debounceMs);
+      }
+    })();
+    return inFlight;
+  };
+
+  const start = () => {
+    if (started) return snapshot();
+    started = true;
+    schedule('startup', startupDelayMs);
+    state = { ...state, next_check_at: iso(now() + startupDelayMs) };
+    intervalTimer = unref(setIntervalFn(() => {
+      schedule('periodic', 0);
+    }, intervalMs));
+    return snapshot();
+  };
+
+  const stop = () => {
+    started = false;
+    if (debounceTimer) clearTimeoutFn(debounceTimer);
+    if (intervalTimer) clearIntervalFn(intervalTimer);
+    debounceTimer = null;
+    intervalTimer = null;
+  };
+
+  return { schedule, run, start, stop, status: snapshot };
+}
+
+const dictionarySync = createDictionarySyncController(syncAllAccounts);
 
 function isTrustedLocalOrigin(req) {
   const origin = req.headers.origin;
@@ -211,6 +343,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
       const snap = inspectSnapshot(rec.user_id);
+      dictionarySync.schedule(idx >= 0 ? 'account-updated' : 'account-added');
       return send(res, 200, { status: 'OK', data: accountForClient(rec, null, snap.has_snapshot, snap) });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
@@ -333,14 +466,15 @@ const server = http.createServer(async (req, res) => {
         },
       });
     }
-    // 注册并添加新账号·收尾:跳过教程 + 抓 token + 入库 + 可选灌主词库
+    // 注册新账号·收尾:跳过教程 + 抓 token + 入库；词库随后后台自动对齐
     if (m === 'POST' && p === '/api/register-wizard/finish') {
       try {
         const b = await readBody(req);
         const result = await finishNewAccountWizard({
-          import_master: b.import_master !== false,
+          import_master: false,
           nickname: b.nickname || '',
         });
+        dictionarySync.schedule('registered-account');
         const safeResult = {
           ...result,
           account: accountForClient(result.account, null, hasSnapshot(result.account.user_id)),
@@ -476,6 +610,7 @@ const server = http.createServer(async (req, res) => {
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const r = await syncAccount(acc);
+      dictionarySync.schedule('single-account-sync');
       return send(res, 200, { status: r.aligned ? 'OK' : 'FAIL', data: r, msg: r.msg });
     }
     // 从源账号复制词库到此账号
@@ -497,6 +632,7 @@ const server = http.createServer(async (req, res) => {
         const r = await curlApi('POST', '/user/dictionary/bulk-import', dst.token, { content: missing.join('\n') });
         imported = r.data?.success_count ?? 0;
       }
+      dictionarySync.schedule('dictionary-copy');
       return send(res, 200, { status: 'OK', data: { src_count: srcWords.length, imported, already: srcWords.length - missing.length } });
     }
     // 删除账号
@@ -506,6 +642,7 @@ const server = http.createServer(async (req, res) => {
       let accs = readAccounts();
       accs = accs.filter(x => x.user_id !== id);
       writeAccounts(accs);
+      dictionarySync.schedule('account-removed');
       return send(res, 200, { status: 'OK' });
     }
     // 单账号词库(全量分页)
@@ -531,11 +668,36 @@ const server = http.createServer(async (req, res) => {
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const r = await syncAccount(acc);
+      dictionarySync.schedule('single-account-sync');
       return send(res, 200, { status: r.aligned ? 'OK' : 'FAIL', data: r, msg: r.msg });
     }
-    // 全部同步(先全量并集主库,再统一回灌 + 对账摘要)
+    // 自动词库对齐状态
+    if (m === 'GET' && p === '/api/dictionary-sync/status') {
+      return send(res, 200, { status: 'OK', data: dictionarySync.status() });
+    }
+    // 手动立即检查:与后台任务共用 single-flight,不会重复并发同步
+    if (m === 'POST' && p === '/api/dictionary-sync/run') {
+      const outcome = await dictionarySync.run('manual');
+      const result = outcome.result;
+      return send(res, 200, {
+        status: outcome.ok ? 'OK' : 'FAIL',
+        data: result ? result.results : [],
+        summary: result ? {
+          master_count: result.master_count,
+          account_count: result.account_count,
+          aligned_count: result.aligned_count,
+          failed_count: result.failed_count,
+          all_aligned: result.all_aligned,
+        } : outcome.status?.summary,
+        sync_status: outcome.status,
+        msg: result?.msg || outcome.error || outcome.status?.msg,
+      });
+    }
+    // 兼容旧入口,同样进入自动对齐控制器
     if (m === 'POST' && p === '/api/sync-all') {
-      const r = await syncAllAccounts();
+      const outcome = await dictionarySync.run('legacy-manual');
+      const r = outcome.result;
+      if (!r) return send(res, 200, { status: 'FAIL', data: [], summary: outcome.status?.summary, msg: outcome.error || '同步失败' });
       return send(res, 200, {
         status: r.all_aligned ? 'OK' : 'FAIL',
         data: r.results,
@@ -554,25 +716,50 @@ const server = http.createServer(async (req, res) => {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       const b = await readBody(req);
+      if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const r = await curlApi('POST', '/user/dictionary/bulk-import', acc.token, { content: b.term });
+      if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '添加失败') });
+      clearDictionaryDeletions([b.term]);
+      dictionarySync.schedule('word-added');
       return send(res, 200, { status: 'OK', data: r.data });
     }
     // 删账号单个词(按 term)
     if (m === 'DELETE' && p.startsWith('/api/accounts/') && p.endsWith('/word')) {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
+      if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const term = u.searchParams.get('term');
       const dl = await fetchAllWords(acc.token);
       const w = (dl.words || []).find(x => x.term === term);
       if (!w) return send(res, 404, { status: 'FAIL', msg: '词条不存在' });
       const r = await curlApi('POST', '/user/dictionary/delete', acc.token, { user_dictionary_id: w.user_dictionary_id });
-      return send(res, 200, { status: 'OK', data: r.data });
+      if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '删除失败') });
+      recordDictionaryDeletions([term], `account:${id}`);
+      dictionarySync.schedule('word-deleted');
+      return send(res, 200, { status: 'OK', data: r.data, msg: '已删除，并将在后台从其他账号同步移除' });
     }
     // 主 CSV
     if (m === 'GET' && p === '/api/master') return send(res, 200, { status: 'OK', data: readMaster() });
     if (m === 'POST' && p === '/api/master') {
-      const b = await readBody(req); const t = writeMaster(b.terms || []);
-      return send(res, 200, { status: 'OK', data: t });
+      const b = await readBody(req);
+      const incomingKeys = new Set((b.terms || []).map(term => String(term || '').trim().toLowerCase()).filter(Boolean));
+      const removedCount = readMaster().filter(term => !incomingKeys.has(String(term).toLowerCase())).length;
+      if (removedCount > 500) {
+        return send(res, 400, {
+          status: 'FAIL',
+          msg: `本次将同步删除 ${removedCount} 个词，已超过单次 500 条安全上限。请分批删除，避免对每个账号产生大量远端写入。`,
+        });
+      }
+      const changed = replaceMasterTerms(b.terms || []);
+      dictionarySync.schedule('master-edited');
+      return send(res, 200, {
+        status: 'OK',
+        data: changed.terms,
+        changes: { added: changed.added.length, removed: changed.removed.length },
+        msg: changed.removed.length
+          ? `已保存，新增 ${changed.added.length} 条、移除 ${changed.removed.length} 条；后台将自动对齐所有账号`
+          : `已保存，后台将自动对齐所有账号`,
+      });
     }
     // 导出主词库为 txt 下载
     if (m === 'GET' && p === '/api/master/export') {
@@ -624,6 +811,7 @@ function startServer() {
     const onListening = () => {
       server.off('error', onError);
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
+      dictionarySync.start();
       resolve(server);
     };
     server.once('error', onError);
@@ -631,6 +819,8 @@ function startServer() {
     server.listen(PORT, '127.0.0.1');
   });
 }
+
+server.on('close', () => dictionarySync.stop());
 
 if (require.main === module) {
   startServer().catch(error => {
@@ -643,5 +833,6 @@ module.exports = {
   server, startServer, PORT,
   isTrustedLocalOrigin, isTrustedLocalHost,
   accountForClient, accountDeleteId, shouldReconnectCurrent,
+  createDictionarySyncController,
   waitForTypelessRunning, writeDiagnosticLog,
 };
