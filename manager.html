@@ -420,7 +420,7 @@
       </div>
       <div class="permission-step">
         <div class="step-title">① <span class="step-app">Typeless 工具集.app</span> · App 管理</div>
-        <div class="step-copy">仅在安装官方更新或解除弹窗、需要写入 <code>/Applications/Typeless.app</code> 时使用。工具集不需要麦克风，也不需要辅助功能。新版工具集启动时会按代码身份自动清理旧 App 管理记录和历史误加的辅助功能项；下次真正修改 Typeless 时重新允许当前工具集一次即可。</div>
+        <div class="step-copy">仅在自动安装官方更新或自动解除弹窗、需要写入 <code>/Applications/Typeless.app</code> 时使用。工具集不需要麦克风，也不需要辅助功能。新工具集代码身份需要重新允许时，会在真正需要修改 Typeless 前主动弹出说明并打开本页；开启后返回工具集，原操作会自动继续。</div>
         <div class="row-btns">
           <button class="btn small" onclick="openMacPrivacySettings('app-management')">打开“App 管理”设置</button>
           <button class="btn small danger" onclick="resetMacPermissions('toolkit')">清除工具集旧权限与误加项</button>
@@ -444,6 +444,27 @@
   </div>
 </div>
 
+<!-- 自动维护需要 App 管理权限 -->
+<div class="mask" id="paywallPermissionMask" onclick="if(event.target===this)closeModal('paywallPermissionMask')">
+  <div class="modal" style="width:min(520px,94vw)">
+    <div class="hd"><h3>需要开启 App 管理</h3><button class="icon-btn" onclick="closeModal('paywallPermissionMask')">✕</button></div>
+    <div class="bd">
+      <div class="permission-intro">
+        工具集检测到 Typeless 的弹窗补丁需要修复，或即将安装 Typeless 官方更新。要写入 <code>/Applications/Typeless.app</code>，macOS 必须允许 <b>Typeless 工具集.app</b> 管理其他 App。
+      </div>
+      <div class="permission-step">
+        <div class="step-title">系统授权由你确认，后续流程自动完成</div>
+        <div class="step-copy" id="paywallPermissionMessage">工具集会直接打开“App 管理”设置。开启开关后回到这里，原来的安装或弹窗修复会自动继续，不需要再次点击解除弹窗。</div>
+        <div class="row-btns">
+          <button class="btn primary" onclick="openMacPrivacySettings('app-management')">打开“App 管理”设置</button>
+          <button class="btn" id="paywallPermissionRetryBtn" onclick="retryMacAppManagement()">已开启，继续</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px">工具集不需要麦克风或辅助功能。由于当前工具集使用 ad-hoc 签名，安装新的工具集版本后 macOS 会把它视为新的代码身份，因此可能需要重新允许一次。</div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -455,6 +476,7 @@ async function apiTimed(p,opt={},timeoutMs=30000){
 }
 let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy = false, currentBusy = false;
 let DICT_SYNC_STATUS = null, MASTER_ORIGINAL = [];
+let ENV_INFO = null, PAYWALL_MAINTENANCE = null, PAYWALL_NOTICE_AT = null, PENDING_MAC_ACTION = null, PAYWALL_SETTINGS_OPENED = false, PAYWALL_FOCUS_RETRY_BUSY = false;
 let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
 const SC_CODE_MAP = {
   ControlLeft:'LeftCtrl', ControlRight:'RightCtrl',
@@ -476,11 +498,43 @@ function toast(m, kind){ const t=document.getElementById('toast'); t.className='
 function openModal(id){ document.getElementById(id).classList.add('on'); }
 function closeModal(id){ document.getElementById(id).classList.remove('on'); }
 function openMacPermissionGuide(){ openModal('macPermissionMask'); }
+function showPaywallPermissionPrompt(message, pendingAction){
+  if(message) document.getElementById('paywallPermissionMessage').textContent=message;
+  if(pendingAction) PENDING_MAC_ACTION=pendingAction;
+  openModal('paywallPermissionMask');
+  if(!PAYWALL_SETTINGS_OPENED){
+    PAYWALL_SETTINGS_OPENED=true;
+    setTimeout(()=>openMacPrivacySettings('app-management'),250);
+  }
+}
 function openMacPrivacySettings(section){
   if(window.typelessToolkitDesktop?.openPrivacySettings){
     window.typelessToolkitDesktop.openPrivacySettings(section);
   }else{
     toast('请在系统设置 → 隐私与安全性中打开对应权限','err');
+  }
+}
+async function requestMacAppManagement(pendingAction){
+  if(ENV_INFO?.platform!=='macos') return true;
+  if(ENV_INFO.app_management_regrant_required){
+    toast('工具集代码身份已更新，macOS 可能会请求一次 App 管理权限');
+  }
+  return true;
+}
+async function retryMacAppManagement(){
+  const btn=document.getElementById('paywallPermissionRetryBtn');
+  btn.disabled=true; btn.textContent='正在继续…';
+  try{
+    closeModal('paywallPermissionMask');
+    PAYWALL_SETTINGS_OPENED=false;
+    const action=PENDING_MAC_ACTION;
+    PENDING_MAC_ACTION=null;
+    if(action) await action();
+    else await retryPaywallMaintenance();
+  }catch(e){
+    document.getElementById('paywallPermissionMessage').textContent='继续执行失败：'+(e.message||e);
+  }finally{
+    btn.disabled=false; btn.textContent='已开启，继续';
   }
 }
 async function resetMacPermissions(target){
@@ -836,31 +890,81 @@ async function patchPaywall(){
   let st={};
   try{ st=await api('/api/paywall-status'); }catch(e){}
   if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
-  let msg='解除升级弹窗?\n\n程序会自动定位付费墙调用、修改 app.asar，并处理 Electron 完整性校验。\n修改前会创建当前平台的回滚备份（Windows 文件快照；macOS 完整 Typeless.app）。Typeless 会先关闭,打完自动重启。\n注意:Typeless 自动更新会还原补丁,届时需重打。';
+  let msg='立即检查并解除弹窗?\n\n正常情况下工具集会在启动、官方更新和账号变更后自动维护。此按钮用于立即重试。\n程序会创建回滚备份、关闭 Typeless、完成修复并自动重启。';
   if(st.data?.autoDetected) msg+='\n\n🔍 已自动检测到你版本的新函数名,将自动适配并写入配置。';
   if(!confirm(msg)) return;
-  toast('打补丁中…');
+  toast('正在检查并自动修复…');
   const r=await api('/api/patch-paywall',{method:'POST'});
   if(r.status==='OK'){
-    toast(r.data?.already?'已是补丁版,无需重打':'✅ 补丁完成,已重启 Typeless','ok');
-    if(r.data?.resign?.accessibility_regrant_required){
-      if(r.data?.resign?.privacy_reset?.ok){
-        alert('Typeless 的代码身份已经变化。旧的辅助功能和麦克风记录已自动清除。\n\n接下来只需按系统提示给 Typeless.app 本体重新授权一次；不要给“Typeless 工具集”开启麦克风或辅助功能。');
-      }
-      openMacPermissionGuide();
-    }
+    toast(r.data?.already?'已是补丁版,无需重打':'✅ 弹窗已解除,Typeless 已重启','ok');
+    await refreshPaywallMaintenanceStatus();
   }
   else {
-    toast('补丁失败，已执行安全回滚','err');
-    alert(r.msg||'打补丁失败，详细原因未返回');
+    if(r.data?.code==='APP_MANAGEMENT_REQUIRED'){
+      showPaywallPermissionPrompt(r.msg||'请开启“Typeless 工具集”的 App 管理权限，允许后会自动继续。');
+    }else{
+      toast('补丁失败，已执行安全回滚','err');
+      alert(r.msg||'打补丁失败，详细原因未返回');
+    }
   }
-  setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); }, 7000);
+  setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); refreshPaywallMaintenanceStatus(); }, 7000);
+}
+function notifyTypelessPermissionReset(resign){
+  if(!resign?.accessibility_regrant_required) return;
+  if(resign?.privacy_reset?.ok){
+    alert('Typeless 的代码身份已经变化。旧的辅助功能和麦克风记录已自动清除。\n\n接下来只需按系统提示给 Typeless.app 本体重新授权一次；不要给“Typeless 工具集”开启麦克风或辅助功能。');
+  }
+  openMacPermissionGuide();
+}
+async function retryPaywallMaintenance(){
+  toast('正在重新检测 App 管理权限并继续修复…');
+  const r=await api('/api/paywall-maintenance/retry',{method:'POST'});
+  if(r.status==='OK'){
+    closeModal('paywallPermissionMask');
+    toast(r.msg||'弹窗已自动解除','ok');
+    PAYWALL_NOTICE_AT=r.data?.status?.last_success_at||PAYWALL_NOTICE_AT;
+    notifyTypelessPermissionReset(r.data?.result?.resign);
+    await fetchEnv();
+  }else if(r.data?.code==='APP_MANAGEMENT_REQUIRED'){
+    showPaywallPermissionPrompt(r.msg||'尚未检测到 App 管理权限，请开启后返回。');
+  }else toast(r.msg||'自动解除弹窗失败','err');
+  await refreshPatchStatus();
+  await refreshPaywallMaintenanceStatus();
+}
+async function refreshPaywallMaintenanceStatus(){
+  try{
+    const r=await api('/api/paywall-maintenance'), s=r.data||{};
+    PAYWALL_MAINTENANCE=s;
+    const btn=document.getElementById('patchBtn'), label=document.getElementById('patchLabel');
+    if(s.state==='checking'){
+      if(label) label.textContent='… 自动修复中';
+      if(btn) btn.title=s.msg||'正在自动检查弹窗补丁';
+    }else if(s.state==='permission-required'){
+      if(label) label.textContent='⚠ 需开启 App 管理';
+      if(btn) btn.title=s.msg||'开启 App 管理权限后会自动继续';
+      if(ENV_INFO?.platform==='macos') showPaywallPermissionPrompt(s.msg);
+    }else if(s.state==='patched'){
+      if(!PENDING_MAC_ACTION) closeModal('paywallPermissionMask');
+      if(label) label.textContent='✓ 弹窗已解除';
+      if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查';
+      if(s.last_success_at && s.last_success_at!==PAYWALL_NOTICE_AT && !s.result?.already){
+        PAYWALL_NOTICE_AT=s.last_success_at;
+        notifyTypelessPermissionReset(s.result?.resign);
+      }
+    }else if(s.state==='deferred'){
+      if(label) label.textContent='↻ 弹窗待自动修复';
+      if(btn) btn.title=s.msg||'下次受控重启时自动修复';
+    }else if(s.state==='error'||s.state==='unsupported'){
+      if(label) label.textContent='⊘ 解除弹窗';
+      if(btn) btn.title=(s.msg||'自动维护失败')+(s.error?'：'+s.error:'');
+    }
+  }catch(e){}
 }
 async function refreshPatchStatus(){
   try{ const st=await api('/api/paywall-status');
     const label=document.getElementById('patchLabel'), btn=document.getElementById('patchBtn');
-    if(st.data?.patched){ label.textContent='✓ 弹窗已解除'; if(btn) btn.title='Typeless 弹窗补丁已生效；点击可重新检查或修复'; }
-    else if(st.data?.autoDetected){ label.textContent='⊘ 解除弹窗'; if(btn) btn.title='已自动识别当前 Typeless 版本，点击解除相关弹窗'; }
+    if(st.data?.patched){ label.textContent='✓ 弹窗已解除'; if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查'; }
+    else if(st.data?.autoDetected){ label.textContent='↻ 弹窗待自动修复'; if(btn) btn.title='已自动识别当前 Typeless 版本，工具集会自动解除相关弹窗'; }
   }catch(e){}
 }
 async function skipOnboarding(){
@@ -910,16 +1014,32 @@ async function refreshOfficialUpdate(){
   }catch(e){ btn.disabled=false; btn.title='Typeless 官方更新状态读取失败'; }
 }
 async function installOfficialUpdate(){
-  const btn=document.getElementById('officialUpdateBtn');
   const st=await api('/api/official-update'), d=st.data||{};
   if(!d.available){ toast(d.reason||'当前没有可安装的官方更新','err'); return; }
   if(!confirm(`安装 Typeless 官方 ${d.pending.version}?\n\n将校验官方更新包与开发者签名,完整备份当前 Typeless.app 后再替换并重启。\n升级会清除当前弹窗补丁并恢复官方签名。`)) return;
+  const action=()=>performOfficialUpdate(d);
+  if(!(await requestMacAppManagement(action))) return;
+  await action();
+}
+async function performOfficialUpdate(updateStatus){
+  const btn=document.getElementById('officialUpdateBtn');
   btn.disabled=true; btn.textContent='更新中…';
   try {
-    const r=await api('/api/official-update/install',{method:'POST'});
+    const r=await api('/api/official-update/install',{
+      method:'POST', body:JSON.stringify({app_management_confirmed:true})
+    });
     if(r.status==='OK'){
       toast(r.msg||'官方升级完成','ok');
-      if(r.data?.identity_changed){
+      const maintenance=r.data?.paywall_maintenance;
+      if(maintenance?.ok){
+        PAYWALL_NOTICE_AT=maintenance.status?.last_success_at||PAYWALL_NOTICE_AT;
+        notifyTypelessPermissionReset(maintenance.result?.resign);
+      }else if(maintenance?.code==='APP_MANAGEMENT_REQUIRED'){
+        showPaywallPermissionPrompt(
+          maintenance.error||'官方更新已完成，但自动解除弹窗仍需要 App 管理权限。开启后返回即可继续。',
+          ()=>retryPaywallMaintenance()
+        );
+      }else if(r.data?.identity_changed){
         if(r.data?.privacy_reset?.ok){
           alert('Typeless 已恢复新的官方代码身份，旧权限记录已自动清除。\n\n请按系统提示给 Typeless.app 本体重新授权一次；之后注册和切换账号不会重复要求授权。');
         }else{
@@ -927,9 +1047,12 @@ async function installOfficialUpdate(){
         }
         openMacPermissionGuide();
       }
-      setTimeout(()=>{ refreshOfficialUpdate(); refreshPatchStatus(); detectCurrent(); },3000);
+      await fetchEnv();
+      setTimeout(()=>{ refreshOfficialUpdate(); refreshPatchStatus(); refreshPaywallMaintenanceStatus(); detectCurrent(); },3000);
     }
-    else toast(r.msg||'官方升级失败','err');
+    else if(r.data?.code==='APP_MANAGEMENT_REQUIRED'){
+      showPaywallPermissionPrompt(r.msg||'请开启 App 管理权限后继续。',()=>performOfficialUpdate(updateStatus));
+    }else toast(r.msg||'官方升级失败','err');
   } catch(e) { toast('官方升级请求失败:'+e.message,'err'); }
   finally { btn.disabled=false; refreshOfficialUpdate(); }
 }
@@ -1238,6 +1361,7 @@ async function fetchEnv(){
   try{
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
+    ENV_INFO=e;
     const updateBtn=document.getElementById('officialUpdateBtn');
     const permissionBtn=document.getElementById('macPermissionBtn');
     if(updateBtn) updateBtn.style.display=e.platform==='macos'?'':'none';
@@ -1251,6 +1375,7 @@ async function fetchEnv(){
         tips.push('设备缓存: '+e.device_cache_dir+(e.device_cache_exists?' ✓':' ✗'));
         tips.push('凭据: '+e.credential_target);
         tips.push('CDP: '+e.cdp_port);
+        tips.push('App 管理: '+(e.app_management_regrant_required?'当前工具集需重新允许':'已完成当前身份的写入验证'));
       } else {
         tips[0]='平台 '+osName+' · Typeless: '+e.typeless_exe;
       }
@@ -1297,13 +1422,29 @@ document.addEventListener('keydown',e=>{
     else m.classList.remove('on');
   });
 });
-loadAccounts().then(() => { refreshPatchStatus(); detectCurrent(); refreshOfficialUpdate(); refreshDictionarySyncStatus(); });
-fetchEnv();
+(async()=>{
+  await fetchEnv();
+  await loadAccounts();
+  await refreshPatchStatus();
+  await refreshPaywallMaintenanceStatus();
+  detectCurrent();
+  refreshOfficialUpdate();
+  refreshDictionarySyncStatus();
+})();
 refreshOnboardingStatus();
 // 每 20 秒自动探测一次,避免手动刷新
 setInterval(detectCurrent, 20000);
 // 只轮询轻量状态，不在页面轮询中直接触发词库写操作
 setInterval(refreshDictionarySyncStatus, 12000);
+// 弹窗维护由后端执行；页面只读取状态并在需要用户同意时展示一次明确引导。
+setInterval(refreshPaywallMaintenanceStatus, 4000);
+window.addEventListener('focus',async()=>{
+  const mask=document.getElementById('paywallPermissionMask');
+  if(!mask?.classList.contains('on')||PAYWALL_FOCUS_RETRY_BUSY) return;
+  PAYWALL_FOCUS_RETRY_BUSY=true;
+  try{ await retryMacAppManagement(); }
+  finally{ PAYWALL_FOCUS_RETRY_BUSY=false; }
+});
 </script>
 </body>
 </html>

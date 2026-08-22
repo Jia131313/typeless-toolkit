@@ -18,6 +18,7 @@ const {
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
+  toolkitAppManagementState, markToolkitAppManagementAuthorized,
   readMaster, replaceMasterTerms,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
@@ -37,6 +38,8 @@ const TYPELESS_APP = TYPELESS_EXE ? String(TYPELESS_EXE).split('/Contents/')[0] 
 const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const AUTO_SYNC_STARTUP_DELAY_MS = 6000;
 const AUTO_SYNC_DEBOUNCE_MS = 1200;
+const PAYWALL_MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
+const PAYWALL_MAINTENANCE_STARTUP_DELAY_MS = 2500;
 
 function createDictionarySyncController(syncFn, opts = {}) {
   const intervalMs = opts.intervalMs || AUTO_SYNC_INTERVAL_MS;
@@ -166,6 +169,185 @@ function createDictionarySyncController(syncFn, opts = {}) {
 
 const dictionarySync = createDictionarySyncController(syncAllAccounts);
 
+function createPaywallMaintenanceController(statusFn, repairFn, runningFn, opts = {}) {
+  const intervalMs = opts.intervalMs || PAYWALL_MAINTENANCE_INTERVAL_MS;
+  const startupDelayMs = opts.startupDelayMs ?? PAYWALL_MAINTENANCE_STARTUP_DELAY_MS;
+  const automaticEnabled = opts.automaticEnabled !== false;
+  const now = opts.now || (() => Date.now());
+  const setTimeoutFn = opts.setTimeoutFn || setTimeout;
+  const clearTimeoutFn = opts.clearTimeoutFn || clearTimeout;
+  const setIntervalFn = opts.setIntervalFn || setInterval;
+  const clearIntervalFn = opts.clearIntervalFn || clearInterval;
+  const fingerprintFn = opts.fingerprintFn || null;
+  let startupTimer = null;
+  let intervalTimer = null;
+  let inFlight = null;
+  let started = false;
+  let lastFingerprint = null;
+  let state = {
+    state: automaticEnabled ? 'waiting' : 'manual',
+    running: false,
+    automatic_enabled: automaticEnabled,
+    reason: null,
+    last_started_at: null,
+    last_finished_at: null,
+    last_success_at: null,
+    next_check_at: null,
+    error: null,
+    permission: null,
+    result: null,
+    msg: automaticEnabled ? '等待自动检查弹窗状态' : '当前运行方式仅支持手动解除弹窗',
+  };
+
+  const iso = value => new Date(value).toISOString();
+  const unref = timer => { if (timer && typeof timer.unref === 'function') timer.unref(); return timer; };
+  const snapshot = () => ({ ...state, permission: state.permission ? { ...state.permission } : null });
+
+  const run = async (reason = 'manual') => {
+    if (inFlight) return inFlight;
+    let fingerprint = null;
+    try { fingerprint = fingerprintFn ? fingerprintFn() : null; } catch (error) {}
+    if (reason === 'periodic' && fingerprint && lastFingerprint === fingerprint && state.state === 'patched') {
+      state = {
+        ...state,
+        running: false,
+        reason,
+        last_finished_at: iso(now()),
+        next_check_at: null,
+        msg: 'Typeless 程序文件未变化，弹窗补丁状态正常',
+      };
+      return { ok: true, skipped: true, code: 'ARTIFACT_UNCHANGED', status: snapshot() };
+    }
+    state = {
+      ...state,
+      state: 'checking',
+      running: true,
+      reason,
+      last_started_at: iso(now()),
+      next_check_at: null,
+      error: null,
+      permission: null,
+      msg: '正在检查弹窗补丁状态',
+    };
+    const task = (async () => {
+      try {
+        const current = statusFn();
+        if (fingerprint) lastFingerprint = fingerprint;
+        if (current.patched) {
+          const finishedAt = iso(now());
+          state = {
+            ...state,
+            state: 'patched',
+            running: false,
+            last_finished_at: finishedAt,
+            last_success_at: finishedAt,
+            result: { already: true },
+            msg: '弹窗补丁状态正常',
+          };
+          return { ok: true, skipped: true, result: { already: true }, status: snapshot() };
+        }
+        if (!current.exists || current.error) {
+          state = {
+            ...state,
+            state: 'unsupported',
+            running: false,
+            last_finished_at: iso(now()),
+            error: current.error || '未找到 Typeless app.asar',
+            msg: '当前 Typeless 版本暂时无法自动解除弹窗',
+          };
+          return { ok: false, skipped: true, code: 'PAYWALL_UNSUPPORTED', error: state.error, status: snapshot() };
+        }
+        if (reason === 'periodic' && runningFn()) {
+          state = {
+            ...state,
+            state: 'deferred',
+            running: false,
+            last_finished_at: iso(now()),
+            msg: '检测到补丁失效，将在下次受控重启时自动修复',
+          };
+          return { ok: false, skipped: true, code: 'TYPELESS_BUSY', status: snapshot() };
+        }
+
+        state = { ...state, msg: '检测到弹窗补丁失效，正在自动修复' };
+        const result = await repairFn({ reason });
+        try { if (fingerprintFn) lastFingerprint = fingerprintFn(); } catch (error) {}
+        const finishedAt = iso(now());
+        state = {
+          ...state,
+          state: 'patched',
+          running: false,
+          last_finished_at: finishedAt,
+          last_success_at: finishedAt,
+          error: null,
+          permission: null,
+          result,
+          msg: result.already ? '弹窗补丁状态正常' : '弹窗已自动解除',
+        };
+        return { ok: true, result, status: snapshot() };
+      } catch (error) {
+        const permissionRequired = error.code === 'APP_MANAGEMENT_REQUIRED';
+        state = {
+          ...state,
+          state: permissionRequired ? 'permission-required' : 'error',
+          running: false,
+          last_finished_at: iso(now()),
+          error: error.message || String(error),
+          permission: error.permission || null,
+          msg: permissionRequired
+            ? '需要开启 Typeless 工具集的“App 管理”权限，允许后会自动继续'
+            : '自动解除弹窗失败，可点击状态按钮重试',
+        };
+        return {
+          ok: false,
+          code: error.code || 'PAYWALL_PATCH_FAILED',
+          error: state.error,
+          permission: state.permission,
+          data: error.data || null,
+          status: snapshot(),
+        };
+      }
+    })();
+    inFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (inFlight === task) inFlight = null;
+    }
+  };
+
+  const schedule = (reason = 'change', delayMs = 800) => {
+    if (!automaticEnabled) return snapshot();
+    if (startupTimer) clearTimeoutFn(startupTimer);
+    const runAt = now() + Math.max(0, delayMs);
+    state = { ...state, next_check_at: iso(runAt), reason };
+    startupTimer = unref(setTimeoutFn(() => {
+      startupTimer = null;
+      run(reason).catch(error => log('[paywall] 自动维护失败:', error.message));
+    }, Math.max(0, delayMs)));
+    return snapshot();
+  };
+
+  const start = () => {
+    if (started || !automaticEnabled) return snapshot();
+    started = true;
+    schedule('startup', startupDelayMs);
+    intervalTimer = unref(setIntervalFn(() => {
+      run('periodic').catch(error => log('[paywall] 定期检查失败:', error.message));
+    }, intervalMs));
+    return snapshot();
+  };
+
+  const stop = () => {
+    started = false;
+    if (startupTimer) clearTimeoutFn(startupTimer);
+    if (intervalTimer) clearIntervalFn(intervalTimer);
+    startupTimer = null;
+    intervalTimer = null;
+  };
+
+  return { run, schedule, start, stop, status: snapshot };
+}
+
 function isTrustedLocalOrigin(req) {
   const origin = req.headers.origin;
   return !origin || origin === `http://127.0.0.1:${PORT}` || origin === `http://localhost:${PORT}`;
@@ -215,6 +397,135 @@ function writeDiagnosticLog(prefix, details) {
   try { fs.chmodSync(file, 0o600); } catch (error) {}
   return file;
 }
+
+let paywallPatchInFlight = null;
+
+function isMacAppManagementError(error) {
+  if (!IS_MAC || !error) return false;
+  if (['EPERM', 'EACCES', 'APP_MANAGEMENT_REQUIRED'].includes(error.code)) return true;
+  return /operation not permitted|permission denied|app management|App 管理|没有写入.+权限/i.test(error.message || '');
+}
+
+async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
+  if (paywallPatchInFlight) return paywallPatchInFlight;
+  paywallPatchInFlight = (async () => {
+    const currentStatus = paywallStatus();
+    if (currentStatus.patched) {
+      return { already: true, msg: '已是无弹窗补丁版,无需重复操作' };
+    }
+    if (!currentStatus.exists || currentStatus.error) {
+      const error = new Error(currentStatus.error || '未找到 Typeless app.asar');
+      error.code = 'PAYWALL_UNSUPPORTED';
+      throw error;
+    }
+
+    killTypeless(); await sleep(1500);
+    // Windows 延续当前版本的文件级回滚；macOS 在 .app 外创建完整 Bundle 备份，
+    // 避免签名时把 rollback 文件纳入资源封印，也确保能恢复 _CodeSignature 与嵌套组件。
+    const rollbackAsar = IS_MAC ? null : ASAR_PATH + '.toolkit-rollback';
+    const rollbackExe = IS_MAC ? null : TYPELESS_EXE + '.toolkit-rollback';
+    let appBackup = null;
+    let result = null;
+    let operationError = null;
+    let operationPhase = '关闭 Typeless';
+    let rollbackError = null;
+    let restartError = null;
+    try {
+      operationPhase = '创建补丁前备份';
+      if (IS_MAC) {
+        appBackup = createTypelessAppBackup('paywall-patch');
+      } else {
+        fs.copyFileSync(ASAR_PATH, rollbackAsar);
+        fs.copyFileSync(TYPELESS_EXE, rollbackExe);
+      }
+      operationPhase = '修改付费墙与 Electron 完整性配置';
+      result = await patchPaywall();
+      operationPhase = '验证 macOS 代码签名';
+      if (IS_MAC) verifyTypelessAppSignature();
+      operationPhase = '启动补丁版 Typeless';
+      await launchTypeless();
+      operationPhase = '确认补丁版 Typeless 存活';
+      if (!(await waitForTypelessRunning())) throw new Error('Typeless 补丁后未能正常启动');
+    } catch (error) {
+      operationError = error;
+      try {
+        killTypeless(); await sleep(500);
+        if (IS_MAC) {
+          if (appBackup) restoreTypelessAppBackup(appBackup);
+        } else {
+          if (rollbackAsar && fs.existsSync(rollbackAsar)) fs.copyFileSync(rollbackAsar, ASAR_PATH);
+          if (rollbackExe && fs.existsSync(rollbackExe)) fs.copyFileSync(rollbackExe, TYPELESS_EXE);
+        }
+      } catch (restoreError) {
+        rollbackError = restoreError;
+      }
+
+      if (!rollbackError) {
+        try {
+          await launchTypeless();
+          if (!(await waitForTypelessRunning())) throw new Error('恢复后 Typeless 未能正常启动');
+        } catch (launchError) { restartError = launchError; }
+      }
+    } finally {
+      if (!IS_MAC) {
+        try { if (rollbackAsar) fs.unlinkSync(rollbackAsar); } catch (error) {}
+        try { if (rollbackExe) fs.unlinkSync(rollbackExe); } catch (error) {}
+      }
+    }
+
+    if (operationError) {
+      const diagnosticLog = writeDiagnosticLog('paywall-patch-failure', {
+        timestamp: new Date().toISOString(),
+        platform: IS_MAC ? 'macos' : 'windows',
+        phase: operationPhase,
+        error: operationError.message,
+        rollback_error: rollbackError ? rollbackError.message : null,
+        restart_error: restartError ? restartError.message : null,
+        backup: appBackup && appBackup.app ? appBackup.app : null,
+      });
+      const details = [
+        `打补丁失败（${operationPhase}）:` + operationError.message,
+        rollbackError ? '完整回滚失败:' + rollbackError.message : '已恢复补丁前版本',
+        restartError ? '恢复后自动启动失败:' + restartError.message : null,
+        appBackup && appBackup.app ? '完整备份:' + appBackup.app : null,
+        '诊断日志:' + diagnosticLog,
+      ].filter(Boolean).join(';');
+      const error = new Error(details);
+      error.code = isMacAppManagementError(operationError)
+        ? 'APP_MANAGEMENT_REQUIRED'
+        : (operationError.code || 'PAYWALL_PATCH_FAILED');
+      error.permission = error.code === 'APP_MANAGEMENT_REQUIRED'
+        ? { ...toolkitAppManagementState(), regrant_required: true }
+        : (operationError.permission || null);
+      error.data = { phase: operationPhase, diagnostic_log: diagnosticLog };
+      throw error;
+    }
+    if (appBackup && appBackup.app) result.backup = appBackup.app;
+    if (IS_MAC) markToolkitAppManagementAuthorized();
+    return result;
+  })();
+
+  try {
+    return await paywallPatchInFlight;
+  } finally {
+    paywallPatchInFlight = null;
+  }
+}
+
+const paywallMaintenance = createPaywallMaintenanceController(
+  paywallStatus,
+  runPaywallPatchTransaction,
+  isTypelessRunning,
+  // macOS 源码模式由 Terminal/Node 承担 TCC 身份，不能替打包后的工具集申请 App 管理。
+  {
+    automaticEnabled: !IS_MAC || !!process.versions.electron,
+    // 定期检查先比较元数据；Typeless 程序未变化时不复制和解析整个 app.asar。
+    fingerprintFn: () => {
+      const stat = fs.statSync(ASAR_PATH);
+      return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+    },
+  }
+);
 
 // ---------- HTTP ----------
 function send(res, code, obj) {
@@ -344,6 +655,7 @@ const server = http.createServer(async (req, res) => {
       }
       const snap = inspectSnapshot(rec.user_id);
       dictionarySync.schedule(idx >= 0 ? 'account-updated' : 'account-added');
+      paywallMaintenance.schedule(idx >= 0 ? 'account-updated' : 'account-added', 1200);
       return send(res, 200, { status: 'OK', data: accountForClient(rec, null, snap.has_snapshot, snap) });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
@@ -397,6 +709,7 @@ const server = http.createServer(async (req, res) => {
         restoreSnapshot(id);
         const heal = healOnboardingAfterRestore(id);
         await launchTypeless();
+        paywallMaintenance.schedule('account-switch', 1200);
         return send(res, 200, {
           status: 'OK',
           msg: heal.healed
@@ -475,6 +788,7 @@ const server = http.createServer(async (req, res) => {
           nickname: b.nickname || '',
         });
         dictionarySync.schedule('registered-account');
+        paywallMaintenance.schedule('registered-account', 1200);
         const safeResult = {
           ...result,
           account: accountForClient(result.account, null, hasSnapshot(result.account.user_id)),
@@ -488,103 +802,67 @@ const server = http.createServer(async (req, res) => {
     if (m === 'GET' && p === '/api/paywall-status') {
       return send(res, 200, { status: 'OK', data: paywallStatus() });
     }
+    if (m === 'GET' && p === '/api/paywall-maintenance') {
+      return send(res, 200, { status: 'OK', data: paywallMaintenance.status() });
+    }
+    if (m === 'POST' && p === '/api/paywall-maintenance/retry') {
+      const outcome = await paywallMaintenance.run('permission-retry');
+      return send(res, outcome.ok ? 200 : 409, {
+        status: outcome.ok ? 'OK' : 'FAIL',
+        data: outcome,
+        msg: outcome.ok ? (outcome.result?.msg || outcome.status?.msg) : (outcome.error || outcome.status?.msg),
+      });
+    }
     // 查询 Typeless 官方 updater 已下载的更新包（macOS）
     if (m === 'GET' && p === '/api/official-update') {
       return send(res, 200, { status: 'OK', data: officialUpdateStatus({ typelessAppPath: TYPELESS_APP }) });
     }
     // 校验并安装官方更新包,恢复官方签名;当前应用先移到工具集数据目录备份
     if (m === 'POST' && p === '/api/official-update/install') {
-      const result = await installOfficialUpdate({
-        typelessAppPath: TYPELESS_APP,
-        dataRoot: ROOT,
-        userDataDir: USERDATA_DIR,
-      });
+      await readBody(req);
+      let result;
+      try {
+        result = await installOfficialUpdate({
+          typelessAppPath: TYPELESS_APP,
+          dataRoot: ROOT,
+          userDataDir: USERDATA_DIR,
+          launchInstalledApp: false,
+        });
+        if (IS_MAC) markToolkitAppManagementAuthorized();
+      } catch (error) {
+        if (isMacAppManagementError(error)) {
+          return send(res, 409, {
+            status: 'FAIL',
+            data: { code: 'APP_MANAGEMENT_REQUIRED', permission: toolkitAppManagementState() },
+            msg: 'macOS 尚未允许“Typeless 工具集”管理其他 App，请开启后重试',
+          });
+        }
+        throw error;
+      }
+      const maintenance = await paywallMaintenance.run('official-update');
+      result.paywall_maintenance = maintenance;
+      if (!maintenance.ok && !isTypelessRunning()) {
+        try { await launchTypeless(); } catch (error) {
+          result.paywall_launch_error = error.message;
+        }
+      }
+      if (maintenance.ok && !maintenance.result?.already) {
+        result.msg += '；弹窗补丁已自动重新应用';
+      } else if (!maintenance.ok && maintenance.code === 'APP_MANAGEMENT_REQUIRED') {
+        result.msg += '；请开启工具集的 App 管理权限，允许后会自动继续解除弹窗';
+      } else if (!maintenance.ok) {
+        result.msg += '；自动解除弹窗失败，可在工具栏状态入口重试';
+      }
       return send(res, 200, { status: 'OK', data: result, msg: result.msg });
     }
-    // 解除升级弹窗；无论成功或失败都恢复 Typeless 普通启动。
+    // 手动入口保留为状态查看与失败重试；正常情况下由后台维护自动完成。
     if (m === 'POST' && p === '/api/patch-paywall') {
-      const currentStatus = paywallStatus();
-      if (currentStatus.patched) {
-        return send(res, 200, { status: 'OK', data: { already: true, msg: '已是无弹窗补丁版,无需重复操作' } });
-      }
-      killTypeless(); await sleep(1500);
-      // Windows 延续当前版本的文件级回滚；macOS 在 .app 外创建完整 Bundle 备份，
-      // 避免签名时把 rollback 文件纳入资源封印，也确保能恢复 _CodeSignature 与嵌套组件。
-      const rollbackAsar = IS_MAC ? null : ASAR_PATH + '.toolkit-rollback';
-      const rollbackExe = IS_MAC ? null : TYPELESS_EXE + '.toolkit-rollback';
-      let appBackup = null;
-      let result = null;
-      let operationError = null;
-      let operationPhase = '关闭 Typeless';
-      let rollbackError = null;
-      let restartError = null;
-      try {
-        operationPhase = '创建补丁前备份';
-        if (IS_MAC) {
-          appBackup = createTypelessAppBackup('paywall-patch');
-        } else {
-          fs.copyFileSync(ASAR_PATH, rollbackAsar);
-          fs.copyFileSync(TYPELESS_EXE, rollbackExe);
-        }
-        operationPhase = '修改付费墙与 Electron 完整性配置';
-        result = await patchPaywall();
-        operationPhase = '验证 macOS 代码签名';
-        if (IS_MAC) verifyTypelessAppSignature();
-        operationPhase = '启动补丁版 Typeless';
-        await launchTypeless();
-        operationPhase = '确认补丁版 Typeless 存活';
-        if (!(await waitForTypelessRunning())) throw new Error('Typeless 补丁后未能正常启动');
-      } catch (e) {
-        operationError = e;
-        try {
-          killTypeless(); await sleep(500);
-          if (IS_MAC) {
-            if (appBackup) restoreTypelessAppBackup(appBackup);
-          } else {
-            if (rollbackAsar && fs.existsSync(rollbackAsar)) fs.copyFileSync(rollbackAsar, ASAR_PATH);
-            if (rollbackExe && fs.existsSync(rollbackExe)) fs.copyFileSync(rollbackExe, TYPELESS_EXE);
-          }
-        } catch (restoreError) {
-          rollbackError = restoreError;
-        }
-
-        if (!rollbackError) {
-          try {
-            await launchTypeless();
-            if (!(await waitForTypelessRunning())) throw new Error('恢复后 Typeless 未能正常启动');
-          } catch (launchError) { restartError = launchError; }
-        }
-      } finally {
-        if (!IS_MAC) {
-          try { if (rollbackAsar) fs.unlinkSync(rollbackAsar); } catch (_) {}
-          try { if (rollbackExe) fs.unlinkSync(rollbackExe); } catch (_) {}
-        }
-      }
-
-      if (operationError) {
-        const diagnosticLog = writeDiagnosticLog('paywall-patch-failure', {
-          timestamp: new Date().toISOString(),
-          platform: IS_MAC ? 'macos' : 'windows',
-          phase: operationPhase,
-          error: operationError.message,
-          rollback_error: rollbackError ? rollbackError.message : null,
-          restart_error: restartError ? restartError.message : null,
-          backup: appBackup && appBackup.app ? appBackup.app : null,
-        });
-        const details = [
-          `打补丁失败（${operationPhase}）:` + operationError.message,
-          rollbackError ? '完整回滚失败:' + rollbackError.message : '已恢复补丁前版本',
-          restartError ? '恢复后自动启动失败:' + restartError.message : null,
-          appBackup && appBackup.app ? '完整备份:' + appBackup.app : null,
-          '诊断日志:' + diagnosticLog,
-        ].filter(Boolean).join(';');
-        return send(res, 500, {
-          status: 'FAIL', msg: details,
-          data: { phase: operationPhase, diagnostic_log: diagnosticLog },
-        });
-      }
-      if (appBackup && appBackup.app) result.backup = appBackup.app;
-      return send(res, 200, { status: 'OK', data: result });
+      const outcome = await paywallMaintenance.run('manual');
+      return send(res, outcome.ok ? 200 : (outcome.code === 'APP_MANAGEMENT_REQUIRED' ? 409 : 500), {
+        status: outcome.ok ? 'OK' : 'FAIL',
+        data: outcome.ok ? outcome.result : outcome,
+        msg: outcome.ok ? (outcome.result?.msg || outcome.status?.msg) : (outcome.error || outcome.status?.msg),
+      });
     }
     // 跳过新手引导(双写本地文件 + 写入当前账号快照)
     if (m === 'POST' && p === '/api/skip-onboarding') {
@@ -777,8 +1055,15 @@ const server = http.createServer(async (req, res) => {
     // 启动 Typeless：已运行则完全不打扰；未运行才以普通模式启动。
     if (m === 'POST' && p === '/api/launch') {
       if (await isTypelessRunning()) return send(res, 200, { status: 'OK', msg: 'Typeless 已在运行' });
-      await launchTypeless();
-      return send(res, 200, { status: 'OK', msg: 'Typeless 已启动' });
+      const maintenance = await paywallMaintenance.run('launch');
+      if (!isTypelessRunning()) await launchTypeless();
+      return send(res, 200, {
+        status: 'OK',
+        data: { paywall_maintenance: maintenance },
+        msg: maintenance.ok && !maintenance.result?.already
+          ? '弹窗已自动解除，Typeless 已启动'
+          : 'Typeless 已启动',
+      });
     }
     // 功能快捷键:直接读写 app-settings.json,可绕过设置页冲突黑名单(如单独 RightCtrl)
     if (m === 'GET' && p === '/api/shortcuts') {
@@ -812,6 +1097,7 @@ function startServer() {
       server.off('error', onError);
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
+      paywallMaintenance.start();
       resolve(server);
     };
     server.once('error', onError);
@@ -820,7 +1106,10 @@ function startServer() {
   });
 }
 
-server.on('close', () => dictionarySync.stop());
+server.on('close', () => {
+  dictionarySync.stop();
+  paywallMaintenance.stop();
+});
 
 if (require.main === module) {
   startServer().catch(error => {
@@ -833,6 +1122,6 @@ module.exports = {
   server, startServer, PORT,
   isTrustedLocalOrigin, isTrustedLocalHost,
   accountForClient, accountDeleteId, shouldReconnectCurrent,
-  createDictionarySyncController,
-  waitForTypelessRunning, writeDiagnosticLog,
+  createDictionarySyncController, createPaywallMaintenanceController,
+  waitForTypelessRunning, writeDiagnosticLog, runPaywallPatchTransaction,
 };

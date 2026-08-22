@@ -66,6 +66,8 @@ function reconcileToolkitPermissionIdentity(dataDir) {
     requirement: currentRequirement,
     previous_requirement: previousRequirement,
     updated_at: new Date().toISOString(),
+    app_management_regrant_required: true,
+    app_management_authorized_at: null,
   }, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
   try { fs.chmodSync(statePath, 0o600); } catch (error) {}
   return { ok: true, changed: true, reset };

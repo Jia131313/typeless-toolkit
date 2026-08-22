@@ -69,11 +69,13 @@
 - Tone: concise, factual, and action-oriented.
 - Terminology: use state-specific compact toolbar labels such as “词库已对齐”, retain “词库自动对齐” in the detailed modal, use “立即检查” for the manual fallback, and use compact “注册账号” in the toolbar while retaining “注册新账号” for the combined guided flow.
 - Microcopy rules: explain consequences before restarts or deletions; do not ask users to perform a normal synchronization step after adding an account.
+- Permission guidance: when a macOS Toolkit identity requires renewed App Management consent, explain the exact write operation, open the relevant System Settings pane, and resume the pending update or paywall repair when the user returns.
 
 ## Implementation constraints
 - Framework/styling system: one dependency-free HTML/CSS/JavaScript page backed by Node.js HTTP routes.
 - Design-token constraints: extend the existing variables and components; do not add a new CSS framework or dependency.
 - Performance constraints: synchronization is single-flight, debounced, periodic at a modest interval, and must avoid high-frequency writes when the normalized master list is unchanged.
+- Paywall maintenance constraints: startup and account/update workflows may trigger repair when the patch is missing; periodic checks defer while Typeless is active, and the visible action remains a status/retry surface.
 - Compatibility constraints: Node.js 22.12+, Windows WebView2 host, macOS Electron host, and current local API security checks.
 - Test/screenshot expectations: run `npm run check`, `git diff --check`, and inspect approximately 1200 px and 880 px layouts with no horizontal overflow or isolated controls.
 
