@@ -10,6 +10,9 @@ const {
   appBundleForExecutable,
   appBundleProcessPattern,
   macLaunchArgs,
+  macLaunchSpec,
+  macCodeRequirement,
+  permissionIdentityChanged,
 } = require('../lib/platform');
 
 function createSignedFixture(t) {
@@ -117,6 +120,37 @@ test('derives the app bundle from its main executable', { skip: process.platform
     '--remote-debugging-port=9222',
     '--user-data-dir=/tmp/custom Typeless data',
   ]);
+  assert.deepEqual(macLaunchSpec(
+    '/Applications/Typeless.app/Contents/MacOS/Typeless',
+    macLaunchArgs(9222, '/tmp/custom Typeless data')
+  ), {
+    file: '/usr/bin/open',
+    args: [
+      '-n',
+      '/Applications/Typeless.app',
+      '--args',
+      '--remote-debugging-port=9222',
+      '--user-data-dir=/tmp/custom Typeless data',
+    ],
+    options: { stdio: 'ignore' },
+    waitForExit: true,
+  });
+});
+
+test('detects when a macOS code identity changed and old TCC grants must be reset', {
+  skip: process.platform !== 'darwin',
+}, t => {
+  const fixture = createSignedFixture(t);
+  const before = macCodeRequirement(fixture.exe);
+  assert.match(before, /designated\s*=>/);
+  assert.equal(permissionIdentityChanged(before, before), false);
+
+  fs.writeFileSync(path.join(fixture.resources, 'state.txt'), 'identity-changed');
+  platform.resignApp(fixture.exe);
+  const after = macCodeRequirement(fixture.exe);
+  assert.notEqual(after, before);
+  assert.equal(permissionIdentityChanged(before, after), true);
+  assert.equal(permissionIdentityChanged('', after), false);
 });
 
 test('macOS re-signing preserves identifier, entitlements, and hardened runtime', { skip: process.platform !== 'darwin' }, t => {
@@ -131,6 +165,9 @@ test('macOS re-signing preserves identifier, entitlements, and hardened runtime'
   assert.equal(result.verified, true);
   assert.equal(result.quarantine_removed, true);
   assert.equal(result.framework_resigned, true);
+  assert.equal(result.identity_changed, true);
+  assert.equal(result.accessibility_regrant_required, true);
+  assert.notEqual(result.previous_requirement, result.current_requirement);
 
   const details = spawnSync('/usr/bin/codesign', ['-dvv', fixture.app], { encoding: 'utf8' });
   const detailText = `${details.stdout || ''}\n${details.stderr || ''}`;

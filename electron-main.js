@@ -3,6 +3,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } = require('electron');
 const { preferredManagerPort, selectManagerEndpoint } = require('./lib/desktop-host');
+const { platform, appBundleForExecutable, macCodeRequirement } = require('./lib/platform');
 
 const APP_NAME = 'Typeless 工具集';
 let mainWindow;
@@ -35,6 +36,39 @@ function prepareDataDirectory() {
 
   process.env.TYPELESS_DATA_DIR = dataDir;
   return dataDir;
+}
+
+function reconcileToolkitPermissionIdentity(dataDir) {
+  if (process.platform !== 'darwin' || !app.isPackaged) return null;
+  const statePath = path.join(dataDir, 'mac-permission-identity.json');
+  let currentRequirement;
+  try {
+    currentRequirement = macCodeRequirement(appBundleForExecutable(process.execPath));
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+
+  let previousRequirement = null;
+  try {
+    previousRequirement = JSON.parse(fs.readFileSync(statePath, 'utf8')).requirement || null;
+  } catch (error) {}
+  if (previousRequirement === currentRequirement) return { ok: true, changed: false };
+
+  // Toolkit 使用 ad-hoc 签名，每次重新构建都会产生新的 CDHash。主动删除旧 App 管理身份，
+  // 以及旧版错误启动 Typeless 时遗留的 Toolkit 辅助功能项，避免系统设置保留无效的开启开关。
+  const reset = platform.resetPrivacyPermissions(
+    'com.typeless-toolkit.manager',
+    ['SystemPolicyAppBundles', 'Accessibility']
+  );
+  if (!reset.ok) return { ok: false, changed: true, reset };
+
+  fs.writeFileSync(statePath, JSON.stringify({
+    requirement: currentRequirement,
+    previous_requirement: previousRequirement,
+    updated_at: new Date().toISOString(),
+  }, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+  try { fs.chmodSync(statePath, 0o600); } catch (error) {}
+  return { ok: true, changed: true, reset };
 }
 
 function createWindow(port) {
@@ -97,7 +131,9 @@ ipcMain.handle('typeless-toolkit:reset-privacy-permissions', (event, target) => 
   const plans = {
     toolkit: {
       bundleId: 'com.typeless-toolkit.manager',
-      services: ['SystemPolicyAppBundles'],
+      // 旧版直接 spawn Typeless 时，macOS 可能把 Typeless 的辅助功能请求错误归到工具集。
+      // 一并清掉该无用记录；工具集正常只需要 App 管理。
+      services: ['SystemPolicyAppBundles', 'Accessibility'],
       appName: 'Typeless 工具集',
     },
     typeless: {
@@ -125,6 +161,10 @@ ipcMain.handle('typeless-toolkit:reset-privacy-permissions', (event, target) => 
 
 async function launch() {
   const dataDir = prepareDataDirectory();
+  const permissionIdentity = reconcileToolkitPermissionIdentity(dataDir);
+  if (permissionIdentity && !permissionIdentity.ok) {
+    console.warn('[macOS permissions] 无法清理旧工具集权限身份:', permissionIdentity);
+  }
   const preferredPort = preferredManagerPort(
     path.join(dataDir, 'config.json'),
     process.env.TYPELESS_MANAGER_PORT,
