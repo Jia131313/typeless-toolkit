@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
 const {
   effectiveCredentialExpiryMs,
+  selectCapturedAuth,
   tokenType,
   tokenUserId,
   validateCapturedAuth,
@@ -98,3 +99,44 @@ test('keeps access-only captures compatible with old Typeless versions', () => {
   assert.equal(effectiveCredentialExpiryMs({ token: access }), (NOW_SECONDS + 86400) * 1000);
 });
 
+test('prefers the IPC credential pair over captured network bearers', () => {
+  const ipcAccess = accessToken('user-1');
+  const ipcRefresh = refreshToken('user-1');
+  const networkAccess = accessToken('user-2');
+  const selected = selectCapturedAuth({
+    user_id: 'user-1',
+    client_user_id: 'client-1',
+    access_token: ipcAccess,
+    refresh_token: ipcRefresh,
+  }, [{ url: 'https://api.example.test/path', auth: `Bearer ${networkAccess}` }], {
+    found: true,
+    user_id: 'user-1',
+    email: 'one@example.test',
+    roles: 'free',
+  }, NOW_MS);
+
+  assert.equal(selected.token, ipcAccess);
+  assert.equal(selected.refresh_token, ipcRefresh);
+  assert.equal(selected.origin, 'https://api.typeless.com');
+  assert.equal(selected.user_info.email, 'one@example.test');
+});
+
+test('falls back to access network bearers and ignores refresh bearers', () => {
+  const access = accessToken('user-1');
+  const selected = selectCapturedAuth(null, [
+    { url: 'https://api.example.test/refresh', auth: `Bearer ${refreshToken('user-1')}` },
+    { url: 'https://api.example.test/user', auth: `Bearer ${access}` },
+  ], { found: true, user_id: 'user-1', email: '', roles: '' }, NOW_MS);
+
+  assert.equal(selected.token, access);
+  assert.equal(selected.refresh_token, null);
+  assert.equal(selected.origin, 'https://api.example.test');
+});
+
+test('rejects captured credentials that do not match the current account', () => {
+  assert.throws(() => selectCapturedAuth({
+    user_id: 'user-2',
+    access_token: accessToken('user-2'),
+    refresh_token: refreshToken('user-2'),
+  }, [], { found: true, user_id: 'user-1' }, NOW_MS), /账号不一致/);
+});
