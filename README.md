@@ -82,7 +82,7 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 - `TypelessToolkit-v1.6.0-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
 - `TypelessToolkit-v1.6.0-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
-两个公开包都会强制使用示例账号和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
+两个公开包都会强制使用空账号列表和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
 
 ## 功能列表
@@ -131,7 +131,7 @@ A: 点击「添加当前账号」时，管理器会临时用调试端口重启 T
 抓取有明确超时，无论成功或失败都会尝试恢复 Typeless。请先确认 Typeless 已安装、已登录且可以正常使用。
 
 **Q: 如何手动刷新当前登录账号?**
-A: 点击右上角的账号状态条（或聚焦后按 Enter/空格）。该操作只读取本地 `app-storage.json`，不会开启调试模式，也不会重启 Typeless。
+A: 点击右上角的账号状态条（或聚焦后按 Enter/空格）。已收录账号只会刷新显示；如果当前账号尚未收录，会直接打开“添加当前账号”窗口。日常检测只读取本地 `app-storage.json`，不会开启调试模式，也不会重启 Typeless。
 
 **Q: 打补丁后 Typeless 闪退?**
 A: 日志若出现 `FATAL:asar_util.cc ... Integrity check failed`，说明完整性处理没有适配当前版本。
@@ -142,8 +142,7 @@ A: 日志若出现 `FATAL:asar_util.cc ... Integrity check failed`，说明完�
 A: 自动更新会重写 `app.asar` 和主程序。工具集会在启动、账号变更或官方更新流程后自动检测并重新应用补丁；若 macOS 要求当前工具集身份重新获得 App 管理权限，会直接打开对应设置，允许后自动继续。
 
 **Q: token 会过期吗?**
-A: Typeless 的 JWT 约 1 年有效。token 失效后管理器会显示「token失效」,重新点「添加当前账号」
-  抓一次新 token 即可。
+A: Typeless 2.3.1 之后的 access token 约 24 小时有效，refresh token 约 1 年有效。工具集会在需要调用 API 时自动用 refresh token 换取新的 access token，不需要每天打开工具集续签；只有长期 refresh token 也过期或被撤销时，才需要重新登录并点「添加当前账号」。
 
 **Q: 支持 Mac/Linux 吗?**
 A: **Windows 与 macOS 都支持**(平台差异集中在 `lib/platform.js`)。Linux 暂未适配。

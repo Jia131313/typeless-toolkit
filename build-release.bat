@@ -37,7 +37,7 @@ if errorlevel 1 exit /b 1
 
 if not exist "%RELEASE%\data\config.json" copy /Y config.example.json "%RELEASE%\data\config.json" >nul
 copy /Y accounts.example.json "%RELEASE%\data\accounts.example.json" >nul
-if not exist "%RELEASE%\data\accounts.json" copy /Y accounts.example.json "%RELEASE%\data\accounts.json" >nul
+if not exist "%RELEASE%\data\accounts.json" echo []>"%RELEASE%\data\accounts.json"
 if not exist "%RELEASE%\data\profiles" mkdir "%RELEASE%\data\profiles"
 
 del /Q "%RELEASE%\TrayApp.exe" "%RELEASE%\TrayApp-wvbrowser.exe" "%RELEASE%\启动.bat" "%RELEASE%\启动-浏览器独立窗口.bat" "%RELEASE%\启动-内嵌窗口.bat" 2>nul

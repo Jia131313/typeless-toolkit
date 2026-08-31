@@ -69,7 +69,8 @@ function Copy-PublicFiles([string]$target) {
 
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'config.example.json') -Destination (Join-Path $target 'data\config.json') -Force
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'accounts.example.json') -Destination (Join-Path $target 'data\accounts.example.json') -Force
-  Copy-Item -LiteralPath (Join-Path $sourceRoot 'accounts.example.json') -Destination (Join-Path $target 'data\accounts.json') -Force
+  $accountsPath = Join-Path $target 'data\accounts.json'
+  [IO.File]::WriteAllText($accountsPath, '[]', [Text.UTF8Encoding]::new($false))
 }
 
 function Install-ProductionDependencies([string]$target) {
@@ -87,7 +88,7 @@ function Install-ProductionDependencies([string]$target) {
 function Assert-PublicData([string]$target) {
   $accountsPath = Join-Path $target 'data\accounts.json'
   $accounts = @(Get-Content -Raw -Encoding UTF8 $accountsPath | ConvertFrom-Json)
-  if ($accounts.Count -ne 1 -or $accounts[0].email -ne 'account@example.com' -or $accounts[0].token -notmatch '^<') {
+  if ($accounts.Count -ne 0) {
     throw "Public accounts.json is not sanitized: $accountsPath"
   }
   if (@(Get-ChildItem (Join-Path $target 'data\profiles') -Force).Count) {

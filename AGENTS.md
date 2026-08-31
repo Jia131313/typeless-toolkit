@@ -40,7 +40,7 @@
 4. 任务栏、标题栏、托盘、Web logo/favicon 必须从同一图标源派生，并保留透明圆角。
 5. `manager_port` 来自配置。复用已监听端口前必须请求 `/api/env` 并验证 `service=typeless-toolkit`，不能只检查 TCP 监听。
 6. 用户数据与代码分离。不得提交或覆盖真实 `accounts.json`、`profiles/`、词库 CSV、备份和 `config.local.json`。
-7. 公开包只能由公开构建脚本生成，必须使用示例账号、空 `profiles/`，并输出校验值；禁止直接压缩自用目录。
+7. 公开包只能由公开构建脚本生成，必须使用空账号列表、空 `profiles/`，并输出校验值；禁止直接压缩自用目录。
 8. 付费墙补丁必须语义定位真实 handler，不能退回“第一个含 paywall 的脚本”。失败时必须事务回滚并尽量恢复 Typeless。
 9. macOS 官方升级必须保留 SHA-512、版本、Bundle ID、Developer ID、Gatekeeper 校验和失败回滚。
 
