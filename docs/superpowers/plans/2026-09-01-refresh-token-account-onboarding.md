@@ -372,4 +372,3 @@ The user has already selected direct integration. Update local `main` with `git 
 - [ ] **Step 7: Reply to Issue #18**
 
 Post the verified root cause, affected Typeless version range, fixed behavior, and one-time migration instruction. Do not include token values, local paths, or account identities.
-
