@@ -4,8 +4,10 @@ const assert = require('node:assert/strict');
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
 const {
   createAccountCredentialManager,
+  createLiveStatus,
   effectiveCredentialExpiryMs,
   selectCapturedAuth,
+  tokenExpiryMs,
   tokenType,
   tokenUserId,
   validateCapturedAuth,
@@ -211,4 +213,47 @@ test('rejects unusable refresh responses without deleting stored credentials', a
     user_id: 'user-1', token: accessToken('user-1', -1), refresh_token: refreshToken('user-1', -1),
   };
   await assert.rejects(transient.ensureAccessToken(expiredRefreshAccount), /refresh token 已过期/i);
+});
+
+test('live status refreshes credentials before every account API request', async () => {
+  const old = accessToken('user-1', -1);
+  const fresh = accessToken('user-1', 3600);
+  const refresh = refreshToken('user-1');
+  const account = { user_id: 'user-1', token: old, refresh_token: refresh };
+  let ensured = false;
+  const seenTokens = [];
+  const status = createLiveStatus({
+    nowFn: () => NOW_MS,
+    ensureAccessTokenFn: async target => {
+      ensured = true;
+      target.token = fresh;
+      return fresh;
+    },
+    curlApiFn: async (method, path, token) => {
+      assert.equal(ensured, true);
+      seenTokens.push(token);
+      if (path === '/user/get_user_info') return { data: { id: 'user-1' } };
+      if (path === '/user/usage_stats') return { data: { voice_transcription: { used: 0 } } };
+      if (path === '/user/personal_stats') return { data: {} };
+      return { data: { total_count: 0 } };
+    },
+  });
+
+  const result = await status(account);
+  assert.equal(result.token_valid, true);
+  assert.equal(result.credential_state, 'ready');
+  assert.equal(result.access_exp, tokenExpiryMs(fresh));
+  assert.equal(result.credential_exp, tokenExpiryMs(refresh));
+  assert.deepEqual(seenTokens, [fresh, fresh, fresh, fresh]);
+});
+
+test('live status distinguishes refresh failures from permanent expiry', async () => {
+  const makeStatus = message => createLiveStatus({
+    nowFn: () => NOW_MS,
+    ensureAccessTokenFn: async () => { throw new Error(message); },
+    curlApiFn: async () => assert.fail('API must not run without a usable access token'),
+  })({ user_id: 'user-1', token: accessToken('user-1', -1), refresh_token: refreshToken('user-1') });
+
+  assert.equal((await makeStatus('network unavailable')).credential_state, 'refresh_error');
+  assert.equal((await makeStatus('refresh token 已过期')).credential_state, 'expired');
 });

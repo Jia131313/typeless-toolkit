@@ -22,6 +22,7 @@ const {
   readMaster, replaceMasterTerms,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
+  ensureAccountAccessToken,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount, syncAllAccounts,
   paywallStatus, patchPaywall,
@@ -359,7 +360,7 @@ function isTrustedLocalHost(req) {
 }
 
 function accountForClient(account, live, hasSnapshotValue, snap) {
-  const { token, ...safe } = account || {};
+  const { token, refresh_token, ...safe } = account || {};
   const out = { ...safe, live, has_snapshot: hasSnapshotValue };
   if (snap) {
     out.snapshot_ok = snap.snapshot_ok;
@@ -638,6 +639,8 @@ const server = http.createServer(async (req, res) => {
         user_id: b.user_id,
         nickname: b.nickname || b.email || (b.user_id || '').slice(0, 8),
         email: b.email, role: b.role, token: b.token, captured_at: b.captured_at,
+        refresh_token: b.refresh_token || (idx >= 0 ? accs[idx].refresh_token : null) || null,
+        client_user_id: b.client_user_id || (idx >= 0 ? accs[idx].client_user_id : null) || null,
         added_at: idx >= 0 ? accs[idx].added_at : new Date().toISOString(),
       };
       if (idx >= 0) accs[idx] = rec; else accs.push(rec);
@@ -900,14 +903,16 @@ const server = http.createServer(async (req, res) => {
       const src = accs.find(x => x.user_id === srcId);
       const dst = accs.find(x => x.user_id === dstId);
       if (!src || !dst) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const sl = await fetchAllWords(src.token);
+      const srcToken = await ensureAccountAccessToken(src);
+      const dstToken = await ensureAccountAccessToken(dst);
+      const sl = await fetchAllWords(srcToken);
       const srcWords = (sl.words || []).map(w => w.term).filter(Boolean);
-      const dl = await fetchAllWords(dst.token);
+      const dl = await fetchAllWords(dstToken);
       const have = new Set((dl.words || []).map(w => w.term));
       const missing = srcWords.filter(w => !have.has(w));
       let imported = 0;
       if (missing.length) {
-        const r = await curlApi('POST', '/user/dictionary/bulk-import', dst.token, { content: missing.join('\n') });
+        const r = await curlApi('POST', '/user/dictionary/bulk-import', dstToken, { content: missing.join('\n') });
         imported = r.data?.success_count ?? 0;
       }
       dictionarySync.schedule('dictionary-copy');
@@ -928,7 +933,8 @@ const server = http.createServer(async (req, res) => {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const dl = await fetchAllWords(acc.token);
+      const token = await ensureAccountAccessToken(acc);
+      const dl = await fetchAllWords(token);
       return send(res, 200, { status: 'OK', data: dl });
     }
     // 导出单账号词库为 txt 文件下载
@@ -936,7 +942,8 @@ const server = http.createServer(async (req, res) => {
       const id = decodeURIComponent(p.split('/')[3]);
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const dl = await fetchAllWords(acc.token);
+      const token = await ensureAccountAccessToken(acc);
+      const dl = await fetchAllWords(token);
       const name = (acc.nickname || id).replace(/[\\/:*?"<>|]/g, '_');
       return sendDownload(res, `Typeless词库_${name}.txt`, dictToText(dl.words));
     }
@@ -995,7 +1002,8 @@ const server = http.createServer(async (req, res) => {
       const acc = readAccounts().find(x => x.user_id === id);
       const b = await readBody(req);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
-      const r = await curlApi('POST', '/user/dictionary/bulk-import', acc.token, { content: b.term });
+      const token = await ensureAccountAccessToken(acc);
+      const r = await curlApi('POST', '/user/dictionary/bulk-import', token, { content: b.term });
       if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '添加失败') });
       clearDictionaryDeletions([b.term]);
       dictionarySync.schedule('word-added');
@@ -1007,10 +1015,11 @@ const server = http.createServer(async (req, res) => {
       const acc = readAccounts().find(x => x.user_id === id);
       if (!acc) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
       const term = u.searchParams.get('term');
-      const dl = await fetchAllWords(acc.token);
+      const token = await ensureAccountAccessToken(acc);
+      const dl = await fetchAllWords(token);
       const w = (dl.words || []).find(x => x.term === term);
       if (!w) return send(res, 404, { status: 'FAIL', msg: '词条不存在' });
-      const r = await curlApi('POST', '/user/dictionary/delete', acc.token, { user_dictionary_id: w.user_dictionary_id });
+      const r = await curlApi('POST', '/user/dictionary/delete', token, { user_dictionary_id: w.user_dictionary_id });
       if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '删除失败') });
       recordDictionaryDeletions([term], `account:${id}`);
       dictionarySync.schedule('word-deleted');

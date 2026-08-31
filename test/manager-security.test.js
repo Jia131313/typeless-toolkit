@@ -35,6 +35,7 @@ test('never exposes bearer tokens in account list responses', () => {
     user_id: 'u1',
     email: 'user@example.com',
     token: 'secret-token',
+    refresh_token: 'secret-refresh-token',
   }, { token_valid: true }, true), {
     user_id: 'u1',
     email: 'user@example.com',
