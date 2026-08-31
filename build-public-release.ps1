@@ -87,8 +87,8 @@ function Install-ProductionDependencies([string]$target) {
 
 function Assert-PublicData([string]$target) {
   $accountsPath = Join-Path $target 'data\accounts.json'
-  $accounts = @(Get-Content -Raw -Encoding UTF8 $accountsPath | ConvertFrom-Json)
-  if ($accounts.Count -ne 0) {
+  $accountsJson = Get-Content -Raw -Encoding UTF8 $accountsPath
+  if ($accountsJson.Trim() -ne '[]') {
     throw "Public accounts.json is not sanitized: $accountsPath"
   }
   if (@(Get-ChildItem (Join-Path $target 'data\profiles') -Force).Count) {

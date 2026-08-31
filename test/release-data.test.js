@@ -10,7 +10,7 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 
 test('public packages start with an empty account list', () => {
   assert.match(publicBuild, /WriteAllText\([^\n]*accountsPath[\s\S]*?'\[\]'/);
-  assert.match(publicBuild, /accounts\.Count\s+-ne\s+0/);
+  assert.match(publicBuild, /accountsJson\.Trim\(\)\s+-ne\s+'\[\]'/);
   assert.doesNotMatch(publicBuild, /accounts\[0\]\.email/);
 });
 
