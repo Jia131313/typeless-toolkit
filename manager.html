@@ -236,7 +236,6 @@
   <div class="toolbar">
     <div class="tool-group primary-tools">
       <button class="btn primary" onclick="launch()" title="启动 Typeless 桌面端">⏻ 启动 Typeless</button>
-      <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加账号</button>
       <div class="divider"></div>
       <button class="btn" onclick="loadAccounts()" title="重新读取账号、额度和当前状态">↻ 刷新</button>
       <button class="btn sync-btn" id="dictionarySyncBtn" data-state="waiting" onclick="openDictionarySyncStatus()" aria-live="polite" title="查看词库自动对齐状态或立即检查">
@@ -250,6 +249,7 @@
     <div class="tool-group system-tools">
       <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
       <button class="btn primary" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化">＋ 注册账号</button>
+      <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加当前账号</button>
       <button class="btn danger" id="patchBtn" onclick="patchPaywall()" title="检查并解除 Typeless 的相关弹窗；已解除时可查看当前状态"><span id="patchLabel">⊘ 解除弹窗</span></button>
     </div>
   </div>
@@ -600,7 +600,7 @@ function sortAccounts(list){
 }
 function render(){
   const g=document.getElementById('grid');
-  if(!ACCOUNTS.length){ g.innerHTML='<div class="empty"><div class="big">👤</div>还没有账号。<br>先在 Typeless 登录一个账号,再点上方「添加账号」。</div>'; return; }
+  if(!ACCOUNTS.length){ g.innerHTML='<div class="empty"><div class="big">👤</div>还没有账号。<br>先在 Typeless 登录你的账号，然后在这里收录。<br><button class="btn primary" style="margin:16px auto 0" onclick="addAccount()">＋ 添加当前账号</button></div>'; return; }
   const q=(document.getElementById('q').value||'').trim().toLowerCase();
   let list=ACCOUNTS.filter(a=>!q||(a.nickname||'').toLowerCase().includes(q)||(a.email||'').toLowerCase().includes(q));
   list=sortAccounts(list);
@@ -611,7 +611,7 @@ function render(){
     const used=ok?u.week_word_usage_value:0, lim=u.week_word_usage_limit||8000;
     const p=pct(used,lim), pcls=p>85?'err':p>65?'warn':'';
     const valid=live.token_valid!==false;
-    const days=live.token_days_left;
+    const days=live.credential_days_left;
     const daysTxt = days==null?'—':(days<0?'已过期':days+'天');
     const daysCls = days==null?'mut':'';
     const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
@@ -629,7 +629,7 @@ function render(){
       <div class="mini">
         <div class="m"><div class="k">词库</div><div class="v">${live.dict_count??'-'}</div></div>
         <div class="m"><div class="k">个性化</div><div class="v">${Math.round((live.personal?.total_learning_ratio||0)*100)}%</div></div>
-        <div class="m"><div class="k">凭证有效</div><div class="v ${daysCls}">${daysTxt}</div></div>
+        <div class="m"><div class="k">登录有效期</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
       <div class="cfoot">
         <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照')}</span>
@@ -1106,7 +1106,7 @@ async function doCapture(){
 }
 async function saveAccount(){
   const d=window._cap; if(!d) return;
-  const r=await api('/api/accounts',{method:'POST',body:JSON.stringify({user_id:d.user_id,nickname:document.getElementById('addNick').value.trim(),email:d.email,role:d.role,token:d.token,captured_at:d.captured_at})});
+  const r=await api('/api/accounts',{method:'POST',body:JSON.stringify({user_id:d.user_id,nickname:document.getElementById('addNick').value.trim(),email:d.email,role:d.role,token:d.token,refresh_token:d.refresh_token,client_user_id:d.client_user_id,captured_at:d.captured_at})});
   if(r.status!=='OK'){ toast('保存失败','err'); return; }
   closeModal('addMask'); toast('已保存，词库将在后台自动对齐','ok');
   await loadAccounts(); detectCurrent();
@@ -1403,7 +1403,8 @@ async function detectCurrent(manual=false){
       pill.title='当前登录：'+(d.email||matched.email||matched.nickname)+'（已收录）；点击重新检测';
     }else{
       dot.className='dot warn'; txt.textContent='已登录，但该账号尚未收录';
-      pill.title='当前登录：'+(d.email||d.user_id)+'。如需收录，请点击工具栏“添加当前账号”；点击此处可重新检测。';
+      pill.title='当前登录：'+(d.email||d.user_id)+'（尚未收录）；点击即可添加当前账号。';
+      if(manual) addAccount();
     }
     render();
   }catch(err){
