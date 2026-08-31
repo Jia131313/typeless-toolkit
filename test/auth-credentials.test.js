@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
 const {
+  createAccountCredentialManager,
   effectiveCredentialExpiryMs,
   selectCapturedAuth,
   tokenType,
@@ -139,4 +140,75 @@ test('rejects captured credentials that do not match the current account', () =>
     access_token: accessToken('user-2'),
     refresh_token: refreshToken('user-2'),
   }, [], { found: true, user_id: 'user-1' }, NOW_MS), /账号不一致/);
+});
+
+test('refreshes a nearly expired access token and persists rotated credentials', async () => {
+  const oldRefresh = refreshToken('user-1');
+  const freshAccess = accessToken('user-1', 7200);
+  const freshRefresh = refreshToken('user-1', 31536000 + 60);
+  let accounts = [{ user_id: 'user-1', token: accessToken('user-1', 300), refresh_token: oldRefresh }];
+  let requestArgs;
+  const manager = createAccountCredentialManager({
+    readAccountsFn: () => accounts,
+    writeAccountsFn: next => { accounts = next; },
+    refreshRequestFn: async (...args) => {
+      requestArgs = args;
+      return { access_token: freshAccess, refresh_token: freshRefresh };
+    },
+    nowFn: () => NOW_MS,
+    appName: 'desktop_windows',
+  });
+
+  assert.equal(await manager.ensureAccessToken(accounts[0]), freshAccess);
+  assert.deepEqual(requestArgs, [oldRefresh, 'desktop_windows']);
+  assert.equal(accounts[0].token, freshAccess);
+  assert.equal(accounts[0].refresh_token, freshRefresh);
+});
+
+test('keeps valid access tokens and coalesces concurrent refreshes', async () => {
+  const valid = { user_id: 'user-1', token: accessToken('user-1', 3600), refresh_token: refreshToken('user-1') };
+  let calls = 0;
+  const noRefresh = createAccountCredentialManager({
+    readAccountsFn: () => [valid], writeAccountsFn: () => {},
+    refreshRequestFn: async () => { calls++; }, nowFn: () => NOW_MS, appName: 'desktop_windows',
+  });
+  assert.equal(await noRefresh.ensureAccessToken(valid), valid.token);
+  assert.equal(calls, 0);
+
+  const expiring = { user_id: 'user-1', token: accessToken('user-1', 1), refresh_token: refreshToken('user-1') };
+  const fresh = accessToken('user-1', 3600);
+  const singleFlight = createAccountCredentialManager({
+    readAccountsFn: () => [expiring], writeAccountsFn: () => {},
+    refreshRequestFn: async () => { calls++; await new Promise(resolve => setImmediate(resolve)); return { access_token: fresh }; },
+    nowFn: () => NOW_MS, appName: 'desktop_windows',
+  });
+  assert.deepEqual(await Promise.all([
+    singleFlight.ensureAccessToken(expiring),
+    singleFlight.ensureAccessToken(expiring),
+  ]), [fresh, fresh]);
+  assert.equal(calls, 1);
+});
+
+test('rejects unusable refresh responses without deleting stored credentials', async () => {
+  const original = { user_id: 'user-1', token: accessToken('user-1', -1), refresh_token: refreshToken('user-1') };
+  const accounts = [original];
+  const mismatch = createAccountCredentialManager({
+    readAccountsFn: () => accounts, writeAccountsFn: () => assert.fail('must not persist invalid credentials'),
+    refreshRequestFn: async () => ({ access_token: accessToken('user-2') }),
+    nowFn: () => NOW_MS, appName: 'desktop_windows',
+  });
+  await assert.rejects(mismatch.ensureAccessToken(original), /账号不一致/);
+  assert.equal(accounts[0].refresh_token, original.refresh_token);
+
+  const transient = createAccountCredentialManager({
+    readAccountsFn: () => accounts, writeAccountsFn: () => assert.fail('must not delete credentials'),
+    refreshRequestFn: async () => { throw new Error('network unavailable'); },
+    nowFn: () => NOW_MS, appName: 'desktop_windows',
+  });
+  await assert.rejects(transient.ensureAccessToken(original), /network unavailable/);
+
+  const expiredRefreshAccount = {
+    user_id: 'user-1', token: accessToken('user-1', -1), refresh_token: refreshToken('user-1', -1),
+  };
+  await assert.rejects(transient.ensureAccessToken(expiredRefreshAccount), /refresh token 已过期/i);
 });
