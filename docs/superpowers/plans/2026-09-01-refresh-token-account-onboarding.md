@@ -143,7 +143,7 @@ const manager = createAccountCredentialManager({
   writeAccountsFn: next => { accounts = next; },
   refreshRequestFn: async refreshToken => ({ access_token: freshAccess }),
   nowFn: () => nowMs,
-  appName: 'desktop_windows',
+  appName: 'typeless_webapp',
 });
 assert.equal(await manager.ensureAccessToken(accounts[0]), freshAccess);
 assert.equal(accounts[0].token, freshAccess);
@@ -160,10 +160,8 @@ Run `node --test test/auth-credentials.test.js`; expect missing-manager failure.
 Expose `authAppName()` from each platform implementation:
 
 ```js
-// Windows
-authAppName() { return 'desktop_windows'; }
-// macOS
-authAppName() { return 'desktop_macos'; }
+// Typeless 2.4 uses the same OAuth client identifier on both desktop platforms.
+authAppName() { return 'typeless_webapp'; }
 ```
 
 - [ ] **Step 4: Implement the credential manager**
@@ -171,7 +169,7 @@ authAppName() { return 'desktop_macos'; }
 Use a `Map<user_id, Promise>` for single-flight refreshes. The production refresh request calls:
 
 ```js
-curlApi('POST', `/oauth/refresh_access_token?app=${encodeURIComponent(PLAT.authAppName())}`, refreshToken)
+curlApi('POST', '/oauth/refresh_access_token', refreshToken, { app: PLAT.authAppName() })
 ```
 
 Accept `response.data.access_token`; validate access and optional replacement refresh tokens; update both the passed account object and the matching persisted account record. Export `ensureAccountAccessToken` and a small `ensureAccountCredentials` wrapper for callers that need the updated object.

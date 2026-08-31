@@ -5,6 +5,7 @@ process.env.TYPELESS_EXE = '/path/that/does/not/exist';
 const {
   createAccountCredentialManager,
   createLiveStatus,
+  createTypelessRefreshRequest,
   effectiveCredentialExpiryMs,
   selectCapturedAuth,
   tokenExpiryMs,
@@ -12,6 +13,7 @@ const {
   tokenUserId,
   validateCapturedAuth,
 } = require('../lib/common');
+const { platform } = require('../lib/platform');
 
 function jwt(payload) {
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -20,6 +22,25 @@ function jwt(payload) {
 
 const NOW_SECONDS = 2_000_000_000;
 const NOW_MS = NOW_SECONDS * 1000;
+
+test('uses the auth app identifier required by Typeless 2.4', () => {
+  assert.equal(platform.authAppName(), 'typeless_webapp');
+});
+
+test('sends the OAuth app as the POST body used by the Typeless client', async () => {
+  let args;
+  const request = createTypelessRefreshRequest(async (...received) => {
+    args = received;
+    return { data: { access_token: 'fresh-token' } };
+  });
+  assert.deepEqual(await request('refresh-token', 'typeless_webapp'), { access_token: 'fresh-token' });
+  assert.deepEqual(args, [
+    'POST',
+    '/oauth/refresh_access_token',
+    'refresh-token',
+    { app: 'typeless_webapp' },
+  ]);
+});
 
 function accessToken(userId = 'user-1', expiresIn = 86400) {
   return jwt({
@@ -158,11 +179,11 @@ test('refreshes a nearly expired access token and persists rotated credentials',
       return { access_token: freshAccess, refresh_token: freshRefresh };
     },
     nowFn: () => NOW_MS,
-    appName: 'desktop_windows',
+    appName: 'typeless_webapp',
   });
 
   assert.equal(await manager.ensureAccessToken(accounts[0]), freshAccess);
-  assert.deepEqual(requestArgs, [oldRefresh, 'desktop_windows']);
+  assert.deepEqual(requestArgs, [oldRefresh, 'typeless_webapp']);
   assert.equal(accounts[0].token, freshAccess);
   assert.equal(accounts[0].refresh_token, freshRefresh);
 });
@@ -172,7 +193,7 @@ test('keeps valid access tokens and coalesces concurrent refreshes', async () =>
   let calls = 0;
   const noRefresh = createAccountCredentialManager({
     readAccountsFn: () => [valid], writeAccountsFn: () => {},
-    refreshRequestFn: async () => { calls++; }, nowFn: () => NOW_MS, appName: 'desktop_windows',
+    refreshRequestFn: async () => { calls++; }, nowFn: () => NOW_MS, appName: 'typeless_webapp',
   });
   assert.equal(await noRefresh.ensureAccessToken(valid), valid.token);
   assert.equal(calls, 0);
@@ -182,7 +203,7 @@ test('keeps valid access tokens and coalesces concurrent refreshes', async () =>
   const singleFlight = createAccountCredentialManager({
     readAccountsFn: () => [expiring], writeAccountsFn: () => {},
     refreshRequestFn: async () => { calls++; await new Promise(resolve => setImmediate(resolve)); return { access_token: fresh }; },
-    nowFn: () => NOW_MS, appName: 'desktop_windows',
+    nowFn: () => NOW_MS, appName: 'typeless_webapp',
   });
   assert.deepEqual(await Promise.all([
     singleFlight.ensureAccessToken(expiring),
@@ -197,7 +218,7 @@ test('rejects unusable refresh responses without deleting stored credentials', a
   const mismatch = createAccountCredentialManager({
     readAccountsFn: () => accounts, writeAccountsFn: () => assert.fail('must not persist invalid credentials'),
     refreshRequestFn: async () => ({ access_token: accessToken('user-2') }),
-    nowFn: () => NOW_MS, appName: 'desktop_windows',
+    nowFn: () => NOW_MS, appName: 'typeless_webapp',
   });
   await assert.rejects(mismatch.ensureAccessToken(original), /账号不一致/);
   assert.equal(accounts[0].refresh_token, original.refresh_token);
@@ -205,7 +226,7 @@ test('rejects unusable refresh responses without deleting stored credentials', a
   const transient = createAccountCredentialManager({
     readAccountsFn: () => accounts, writeAccountsFn: () => assert.fail('must not delete credentials'),
     refreshRequestFn: async () => { throw new Error('network unavailable'); },
-    nowFn: () => NOW_MS, appName: 'desktop_windows',
+    nowFn: () => NOW_MS, appName: 'typeless_webapp',
   });
   await assert.rejects(transient.ensureAccessToken(original), /network unavailable/);
 
