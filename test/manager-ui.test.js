@@ -24,6 +24,11 @@ test('opens account collection when the manually detected account is not managed
   assert.match(html, /if\s*\(manual\)\s*addAccount\(\)/);
 });
 
+test('guides managed legacy accounts through credential recapture', () => {
+  assert.match(html, /credentialNeedsUpdate\s*=\s*live\.credential_state\s*===\s*['"]legacy['"]/);
+  assert.match(html, /if\s*\(manual\s*&&\s*matched\.live\?\.credential_state\s*===\s*['"]legacy['"]\)\s*addAccount\(\)/);
+});
+
 test('renders effective login lifetime and a direct empty-state action', () => {
   assert.match(html, /credential_days_left/);
   assert.match(html, /登录有效期/);
