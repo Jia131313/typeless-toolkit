@@ -324,7 +324,7 @@
     <div class="hd"><h3>☁ 账号同步</h3><button class="icon-btn" onclick="closeModal('accountSyncMask')">✕</button></div>
     <div class="bd">
       <div class="hint" style="margin-bottom:14px">
-        在多台 Windows / Mac 间同步账号及长期 refresh token。远端文件使用同步密码经 scrypt + AES-256-GCM 加密；不会上传短期 access token、登录快照、设备信息或词库。
+        在多台 Windows / Mac 间同步账号及长期 refresh token，或同步主词库。远端文件使用同步密码经 scrypt + AES-256-GCM 加密；不会上传短期 access token、登录快照或设备信息。
       </div>
       <div class="field"><label>服务</label><select class="fld" id="accountSyncProvider" onchange="updateAccountSyncProvider()">
         <option value="disabled">关闭同步</option>
@@ -332,6 +332,9 @@
         <option value="webdav">其他 WebDAV</option>
       </select></div>
       <div id="accountSyncFields">
+        <div class="field"><label>同步内容</label><select class="fld" id="accountSyncScope">
+          <option value="accounts">仅账号（refresh token）</option><option value="dictionary">仅词库</option><option value="all">账号和词库</option>
+        </select></div>
         <div class="field"><label>WebDAV URL</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
         <div class="field"><label>用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
         <div class="field"><label>WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空表示保持已保存密码"></div>
@@ -845,6 +848,7 @@ function accountSyncPayload(){
     password:document.getElementById('accountSyncPassword').value,
     sync_password:document.getElementById('accountSyncVaultPassword').value,
     remote_path:document.getElementById('accountSyncPath').value.trim(),
+    sync_scope:document.getElementById('accountSyncScope').value,
   };
 }
 function accountSyncStatusText(status){
@@ -865,6 +869,7 @@ async function openAccountSync(){
     ]);
     const c=configResult.data||{};
     document.getElementById('accountSyncProvider').value=c.enabled?(c.provider||'webdav'):'disabled';
+    document.getElementById('accountSyncScope').value=c.sync_scope||'accounts';
     document.getElementById('accountSyncUrl').value=c.url||'';
     document.getElementById('accountSyncUsername').value=c.username||'';
     document.getElementById('accountSyncPassword').value='';

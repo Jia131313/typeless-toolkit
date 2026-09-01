@@ -26,6 +26,7 @@ const {
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
   readMaster, replaceMasterTerms,
+  readDictionarySyncMeta, writeDictionarySyncMeta,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
   ensureAccountAccessToken, activateAccountOnDevice,
@@ -96,6 +97,10 @@ const accountSync = createAccountSyncService({
   readTombstonesFn: readAccountSyncTombstones,
   writeTombstonesFn: writeAccountSyncTombstones,
   providerFactory: createWebDavProvider,
+  readDictionaryFn: readMaster,
+  writeDictionaryFn: terms => { replaceMasterTerms(terms); },
+  readDictionaryTombstonesFn: () => readDictionarySyncMeta().tombstones,
+  writeDictionaryTombstonesFn: tombstones => writeDictionarySyncMeta({ tombstones }),
 });
 let accountSyncTimer = null;
 function scheduleAccountSync(reason, delay = 800) {

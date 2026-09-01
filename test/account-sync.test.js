@@ -108,7 +108,8 @@ test('validates WebDAV URLs, applies the Nutstore preset, and redacts secrets', 
   assert.equal(config.remote_path, 'TypelessToolkit/accounts.vault.json');
   assert.deepEqual(redactSyncConfig(config), {
     enabled: true, provider: 'nutstore', url: 'https://dav.jianguoyun.com/dav/', username: 'user@example.test',
-    remote_path: 'TypelessToolkit/accounts.vault.json', password_configured: true, sync_password_configured: true,
+    remote_path: 'TypelessToolkit/accounts.vault.json', dictionary_remote_path: 'TypelessToolkit/dictionary.vault.json',
+    sync_scope: 'accounts', password_configured: true, sync_password_configured: true,
   });
 });
 
