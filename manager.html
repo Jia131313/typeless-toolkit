@@ -643,8 +643,9 @@ function render(){
     const p=pct(used,lim), pcls=p>85?'err':p>65?'warn':'';
     const valid=live.token_valid!==false;
     const days=live.credential_days_left;
-    const daysTxt = days==null?'—':(days<0?'已过期':days+'天');
-    const daysCls = days==null?'mut':'';
+    const credentialNeedsUpdate=live.credential_state==='legacy';
+    const daysTxt = credentialNeedsUpdate?'需更新':(days==null?'—':(days<0?'已过期':days+'天'));
+    const daysCls = credentialNeedsUpdate?'warn':(days==null?'mut':'');
     const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
     const cloudOnly=!!a.cloud_only && !a.has_snapshot;
     return `<div class="card ${a.user_id===CUR_ID?'active':''} ${valid?'':'invalid'}" onclick="openDetail('${a.user_id}')">
@@ -1529,8 +1530,14 @@ async function detectCurrent(manual=false){
     const d=r.data; CUR_ID=d.user_id;
     const matched=ACCOUNTS.find(x=>x.user_id===d.user_id);
     if(matched){
-      dot.className='dot on'; txt.textContent='当前账号：'+matched.nickname;
-      pill.title='当前登录：'+(d.email||matched.email||matched.nickname)+'（已收录）；点击重新检测';
+      if(matched.live?.credential_state==='legacy'){
+        dot.className='dot warn'; txt.textContent='当前账号：'+matched.nickname+'（凭证需更新）';
+        pill.title='当前登录：'+(d.email||matched.email||matched.nickname)+'（已收录，但仍是旧登录凭证）；点击即可更新长期凭证。';
+        if(manual && matched.live?.credential_state==='legacy') addAccount();
+      }else{
+        dot.className='dot on'; txt.textContent='当前账号：'+matched.nickname;
+        pill.title='当前登录：'+(d.email||matched.email||matched.nickname)+'（已收录）；点击重新检测';
+      }
     }else{
       dot.className='dot warn'; txt.textContent='已登录，但该账号尚未收录';
       pill.title='当前登录：'+(d.email||d.user_id)+'（尚未收录）；点击即可添加当前账号。';

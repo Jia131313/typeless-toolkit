@@ -1,6 +1,6 @@
 {
   "name": "typeless-toolkit",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Electron）。",
   "main": "electron-main.js",
   "author": "Typeless Toolkit contributors",
@@ -15,7 +15,7 @@
     "start": "node manager.js",
     "start:electron": "electron .",
     "sync": "node typeless-dict-sync.js",
-    "check": "node --check electron-main.js && node --check electron-preload.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/desktop-host.js && node --check lib/official-update.js && node --check scripts/prepare-mac-build.js && node --check scripts/hide-mac-build-app.js && node --check scripts/write-mac-checksum.js && node --check scripts/install-mac-build.js && node --test",
+    "check": "node --check electron-main.js && node --check electron-preload.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/desktop-host.js && node --check lib/official-update.js && node --check scripts/prepare-mac-build.js && node --check scripts/hide-mac-build-app.js && node --check scripts/write-mac-checksum.js && node --check scripts/install-mac-build.js && node --check scripts/prepare-release-notes.js && node --test",
     "prepare:mac": "node scripts/prepare-mac-build.js",
     "hide:mac-build": "node scripts/hide-mac-build-app.js",
     "generate:icon:mac": "swift scripts/generate-mac-icon.swift",

@@ -61,12 +61,7 @@ jobs:
       - name: Prepare release notes
         run: |
           version="${GITHUB_REF_NAME#v}"
-          awk -v heading="## $version " '
-            index($0, heading) == 1 { capture = 1; next }
-            capture && /^## / { exit }
-            capture { print }
-          ' CHANGELOG.md > release-notes.md
-          test -s release-notes.md
+          node scripts/prepare-release-notes.js "$version"
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,4 +70,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --notes-file release-notes.md \
-            --title "Typeless Toolkit $GITHUB_REF_NAME"
+            --title "$(cat release-title.txt)"
