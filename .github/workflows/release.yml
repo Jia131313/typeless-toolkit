@@ -61,18 +61,7 @@ jobs:
       - name: Prepare release notes
         run: |
           version="${GITHUB_REF_NAME#v}"
-          heading="$(grep -m1 "^## $version - " CHANGELOG.md)"
-          test -n "$heading"
-          summary="$(printf '%s\n' "$heading" | sed -E "s/^## $version - (.*) \([0-9]{4}-[0-9]{2}-[0-9]{2}\)$/\1/")"
-          test -n "$summary"
-          test "$summary" != "$heading"
-          printf 'v%s - %s\n' "$version" "$summary" > release-title.txt
-          awk -v heading="$heading" '
-            $0 == heading { capture = 1; next }
-            capture && /^## / { exit }
-            capture { print }
-          ' CHANGELOG.md > release-notes.md
-          test -s release-notes.md
+          node scripts/prepare-release-notes.js "$version"
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
