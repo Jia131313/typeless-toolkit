@@ -13,6 +13,7 @@ const {
   normalizeSyncConfig,
   redactSyncConfig,
   encryptPayload, decryptPayload, mergeDictionaryVaults,
+  dictionaryRecords,
 } = require('../lib/account-sync');
 
 function jwt(payload) {
@@ -60,6 +61,17 @@ test('dictionary payloads are independently encrypted and merge normalized tombs
   ] }]);
   assert.equal(merged.terms.length, 1);
   assert.equal(merged.terms[0].deleted_at, '2026-09-02T00:00:00.000Z');
+});
+
+test('dictionary records preserve local timestamps and newer re-add beats deletion', () => {
+  const old = '2026-09-01T00:00:00.000Z';
+  const records = dictionaryRecords(['Word'], { active: { word: { term: 'Word', updated_at: old } }, tombstones: {} }, '2026-09-10T00:00:00.000Z');
+  assert.equal(records[0].updated_at, old);
+  const merged = mergeDictionaryVaults([
+    { terms: [{ term: 'Word', updated_at: '2026-09-03T00:00:00.000Z', deleted_at: '2026-09-03T00:00:00.000Z' }] },
+    { terms: [{ term: 'word', updated_at: '2026-09-04T00:00:00.000Z', deleted_at: null }] },
+  ]);
+  assert.equal(merged.terms[0].deleted_at, null);
 });
 
 test('sync scopes isolate account and dictionary providers', async () => {

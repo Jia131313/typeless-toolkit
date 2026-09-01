@@ -25,7 +25,7 @@ const {
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
-  readMaster, replaceMasterTerms,
+  readMaster, writeMaster, replaceMasterTerms,
   readDictionarySyncMeta, writeDictionarySyncMeta,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
@@ -98,9 +98,16 @@ const accountSync = createAccountSyncService({
   writeTombstonesFn: writeAccountSyncTombstones,
   providerFactory: createWebDavProvider,
   readDictionaryFn: readMaster,
-  writeDictionaryFn: terms => { replaceMasterTerms(terms); },
-  readDictionaryTombstonesFn: () => readDictionarySyncMeta().tombstones,
-  writeDictionaryTombstonesFn: tombstones => writeDictionarySyncMeta({ tombstones }),
+  writeDictionaryFn: (terms, merged) => {
+    writeMaster(terms);
+    const active = Object.fromEntries((merged?.terms || []).filter(item => !item.deleted_at)
+      .map(item => [String(item.term).trim().toLowerCase(), { term: item.term, updated_at: item.updated_at }]));
+    writeDictionarySyncMeta({ active, tombstones: readDictionarySyncMeta().tombstones });
+  },
+  readDictionaryTombstonesFn: () => readDictionarySyncMeta(),
+  writeDictionaryTombstonesFn: tombstones => {
+    const meta = readDictionarySyncMeta(); writeDictionarySyncMeta({ active: meta.active, tombstones });
+  },
 });
 let accountSyncTimer = null;
 function scheduleAccountSync(reason, delay = 800) {
