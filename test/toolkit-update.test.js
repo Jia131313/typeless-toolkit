@@ -96,6 +96,7 @@ test('checks the GitHub latest-release response without downloading an asset', a
   assert.equal(state.state, 'available');
   assert.equal(state.available, true);
   assert.equal(state.version, '1.6.3');
+  assert.equal(state.running, false);
 });
 
 test('reused Windows backend is explicitly manual-update only', async () => {
