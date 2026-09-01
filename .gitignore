@@ -2,6 +2,8 @@
 accounts.json
 profiles/
 dictionary-sync-meta.json
+account-sync.json
+account-sync-tombstones.json
 *.csv
 *.bak
 

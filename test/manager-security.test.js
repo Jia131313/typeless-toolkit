@@ -11,6 +11,7 @@ const {
   accountForClient,
   isTrustedLocalHost,
   isTrustedLocalOrigin,
+  mergeAccountSyncConfig,
   shouldReconnectCurrent,
 } = require('../manager');
 
@@ -42,6 +43,34 @@ test('never exposes bearer tokens in account list responses', () => {
     live: { token_valid: true },
     has_snapshot: true,
   });
+});
+
+test('keeps saved sync secrets when the settings form submits blank placeholders', () => {
+  const merged = mergeAccountSyncConfig({
+    enabled: true,
+    provider: 'webdav',
+    url: 'https://dav.example.test/',
+    username: 'alice',
+    password: 'webdav-secret',
+    sync_password: 'vault-secret',
+    remote_path: 'TypelessToolkit/accounts.vault.json',
+  }, {
+    enabled: true,
+    provider: 'webdav',
+    url: 'https://dav.example.test/',
+    username: 'alice',
+    password: '',
+    sync_password: '',
+    remote_path: 'TypelessToolkit/accounts.vault.json',
+  });
+  assert.equal(merged.password, 'webdav-secret');
+  assert.equal(merged.sync_password, 'vault-secret');
+});
+
+test('account sync settings and tombstones are ignored runtime secrets', () => {
+  const ignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');
+  assert.match(ignore, /^account-sync\.json$/m);
+  assert.match(ignore, /^account-sync-tombstones\.json$/m);
 });
 
 test('account deletion only matches the exact account resource', () => {

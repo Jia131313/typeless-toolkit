@@ -11,6 +11,12 @@ const fs = require('fs');
 const path = require('path');
 
 const C = require('./lib/common');
+const {
+  createAccountSyncService,
+  createWebDavProvider,
+  normalizeSyncConfig,
+  redactSyncConfig,
+} = require('./lib/account-sync');
 const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
 const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
@@ -41,6 +47,66 @@ const AUTO_SYNC_STARTUP_DELAY_MS = 6000;
 const AUTO_SYNC_DEBOUNCE_MS = 1200;
 const PAYWALL_MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 const PAYWALL_MAINTENANCE_STARTUP_DELAY_MS = 2500;
+const ACCOUNT_SYNC_CONFIG_FILE = path.join(ROOT, 'account-sync.json');
+const ACCOUNT_SYNC_TOMBSTONES_FILE = path.join(ROOT, 'account-sync-tombstones.json');
+
+function readPrivateJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) { return fallback; }
+}
+
+function writePrivateJson(file, value) {
+  // Windows 的 rename 不能稳定覆盖已存在的目标文件；这些配置很小，直接覆盖更可靠。
+  fs.writeFileSync(file, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
+  try { fs.chmodSync(file, 0o600); } catch (e) {}
+}
+
+function readAccountSyncConfig() {
+  return readPrivateJson(ACCOUNT_SYNC_CONFIG_FILE, { enabled: false, provider: 'disabled' });
+}
+
+function writeAccountSyncConfig(config) { writePrivateJson(ACCOUNT_SYNC_CONFIG_FILE, config); }
+function readAccountSyncTombstones() { return readPrivateJson(ACCOUNT_SYNC_TOMBSTONES_FILE, []); }
+function writeAccountSyncTombstones(value) { writePrivateJson(ACCOUNT_SYNC_TOMBSTONES_FILE, value); }
+
+function mergeAccountSyncConfig(existing, incoming) {
+  const merged = { ...existing, ...incoming };
+  if (!incoming.password) merged.password = existing.password || '';
+  if (!incoming.sync_password) merged.sync_password = existing.sync_password || '';
+  return normalizeSyncConfig(merged);
+}
+
+function clearAccountDeletion(userId) {
+  const next = readAccountSyncTombstones().filter(item => item.user_id !== userId);
+  writeAccountSyncTombstones(next);
+}
+
+function recordAccountDeletion(account) {
+  if (!account?.user_id) return;
+  const now = new Date().toISOString();
+  const next = readAccountSyncTombstones().filter(item => item.user_id !== account.user_id);
+  next.push({ user_id: account.user_id, deleted_at: now, updated_at: now });
+  writeAccountSyncTombstones(next);
+}
+
+const accountSync = createAccountSyncService({
+  readConfigFn: readAccountSyncConfig,
+  readAccountsFn: readAccounts,
+  writeAccountsFn: writeAccounts,
+  readTombstonesFn: readAccountSyncTombstones,
+  writeTombstonesFn: writeAccountSyncTombstones,
+  providerFactory: createWebDavProvider,
+});
+let accountSyncTimer = null;
+function scheduleAccountSync(reason, delay = 800) {
+  const config = readAccountSyncConfig();
+  if (!config.enabled) return;
+  if (accountSyncTimer) clearTimeout(accountSyncTimer);
+  accountSyncTimer = setTimeout(() => {
+    accountSyncTimer = null;
+    accountSync.sync(reason).catch(error => log('[account-sync]', error.message));
+  }, delay);
+}
 
 function createDictionarySyncController(syncFn, opts = {}) {
   const intervalMs = opts.intervalMs || AUTO_SYNC_INTERVAL_MS;
@@ -584,6 +650,38 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(html);
     }
+    // 跨设备账号同步：配置读取始终脱敏，远端仅保存加密后的 refresh 凭证。
+    if (m === 'GET' && p === '/api/account-sync/config') {
+      return send(res, 200, { status: 'OK', data: redactSyncConfig(readAccountSyncConfig()) });
+    }
+    if (m === 'POST' && p === '/api/account-sync/config') {
+      const body = await readBody(req);
+      const config = mergeAccountSyncConfig(readAccountSyncConfig(), body);
+      if (config.enabled && (!config.username || !config.password || !config.sync_password)) {
+        return send(res, 400, { status: 'FAIL', msg: '请完整填写用户名、应用密码和同步密码' });
+      }
+      writeAccountSyncConfig(config);
+      if (config.enabled) scheduleAccountSync('config-saved', 200);
+      return send(res, 200, { status: 'OK', data: redactSyncConfig(config), msg: config.enabled ? '账号同步配置已保存' : '账号同步已关闭' });
+    }
+    if (m === 'POST' && p === '/api/account-sync/test') {
+      try {
+        const provider = createWebDavProvider(readAccountSyncConfig());
+        const result = await provider.testConnection();
+        return send(res, 200, { status: 'OK', data: result, msg: 'WebDAV 连接成功' });
+      } catch (e) { return send(res, 400, { status: 'FAIL', msg: e.message }); }
+    }
+    if (m === 'GET' && p === '/api/account-sync/status') {
+      return send(res, 200, { status: 'OK', data: accountSync.status() });
+    }
+    if (m === 'POST' && p === '/api/account-sync/run') {
+      try {
+        const result = await accountSync.sync('manual');
+        return send(res, 200, { status: 'OK', data: result, sync_status: accountSync.status(), msg: `账号同步完成：${result.account_count} 个账号` });
+      } catch (e) {
+        return send(res, 502, { status: 'FAIL', data: accountSync.status(), msg: e.message });
+      }
+    }
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
       const accs = readAccounts();
@@ -642,9 +740,12 @@ const server = http.createServer(async (req, res) => {
         refresh_token: b.refresh_token || (idx >= 0 ? accs[idx].refresh_token : null) || null,
         client_user_id: b.client_user_id || (idx >= 0 ? accs[idx].client_user_id : null) || null,
         added_at: idx >= 0 ? accs[idx].added_at : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        cloud_only: false,
       };
       if (idx >= 0) accs[idx] = rec; else accs.push(rec);
       writeAccounts(accs);
+      clearAccountDeletion(rec.user_id);
       // 不杀进程地补写引导完成,再快照,避免「添加时教程未完成」写进 profiles
       try { applyOnboardingCompleteToLiveFiles(); } catch (e) { log('[accounts] onboarding patch:', e.message); }
       try {
@@ -659,6 +760,7 @@ const server = http.createServer(async (req, res) => {
       const snap = inspectSnapshot(rec.user_id);
       dictionarySync.schedule(idx >= 0 ? 'account-updated' : 'account-added');
       paywallMaintenance.schedule(idx >= 0 ? 'account-updated' : 'account-added', 1200);
+      scheduleAccountSync(idx >= 0 ? 'account-updated' : 'account-added');
       return send(res, 200, { status: 'OK', data: accountForClient(rec, null, snap.has_snapshot, snap) });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
@@ -791,6 +893,8 @@ const server = http.createServer(async (req, res) => {
           nickname: b.nickname || '',
         });
         dictionarySync.schedule('registered-account');
+        clearAccountDeletion(result.account.user_id);
+        scheduleAccountSync('registered-account');
         paywallMaintenance.schedule('registered-account', 1200);
         const safeResult = {
           ...result,
@@ -923,9 +1027,12 @@ const server = http.createServer(async (req, res) => {
     if (deleteAccountId) {
       const id = deleteAccountId;
       let accs = readAccounts();
+      const removed = accs.find(x => x.user_id === id);
+      recordAccountDeletion(removed || { user_id: id });
       accs = accs.filter(x => x.user_id !== id);
       writeAccounts(accs);
       dictionarySync.schedule('account-removed');
+      scheduleAccountSync('account-removed');
       return send(res, 200, { status: 'OK' });
     }
     // 单账号词库(全量分页)
@@ -1107,6 +1214,7 @@ function startServer() {
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
       paywallMaintenance.start();
+      scheduleAccountSync('startup', 1500);
       resolve(server);
     };
     server.once('error', onError);
@@ -1118,6 +1226,8 @@ function startServer() {
 server.on('close', () => {
   dictionarySync.stop();
   paywallMaintenance.stop();
+  if (accountSyncTimer) clearTimeout(accountSyncTimer);
+  accountSyncTimer = null;
 });
 
 if (require.main === module) {
@@ -1132,5 +1242,6 @@ module.exports = {
   isTrustedLocalOrigin, isTrustedLocalHost,
   accountForClient, accountDeleteId, shouldReconnectCurrent,
   createDictionarySyncController, createPaywallMaintenanceController,
+  mergeAccountSyncConfig, readAccountSyncConfig,
   waitForTypelessRunning, writeDiagnosticLog, runPaywallPatchTransaction,
 };
