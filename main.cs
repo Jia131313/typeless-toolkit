@@ -53,12 +53,15 @@ class TrayApp
     static string backendError;
     static bool exiting;
     static bool backendReused;
+    static string updateReadyPath;
+    static string updateTargetVersion;
 
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
         // 让 WinForms 与 WebView2 使用相同的物理 DPI，避免系统位图缩放造成页面发糊。
         try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { }
+        ParseUpdateReadyArguments(args);
 
         bool createdNew;
         singleInstance = new Mutex(true, "TypelessToolkit.Desktop.SingleInstance", out createdNew);
@@ -87,6 +90,12 @@ class TrayApp
             return;
         }
 
+        if (!string.IsNullOrEmpty(updateReadyPath) && !SignalUpdateReady())
+        {
+            Cleanup();
+            return;
+        }
+
         BuildTray();
         string pageUrl = baseUrl + (backendReused ? "/?toolkit_backend=shared" : "/");
         managerForm = new ManagerForm(pageUrl, exeDir, LoadAppIcon());
@@ -103,6 +112,55 @@ class TrayApp
             ShowWindow(window, SW_RESTORE);
             SetForegroundWindow(window);
         }
+    }
+
+    static void ParseUpdateReadyArguments(string[] args)
+    {
+        if (args == null) return;
+        for (int i = 0; i + 1 < args.Length; i++)
+        {
+            if (args[i] == "--toolkit-update-ready") updateReadyPath = args[++i];
+            else if (args[i] == "--toolkit-update-version") updateTargetVersion = args[++i];
+        }
+        if (string.IsNullOrEmpty(updateReadyPath) || string.IsNullOrEmpty(updateTargetVersion))
+        {
+            updateReadyPath = null;
+            updateTargetVersion = null;
+            return;
+        }
+        try
+        {
+            string marker = Path.GetFullPath(updateReadyPath);
+            string stage = Path.GetDirectoryName(marker);
+            string tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (stage == null || Path.GetDirectoryName(stage) == null ||
+                !string.Equals(Path.GetDirectoryName(stage).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), tempRoot, StringComparison.OrdinalIgnoreCase) ||
+                !Path.GetFileName(stage).StartsWith("typeless-toolkit-update-", StringComparison.OrdinalIgnoreCase) ||
+                !Regex.IsMatch(Path.GetFileName(marker), "^\\.typeless-toolkit-ready-[A-Za-z0-9]+\\.marker$") ||
+                !Regex.IsMatch(updateTargetVersion, "^\\d+(?:\\.\\d+){1,3}$"))
+            {
+                updateReadyPath = null;
+                updateTargetVersion = null;
+                return;
+            }
+            updateReadyPath = marker;
+        }
+        catch
+        {
+            updateReadyPath = null;
+            updateTargetVersion = null;
+        }
+    }
+
+    static bool SignalUpdateReady()
+    {
+        try
+        {
+            if (!ProbeToolkit(updateTargetVersion)) return false;
+            File.WriteAllText(updateReadyPath, updateTargetVersion + Environment.NewLine);
+            return true;
+        }
+        catch { return false; }
     }
 
     static bool EnsureBackend()
@@ -275,7 +333,7 @@ class TrayApp
         return 7788;
     }
 
-    static bool ProbeToolkit()
+    static bool ProbeToolkit(string expectedVersion = null)
     {
         try
         {
@@ -287,9 +345,14 @@ class TrayApp
             using (StreamReader reader = new StreamReader(response.GetResponseStream()))
             {
                 string body = reader.ReadToEnd();
-                return response.StatusCode == HttpStatusCode.OK &&
+                bool valid = response.StatusCode == HttpStatusCode.OK &&
                     body.IndexOf("\"status\":\"OK\"", StringComparison.Ordinal) >= 0 &&
                     body.IndexOf("\"service\":\"typeless-toolkit\"", StringComparison.Ordinal) >= 0;
+                if (!valid) return false;
+                return string.IsNullOrEmpty(expectedVersion) || Regex.IsMatch(
+                    body,
+                    "\\\"toolkit_version\\\"\\s*:\\s*\\\"" + Regex.Escape(expectedVersion) + "\\\""
+                );
             }
         }
         catch { return false; }

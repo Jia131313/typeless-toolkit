@@ -220,13 +220,31 @@ test('Windows replacement helper uses one temporary rollback and never copies re
   assert.match(source, /Get-Process -Id \$HostPid/);
   assert.match(source, /\[string\]\$StageDir/);
   assert.match(source, /\[string\]\$RollbackDir/);
+  assert.match(source, /\[string\]\$ReadyPath/);
   assert.match(source, /Move-Item -LiteralPath/);
   assert.match(source, /\$oldMoveCompleted = \$false/);
   assert.match(source, /\$replacementStarted = \$false/);
   assert.match(source, /\$oldMoveCompleted = \$true\s+\$replacementStarted = \$true/);
   assert.match(source, /if \(\$oldMoveCompleted -and \$replacementStarted\) \{\s+Get-ChildItem -LiteralPath \$install/);
+  assert.match(source, /Start-Process -FilePath \$RestartExe .*--toolkit-update-ready/);
+  assert.match(source, /while \(!\(Test-Path -LiteralPath \$ready\)\)/);
+  assert.match(source, /Get-Content -LiteralPath \$ready -Raw/);
+  assert.doesNotMatch(source, /Start-Sleep -Seconds 4/);
   assert.match(source, /Write-Result 'rolled-back'/);
   assert.match(source, /rmdir \/s \/q/);
   assert.match(source, /Name -ne 'data'/);
   assert.match(source, /Where-Object \{ \$_\.Name -ne 'data' \}/);
+});
+
+test('desktop ready handshake verifies the running backend version before writing a stage marker', () => {
+  const manager = fs.readFileSync(path.join(__dirname, '..', 'manager.js'), 'utf8');
+  const desktop = fs.readFileSync(path.join(__dirname, '..', 'main.cs'), 'utf8');
+  const updater = fs.readFileSync(path.join(__dirname, '..', 'lib', 'toolkit-update.js'), 'utf8');
+  assert.match(manager, /toolkit_version: TOOLKIT_VERSION/);
+  assert.match(manager, /code_root: C\.CODE_DIR/);
+  assert.match(desktop, /--toolkit-update-ready/);
+  assert.match(desktop, /SignalUpdateReady\(\)/);
+  assert.match(desktop, /ProbeToolkit\(updateTargetVersion\)/);
+  assert.match(desktop, /File\.WriteAllText\(updateReadyPath, updateTargetVersion/);
+  assert.match(updater, /fs\.rmSync\(extractionDir, \{ recursive: true, force: true \}\)/);
 });

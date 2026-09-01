@@ -1101,7 +1101,10 @@ const server = http.createServer(async (req, res) => {
     }
     // 运行环境信息(排错用:平台、探测到的路径、凭据名)
     if (m === 'GET' && p === '/api/env') {
-      return send(res, 200, { status: 'OK', data: envInfo() });
+      return send(res, 200, {
+        status: 'OK',
+        data: { ...envInfo(), toolkit_version: TOOLKIT_VERSION, code_root: C.CODE_DIR },
+      });
     }
     // 一键备份(账号表 + 主词库,带时间戳)
     if (m === 'POST' && p === '/api/backup') {
