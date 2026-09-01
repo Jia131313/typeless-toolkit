@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const crypto = require('node:crypto');
 
 const {
   decryptVault,
@@ -33,6 +34,18 @@ test('encrypted vault round trips with randomized authenticated envelopes', () =
   const envelope = JSON.parse(one);
   envelope.ciphertext = (envelope.ciphertext[0] === 'A' ? 'B' : 'A') + envelope.ciphertext.slice(1);
   assert.throws(() => decryptVault(JSON.stringify(envelope), 'correct horse battery staple'), /密码|损坏/);
+
+  const weakSalt = crypto.randomBytes(16), weakIv = crypto.randomBytes(12);
+  const weakKey = crypto.scryptSync('correct horse battery staple', weakSalt, 32, { N: 1024, r: 8, p: 1 });
+  const weakCipher = crypto.createCipheriv('aes-256-gcm', weakKey, weakIv);
+  weakCipher.setAAD(Buffer.from('typeless-toolkit-account-vault:v1'));
+  const weakContent = Buffer.concat([weakCipher.update(JSON.stringify(vault)), weakCipher.final()]);
+  assert.throws(() => decryptVault(JSON.stringify({
+    version: 1, cipher: 'aes-256-gcm',
+    kdf: { name: 'scrypt', N: 1024, r: 8, p: 1, key_length: 32 },
+    salt: weakSalt.toString('base64'), iv: weakIv.toString('base64'),
+    ciphertext: weakContent.toString('base64'), tag: weakCipher.getAuthTag().toString('base64'),
+  }), 'correct horse battery staple'), /密码|损坏/);
 });
 
 test('portable records exclude access tokens, snapshots, paths, and device data', () => {
@@ -97,6 +110,17 @@ test('validates WebDAV URLs, applies the Nutstore preset, and redacts secrets', 
     enabled: true, provider: 'nutstore', url: 'https://dav.jianguoyun.com/dav/', username: 'user@example.test',
     remote_path: 'TypelessToolkit/accounts.vault.json', password_configured: true, sync_password_configured: true,
   });
+});
+
+test('WebDAV requests never forward Basic credentials through automatic redirects', async () => {
+  const provider = createWebDavProvider({
+    enabled: true, provider: 'webdav', url: 'https://dav.example.test/',
+    username: 'u', password: 'p', sync_password: 'vault',
+  }, async (_url, options) => {
+    assert.equal(options.redirect, 'manual');
+    return new Response('', { status: 207 });
+  });
+  await provider.testConnection();
 });
 
 test('WebDAV provider creates, reads, and conditionally updates an ETag vault', async t => {
