@@ -52,6 +52,7 @@ class TrayApp
     static string baseUrl;
     static string backendError;
     static bool exiting;
+    static bool backendReused;
 
     [STAThread]
     static void Main()
@@ -87,7 +88,8 @@ class TrayApp
         }
 
         BuildTray();
-        managerForm = new ManagerForm(baseUrl, exeDir, LoadAppIcon());
+        string pageUrl = baseUrl + (backendReused ? "/?toolkit_backend=shared" : "/");
+        managerForm = new ManagerForm(pageUrl, exeDir, LoadAppIcon());
         managerForm.FormClosing += OnManagerFormClosing;
         Application.Run(managerForm);
         Cleanup();
@@ -107,7 +109,11 @@ class TrayApp
     {
         if (IsPortOpen())
         {
-            if (ProbeToolkit()) return true;
+            if (ProbeToolkit())
+            {
+                backendReused = true;
+                return true;
+            }
             int occupiedPort = managerPort;
             if (!UseFallbackPort())
             {
@@ -155,6 +161,8 @@ class TrayApp
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_DATA_DIR"] = dataDir;
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_MANAGER_PORT"] = managerPort.ToString();
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_HOST_PID"] = Process.GetCurrentProcess().Id.ToString();
+        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_BACKEND_OWNER"] = "desktop-host";
+        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_INSTALL_DIR"] = exeDir;
 
         try { nodeProcess.Start(); }
         catch (Exception error)

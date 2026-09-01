@@ -495,6 +495,7 @@ let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy =
 let DICT_SYNC_STATUS = null, MASTER_ORIGINAL = [];
 let ENV_INFO = null, PAYWALL_MAINTENANCE = null, PAYWALL_NOTICE_AT = null, PENDING_MAC_ACTION = null, PAYWALL_SETTINGS_OPENED = false, PAYWALL_FOCUS_RETRY_BUSY = false;
 let TOOLKIT_UPDATE = null, TOOLKIT_UPDATE_POLL = null, TOOLKIT_UPDATE_NOTIFIED = false;
+const TOOLKIT_UPDATE_SHARED_BACKEND = new URLSearchParams(window.location.search).get('toolkit_backend') === 'shared';
 let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
 const SC_CODE_MAP = {
   ControlLeft:'LeftCtrl', ControlRight:'RightCtrl',
@@ -1077,7 +1078,12 @@ function renderToolkitUpdate(){
   summary.textContent=`发现 Typeless 工具集 v${d.version}（当前 v${d.current_version}）`;
   notes.textContent=u?.notes||'该版本未提供更新说明。'; notes.style.display='';
   if(release) release.style.display=u?.release_url?'':'none';
-  if(d.state==='downloading'){
+  if(u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){
+    progress.textContent=TOOLKIT_UPDATE_SHARED_BACKEND
+      ? '此窗口复用了其他工具集的本地服务，为避免替换仍在使用的程序，请从 Release 手动更新。'
+      : (u.error||d.manual_install_reason||'当前安装只能手动更新。');
+    action.textContent='前往 Release 手动更新'; action.disabled=!u.release_url;
+  }else if(d.state==='downloading'){
     const p=d.progress||{};
     progress.textContent=p.total
       ? `正在下载并校验：${updateBytes(p.downloaded)} / ${updateBytes(p.total)}（${p.percent||0}%）`
@@ -1094,9 +1100,10 @@ function renderToolkitUpdate(){
     action.textContent=d.state==='error'?'重新下载':'下载更新'; action.disabled=false;
   }
   if(boundary){
-    boundary.textContent=d.platform==='macos'
+    const result=d.last_result?.message ? `上次更新：${d.last_result.message}` : '';
+    boundary.textContent=(d.platform==='macos'
       ? 'macOS 当前采用 ad-hoc 签名：这里只会校验下载并打开 DMG，仍需你将 App 拖入“应用程序”完成替换。'
-      : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。';
+      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。')) + (result?`\n${result}`:'');
   }
 }
 async function refreshToolkitUpdate(announce=false){
@@ -1136,6 +1143,7 @@ function openToolkitUpdateRelease(){
 async function downloadToolkitUpdate(){
   const d=TOOLKIT_UPDATE;
   if(!d?.available){ await refreshToolkitUpdate(false); return; }
+  if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
   if(d.state==='downloaded'){
     if(d.platform==='macos'){
       const result=await window.typelessToolkitDesktop?.openToolkitUpdateFile?.(d.download_path);

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } = require('electron');
@@ -167,11 +168,24 @@ ipcMain.handle('typeless-toolkit:open-toolkit-update-file', async (event, filePa
   }
   if (process.platform !== 'darwin') return { ok: false, message: '仅支持 macOS' };
   const target = path.resolve(String(filePath || ''));
-  if (!/^Typeless-Toolkit-\d+(?:\.\d+)+-universal\.dmg$/i.test(path.basename(target))) {
+  const expectedName = /^Typeless-Toolkit-\d+(?:\.\d+)+-universal\.dmg$/i;
+  if (!expectedName.test(path.basename(target))) {
     return { ok: false, message: '不是受支持的工具集更新包' };
   }
-  if (!fs.existsSync(target)) return { ok: false, message: '已下载的 DMG 不存在，请重新下载' };
-  const error = await shell.openPath(target);
+  let realTarget, realStage, realTemp;
+  try {
+    const info = fs.lstatSync(target);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error('invalid-file');
+    realTarget = fs.realpathSync(target);
+    realStage = fs.realpathSync(path.dirname(realTarget));
+    realTemp = fs.realpathSync(os.tmpdir());
+  } catch (error) {
+    return { ok: false, message: '已下载的 DMG 不存在或不是普通文件，请重新下载' };
+  }
+  if (path.dirname(realStage) !== realTemp || !path.basename(realStage).startsWith('typeless-toolkit-update-') || path.dirname(realTarget) !== realStage) {
+    return { ok: false, message: '更新包不在受支持的临时下载目录，请重新下载' };
+  }
+  const error = await shell.openPath(realTarget);
   return error ? { ok: false, message: error } : { ok: true };
 });
 

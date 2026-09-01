@@ -9,10 +9,15 @@ const {
   assetNames,
   compareVersions,
   createToolkitUpdateController,
+  downloadToFile,
+  installationInfo,
   isSafeZipEntry,
   parseSha256File,
   releaseSummary,
   resolveWindowsPayloadRoot,
+  validateWindowsPayload,
+  validateZipEntryMetadata,
+  validateZipMetadata,
   writeWindowsUpdateHelper,
 } = require('../lib/toolkit-update');
 
@@ -27,6 +32,7 @@ test('selects an update package that exactly matches the platform and Windows fl
     archive: 'Typeless-Toolkit-1.6.3-universal.dmg',
     checksum: 'Typeless-Toolkit-1.6.3-universal.dmg.sha256.txt',
   });
+  assert.equal(assetNames('1.6.3', 'win32', 'unknown'), null);
   assert.equal(compareVersions('v1.6.10', '1.6.2'), 1);
   assert.equal(compareVersions('1.6.2', '1.6.2'), 0);
 });
@@ -42,6 +48,15 @@ test('rejects archive paths that could escape the update staging directory', () 
   assert.equal(isSafeZipEntry('../data/accounts.json'), false);
   assert.equal(isSafeZipEntry('/Windows/System32/file'), false);
   assert.equal(isSafeZipEntry('C:\\Windows\\System32\\file'), false);
+});
+
+test('rejects oversized or suspicious ZIP entry metadata before extraction', () => {
+  assert.doesNotThrow(() => validateZipEntryMetadata({ name: 'server/manager.js', length: 100, compressedLength: 50 }));
+  assert.throws(() => validateZipEntryMetadata({ name: '../data/accounts.json', length: 1, compressedLength: 1 }), /不安全路径/);
+  assert.throws(() => validateZipEntryMetadata({ name: 'big.bin', length: 513 * 1024 * 1024, compressedLength: 1 }), /大小超出上限/);
+  assert.throws(() => validateZipEntryMetadata({ name: 'bomb.txt', length: 1000, compressedLength: 1 }), /压缩比例异常/);
+  assert.throws(() => validateZipMetadata(Array.from({ length: 5001 }, (_, index) => ({ name: `file-${index}`, length: 0, compressedLength: 0 }))), /文件数量超出上限/);
+  assert.throws(() => validateZipMetadata(Array.from({ length: 5 }, (_, index) => ({ name: `large-${index}.bin`, length: 512 * 1024 * 1024, compressedLength: 512 * 1024 * 1024 }))), /解压总大小超出上限/);
 });
 
 test('reports an update only when release assets and checksums are both present', () => {
@@ -63,7 +78,7 @@ test('reports an update only when release assets and checksums are both present'
 test('checks the GitHub latest-release response without downloading an asset', async () => {
   const names = assetNames('1.6.3', 'win32', 'portable');
   const controller = createToolkitUpdateController({
-    platform: 'win32', currentVersion: '1.6.2', flavor: 'portable',
+    platform: 'win32', currentVersion: '1.6.2', flavor: 'portable', backendOwned: true,
     fetchFn: async url => {
       assert.match(url, /\/releases\/latest$/);
       return {
@@ -81,6 +96,21 @@ test('checks the GitHub latest-release response without downloading an asset', a
   assert.equal(state.state, 'available');
   assert.equal(state.available, true);
   assert.equal(state.version, '1.6.3');
+});
+
+test('reused Windows backend is explicitly manual-update only', async () => {
+  const names = assetNames('1.6.3', 'win32', 'portable');
+  const controller = createToolkitUpdateController({
+    platform: 'win32', currentVersion: '1.6.2', flavor: 'portable', backendOwned: false,
+    fetchFn: async () => ({ ok: true, json: async () => ({ tag_name: 'v1.6.3', assets: [
+      { name: names.archive, browser_download_url: 'https://example.invalid/app.zip' },
+      { name: names.checksum, browser_download_url: 'https://example.invalid/app.sha256.txt' },
+    ] }) }),
+  });
+  const state = await controller.check();
+  assert.equal(state.state, 'manual-only');
+  assert.equal(state.update.manual_only, true);
+  assert.match(state.update.error, /复用了已有本地服务/);
 });
 
 test('downloads an update to staging and verifies SHA-256 before exposing it', async t => {
@@ -110,6 +140,17 @@ test('downloads an update to staging and verifies SHA-256 before exposing it', a
   const state = await controller.download();
   assert.equal(state.state, 'downloaded');
   assert.equal(fs.readFileSync(state.download_path).toString(), payload.toString());
+  const stage = state.stage_dir;
+  controller.cleanupStaging();
+  assert.equal(fs.existsSync(stage), false);
+});
+
+test('macOS IPC only opens a regular DMG in the exact updater staging directory', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'electron-main.js'), 'utf8');
+  assert.match(source, /fs\.lstatSync\(target\)/);
+  assert.match(source, /fs\.realpathSync\(os\.tmpdir\(\)\)/);
+  assert.match(source, /path\.dirname\(realStage\) !== realTemp/);
+  assert.match(source, /path\.basename\(realStage\)\.startsWith\('typeless-toolkit-update-'\)/);
 });
 
 test('accepts the single top-level directory produced by the public Windows ZIP', t => {
@@ -122,7 +163,55 @@ test('accepts the single top-level directory produced by the public Windows ZIP'
   assert.equal(resolveWindowsPayloadRoot(root), payload);
 });
 
-test('Windows replacement helper preserves data and never copies release data over it', t => {
+function makeWindowsInstall(root, version = '1.6.3', edition = 'portable') {
+  fs.mkdirSync(path.join(root, 'server'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'TypelessToolkit.exe'), 'launcher');
+  fs.writeFileSync(path.join(root, 'server', 'manager.js'), 'server');
+  fs.writeFileSync(path.join(root, 'server', 'package.json'), JSON.stringify({ version }));
+  if (edition === 'portable') {
+    fs.mkdirSync(path.join(root, 'runtime'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'runtime', 'node.exe'), 'node');
+  }
+}
+
+test('requires a standard Windows release root and derives its edition from the runtime', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'toolkit-install-test-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  makeWindowsInstall(root);
+  assert.deepEqual(installationInfo(path.join(root, 'server'), path.join(root, 'data')), {
+    ok: true, install_dir: root, edition: 'portable', error: null,
+  });
+  assert.equal(installationInfo(root, path.join(root, 'data')).ok, false);
+  fs.rmSync(path.join(root, 'runtime'), { recursive: true });
+  assert.equal(installationInfo(path.join(root, 'server'), path.join(root, 'data')).edition, 'lite');
+});
+
+test('requires the target version and matching Portable/Lite payload structure', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'toolkit-payload-validation-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  makeWindowsInstall(root, '1.6.3', 'portable');
+  assert.doesNotThrow(() => validateWindowsPayload(root, '1.6.3', 'portable'));
+  assert.throws(() => validateWindowsPayload(root, '1.6.4', 'portable'), /版本与目标/);
+  assert.throws(() => validateWindowsPayload(root, '1.6.3', 'lite'), /包含内置 Node/);
+  fs.rmSync(path.join(root, 'runtime'), { recursive: true });
+  assert.throws(() => validateWindowsPayload(root, '1.6.3', 'portable'), /缺少内置 Node/);
+});
+
+test('removes a partially downloaded file when its stream fails', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'toolkit-download-test-'));
+  const output = path.join(dir, 'failed.bin');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const body = new ReadableStream({
+    start(controller) { controller.enqueue(Buffer.from('partial')); controller.error(new Error('network lost')); },
+  });
+  await assert.rejects(downloadToFile('https://example.invalid/file', output, {
+    fetchFn: async () => ({ ok: true, headers: { get: () => null }, body }),
+  }), /network lost/);
+  assert.equal(fs.existsSync(output), false);
+});
+
+test('Windows replacement helper uses one temporary rollback and never copies release data over it', t => {
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'toolkit-helper-test-'));
   t.after(() => fs.rmSync(stage, { recursive: true, force: true }));
   const helper = writeWindowsUpdateHelper(stage);
@@ -130,6 +219,9 @@ test('Windows replacement helper preserves data and never copies release data ov
   assert.match(source, /\[int\]\$HostPid/);
   assert.match(source, /Get-Process -Id \$HostPid/);
   assert.match(source, /\[string\]\$StageDir/);
+  assert.match(source, /\[string\]\$RollbackDir/);
+  assert.match(source, /Move-Item -LiteralPath/);
+  assert.match(source, /Write-Result 'rolled-back'/);
   assert.match(source, /rmdir \/s \/q/);
   assert.match(source, /Name -ne 'data'/);
   assert.match(source, /Where-Object \{ \$_\.Name -ne 'data' \}/);
