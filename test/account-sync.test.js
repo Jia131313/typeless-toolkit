@@ -12,6 +12,7 @@ const {
   createWebDavProvider,
   normalizeSyncConfig,
   redactSyncConfig,
+  encryptPayload, decryptPayload, mergeDictionaryVaults,
 } = require('../lib/account-sync');
 
 function jwt(payload) {
@@ -46,6 +47,30 @@ test('encrypted vault round trips with randomized authenticated envelopes', () =
     salt: weakSalt.toString('base64'), iv: weakIv.toString('base64'),
     ciphertext: weakContent.toString('base64'), tag: weakCipher.getAuthTag().toString('base64'),
   }), 'correct horse battery staple'), /密码|损坏/);
+});
+
+test('dictionary payloads are independently encrypted and merge normalized tombstones', () => {
+  const payload = { version: 1, terms: [{ term: 'Hello', updated_at: '2026-09-01T00:00:00.000Z', deleted_at: null }] };
+  const encrypted = encryptPayload(payload, 'pw', 'dictionary');
+  assert.deepEqual(decryptPayload(encrypted, 'pw', 'dictionary', 'terms'), payload);
+  assert.throws(() => decryptPayload(encrypted, 'pw', 'account', 'terms'), /密码|损坏/);
+  const merged = mergeDictionaryVaults([{ terms: [
+    { term: 'Hello', updated_at: '2026-09-01T00:00:00.000Z', deleted_at: null },
+    { term: 'hello', updated_at: '2026-09-02T00:00:00.000Z', deleted_at: '2026-09-02T00:00:00.000Z' },
+  ] }]);
+  assert.equal(merged.terms.length, 1);
+  assert.equal(merged.terms[0].deleted_at, '2026-09-02T00:00:00.000Z');
+});
+
+test('sync scopes isolate account and dictionary providers', async () => {
+  const calls = [];
+  const provider = path => ({ async readVault() { calls.push(`read:${path}`); return { exists: false, content: null, revision: null }; }, async writeVault() { calls.push(`write:${path}`); return { revision: null }; } });
+  const run = scope => createAccountSyncService({ readConfigFn: () => ({ enabled: true, provider: 'webdav', sync_scope: scope, url: 'http://127.0.0.1:1/', username: 'u', password: 'p', sync_password: 'pw' }), readAccountsFn: () => [], writeAccountsFn: () => {}, readTombstonesFn: () => [], writeTombstonesFn: () => {}, readDictionaryFn: () => ['x'], writeDictionaryFn: () => {}, providerFactory: (_c, _f, path) => provider(path || 'accounts') });
+  await run('dictionary').sync();
+  assert.deepEqual(calls, ['read:TypelessToolkit/dictionary.vault.json', 'write:TypelessToolkit/dictionary.vault.json']);
+  calls.length = 0;
+  await run('accounts').sync();
+  assert.deepEqual(calls, ['read:accounts', 'write:accounts']);
 });
 
 test('portable records exclude access tokens, snapshots, paths, and device data', () => {
