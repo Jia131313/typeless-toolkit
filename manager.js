@@ -42,18 +42,6 @@ const AUTO_SYNC_STARTUP_DELAY_MS = 6000;
 const AUTO_SYNC_DEBOUNCE_MS = 1200;
 const PAYWALL_MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 const PAYWALL_MAINTENANCE_STARTUP_DELAY_MS = 2500;
-const TOOLKIT_VERSION = require('./package.json').version;
-const toolkitBackendOwned = process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
-  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..');
-const toolkitUpdate = createToolkitUpdateController({
-  platform: IS_MAC ? 'darwin' : 'win32',
-  codeRoot: C.CODE_DIR,
-  dataRoot: ROOT,
-  currentVersion: TOOLKIT_VERSION,
-  parentPid: process.pid,
-  hostPid: Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
-  backendOwned: toolkitBackendOwned,
-});
 
 function createDictionarySyncController(syncFn, opts = {}) {
   const intervalMs = opts.intervalMs || AUTO_SYNC_INTERVAL_MS;
@@ -540,6 +528,19 @@ const paywallMaintenance = createPaywallMaintenanceController(
     },
   }
 );
+
+const TOOLKIT_VERSION = require('./package.json').version;
+const toolkitBackendOwned = process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
+  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..');
+const toolkitUpdate = createToolkitUpdateController({
+  platform: IS_MAC ? 'darwin' : 'win32',
+  codeRoot: C.CODE_DIR,
+  dataRoot: ROOT,
+  currentVersion: TOOLKIT_VERSION,
+  parentPid: process.pid,
+  hostPid: Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
+  backendOwned: toolkitBackendOwned,
+});
 
 // ---------- HTTP ----------
 function send(res, code, obj) {
@@ -1168,8 +1169,9 @@ function startServer() {
 server.on('close', () => {
   dictionarySync.stop();
   paywallMaintenance.stop();
-  toolkitUpdate.cleanupStaging();
 });
+
+server.on('close', () => toolkitUpdate.cleanupStaging());
 
 if (require.main === module) {
   startServer().catch(error => {
