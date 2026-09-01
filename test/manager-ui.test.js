@@ -34,3 +34,19 @@ test('submits refresh credentials captured from Typeless', () => {
   assert.match(html, /refresh_token\s*:\s*d\.refresh_token/);
   assert.match(html, /client_user_id\s*:\s*d\.client_user_id/);
 });
+
+test('offers encrypted WebDAV account sync with a Nutstore preset', () => {
+  assert.match(html, /账号同步/);
+  assert.match(html, /value="nutstore"[^>]*>坚果云/);
+  assert.match(html, /openAccountSync\(\)/);
+  assert.match(html, /\/api\/account-sync\/config/);
+  assert.match(html, /\/api\/account-sync\/test/);
+  assert.match(html, /\/api\/account-sync\/run/);
+});
+
+test('cloud-only accounts can be activated on the current device', () => {
+  assert.match(html, /a\.cloud_only/);
+  assert.match(html, /activateAccount\('\$\{a\.user_id\}'\)/);
+  assert.match(html, /在此设备启用/);
+  assert.match(html, /\/activate/);
+});

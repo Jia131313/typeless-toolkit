@@ -69,6 +69,20 @@ test('deterministically merges additions, metadata, credentials, and tombstones'
   assert.equal(merged.accounts[0].refresh_token, newToken);
   assert.equal(merged.accounts[1].deleted_at, '2026-09-03T00:00:00.000Z');
   assert.equal(merged.updated_at, '2026-09-04T00:00:00.000Z');
+
+  const tiedActive = { user_id: 'tie', nickname: 'Active', refresh_token: refresh('tie', 1, 500), updated_at: '2026-09-05T00:00:00.000Z', deleted_at: null };
+  const tiedDelete = { user_id: 'tie', updated_at: '2026-09-05T00:00:00.000Z', deleted_at: '2026-09-05T00:00:00.000Z' };
+  const forward = mergeVaults([{ version: 1, accounts: [tiedActive] }, { version: 1, accounts: [tiedDelete] }]);
+  const reverse = mergeVaults([{ version: 1, accounts: [tiedDelete] }, { version: 1, accounts: [tiedActive] }]);
+  assert.deepEqual(forward.accounts, reverse.accounts);
+  assert.equal(forward.accounts[0].deleted_at, tiedDelete.deleted_at);
+
+  const tiedOld = { user_id: 'active-tie', nickname: 'Old', refresh_token: refresh('active-tie', 1, 500), updated_at: '2026-09-06T00:00:00.000Z', deleted_at: null };
+  const tiedNew = { user_id: 'active-tie', nickname: 'New', refresh_token: refresh('active-tie', 2, 500), updated_at: '2026-09-06T00:00:00.000Z', deleted_at: null };
+  const activeForward = mergeVaults([{ version: 1, accounts: [tiedOld] }, { version: 1, accounts: [tiedNew] }]);
+  const activeReverse = mergeVaults([{ version: 1, accounts: [tiedNew] }, { version: 1, accounts: [tiedOld] }]);
+  assert.deepEqual(activeForward.accounts, activeReverse.accounts);
+  assert.equal(activeForward.accounts[0].nickname, 'New');
 });
 
 test('validates WebDAV URLs, applies the Nutstore preset, and redacts secrets', () => {
@@ -160,4 +174,52 @@ test('sync service retries ETag conflicts, merges remote accounts, and remains s
   assert.equal(local[1].token, null);
   assert.equal(local[1].cloud_only, true);
   assert.equal(service.status().state, 'success');
+});
+
+test('two devices converge additions and deletions through one encrypted WebDAV vault', async () => {
+  let remoteContent = null;
+  let revision = 0;
+  const providerFactory = () => ({
+    async readVault() {
+      return remoteContent === null
+        ? { exists: false, content: null, revision: null }
+        : { exists: true, content: remoteContent, revision: `"${revision}"` };
+    },
+    async writeVault(content, expectedRevision) {
+      const expected = remoteContent === null ? null : `"${revision}"`;
+      if (expectedRevision !== expected) {
+        const error = new Error('conflict'); error.code = 'WEBDAV_CONFLICT'; throw error;
+      }
+      remoteContent = content; revision++;
+      return { revision: `"${revision}"` };
+    },
+  });
+  const config = () => ({
+    enabled: true, provider: 'webdav', url: 'http://127.0.0.1:9999/dav/',
+    username: 'u', password: 'p', sync_password: 'shared-password',
+  });
+  let accountsA = [{ user_id: 'a', nickname: 'A', refresh_token: refresh('a', 1, 500), updated_at: '2026-09-01T00:00:00.000Z' }];
+  let accountsB = [{ user_id: 'b', nickname: 'B', refresh_token: refresh('b', 1, 500), updated_at: '2026-09-02T00:00:00.000Z' }];
+  let tombstonesA = [], tombstonesB = [];
+  const service = (readAccounts, writeAccounts, readTombstones, writeTombstones, now) => createAccountSyncService({
+    readConfigFn: config, readAccountsFn: readAccounts, writeAccountsFn: writeAccounts,
+    readTombstonesFn: readTombstones, writeTombstonesFn: writeTombstones,
+    providerFactory, nowFn: () => new Date(now),
+  });
+  const a1 = service(() => accountsA, next => { accountsA = next; }, () => tombstonesA, next => { tombstonesA = next; }, '2026-09-03T00:00:00.000Z');
+  const b1 = service(() => accountsB, next => { accountsB = next; }, () => tombstonesB, next => { tombstonesB = next; }, '2026-09-04T00:00:00.000Z');
+  await a1.sync('device-a');
+  await b1.sync('device-b');
+  await a1.sync('device-a-pull');
+  assert.deepEqual(accountsA.map(item => item.user_id), ['a', 'b']);
+  assert.deepEqual(accountsB.map(item => item.user_id), ['a', 'b']);
+
+  accountsA = accountsA.filter(item => item.user_id !== 'a');
+  tombstonesA = [{ user_id: 'a', deleted_at: '2026-09-05T00:00:00.000Z', updated_at: '2026-09-05T00:00:00.000Z' }];
+  const a2 = service(() => accountsA, next => { accountsA = next; }, () => tombstonesA, next => { tombstonesA = next; }, '2026-09-05T00:00:00.000Z');
+  const b2 = service(() => accountsB, next => { accountsB = next; }, () => tombstonesB, next => { tombstonesB = next; }, '2026-09-06T00:00:00.000Z');
+  await a2.sync('delete-a');
+  await b2.sync('pull-delete');
+  assert.deepEqual(accountsB.map(item => item.user_id), ['b']);
+  assert.deepEqual(tombstonesB.map(item => item.user_id), ['a']);
 });

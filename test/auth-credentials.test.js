@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 process.env.TYPELESS_EXE = '/path/that/does/not/exist';
 const {
+  buildTypelessLoginAuth,
+  createAccountActivator,
   createAccountCredentialManager,
   createLiveStatus,
   createTypelessRefreshRequest,
@@ -277,4 +279,57 @@ test('live status distinguishes refresh failures from permanent expiry', async (
 
   assert.equal((await makeStatus('network unavailable')).credential_state, 'refresh_error');
   assert.equal((await makeStatus('refresh token 已过期')).credential_state, 'expired');
+});
+
+test('builds a Typeless auth:login payload from a matching refresh credential', () => {
+  const access = accessToken('user-1', 3600);
+  const refresh = refreshToken('user-1');
+  assert.deepEqual(buildTypelessLoginAuth({
+    user_id: 'user-1', email: 'one@example.test', client_user_id: 'client-1', refresh_token: refresh,
+  }, access, NOW_MS), {
+    user_id: 'user-1',
+    email: 'one@example.test',
+    client_user_id: 'client-1',
+    access_token: access,
+    refresh_token: refresh,
+    login_time: NOW_MS,
+  });
+  assert.throws(() => buildTypelessLoginAuth({
+    user_id: 'user-2', refresh_token: refreshToken('user-2'),
+  }, access, NOW_MS), /账号不一致/);
+});
+
+test('activates a cloud account through auth:login and creates its local snapshot', async () => {
+  const access = accessToken('user-1', 3600);
+  const refresh = refreshToken('user-1');
+  let accounts = [{ user_id: 'user-1', email: 'one@example.test', refresh_token: refresh, cloud_only: true }];
+  const events = [];
+  const activate = createAccountActivator({
+    ensureAccessTokenFn: async () => access,
+    portUpFn: async () => false,
+    isAppRunningFn: async () => false,
+    restartWithDebugFn: async () => { events.push('debug'); return 9333; },
+    restartCleanFn: async (_exe, shouldRun) => { events.push(`clean:${shouldRun}`); },
+    withCDPFn: async (callback, port) => {
+      assert.equal(port, 9333);
+      return callback(null, async expression => {
+        assert.match(expression, /auth:login/);
+        return JSON.stringify({ current: { user_id: 'user-1' } });
+      });
+    },
+    preserveCurrentFn: () => events.push('preserve'),
+    applyOnboardingFn: () => events.push('onboarding'),
+    saveSnapshotFn: userId => events.push(`snapshot:${userId}`),
+    readAccountsFn: () => accounts,
+    writeAccountsFn: next => { accounts = next; },
+    nowFn: () => NOW_MS,
+    settleFn: async () => {},
+    typelessExe: 'Typeless.exe',
+    userDataDir: 'userdata',
+  });
+
+  const result = await activate(accounts[0]);
+  assert.equal(result.account.cloud_only, false);
+  assert.equal(result.account.token, access);
+  assert.deepEqual(events, ['preserve', 'debug', 'onboarding', 'snapshot:user-1', 'clean:true']);
 });

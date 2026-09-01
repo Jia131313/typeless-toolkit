@@ -12,6 +12,8 @@ test('public packages start with an empty account list', () => {
   assert.match(publicBuild, /WriteAllText\([^\n]*accountsPath[\s\S]*?'\[\]'/);
   assert.match(publicBuild, /accountsJson\.Trim\(\)\s+-ne\s+'\[\]'/);
   assert.doesNotMatch(publicBuild, /accounts\[0\]\.email/);
+  assert.match(publicBuild, /account-sync\.json/);
+  assert.match(publicBuild, /account-sync-tombstones\.json/);
 });
 
 test('local release initializes only missing account data as empty', () => {

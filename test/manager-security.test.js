@@ -80,6 +80,12 @@ test('account deletion only matches the exact account resource', () => {
   assert.equal(accountDeleteId('/api/accounts/user-1/sync'), null);
 });
 
+test('provides an explicit local activation route for cloud-only accounts', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'manager.js'), 'utf8');
+  assert.match(source, /p\.endsWith\('\/activate'\)/);
+  assert.match(source, /activateAccountOnDevice\(account\)/);
+});
+
 test('periodic current-account detection never restarts Typeless implicitly', () => {
   assert.equal(shouldReconnectCurrent(true, null), false);
   assert.equal(shouldReconnectCurrent(true, '0'), false);

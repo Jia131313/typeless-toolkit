@@ -28,7 +28,7 @@ const {
   readMaster, replaceMasterTerms,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
-  ensureAccountAccessToken,
+  ensureAccountAccessToken, activateAccountOnDevice,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount, syncAllAccounts,
   paywallStatus, patchPaywall,
@@ -778,6 +778,26 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (e) {
         return send(res, 400, { status: 'FAIL', msg: e.message });
+      }
+    }
+    // 从 WebDAV 拉到的新账号只有长期凭证；用官方 auth:login IPC 在本机建立登录态和快照。
+    if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/activate')) {
+      const id = decodeURIComponent(p.split('/')[3]);
+      const account = readAccounts().find(item => item.user_id === id);
+      if (!account) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
+      try {
+        const result = await activateAccountOnDevice(account);
+        const snap = inspectSnapshot(id);
+        dictionarySync.schedule('cloud-account-activated');
+        paywallMaintenance.schedule('cloud-account-activated', 1200);
+        scheduleAccountSync('cloud-account-activated');
+        return send(res, 200, {
+          status: 'OK',
+          msg: '账号已在此设备启用并切换，Typeless 已启动',
+          data: accountForClient(result.account, null, snap.has_snapshot, snap),
+        });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: '启用云端账号失败：' + e.message });
       }
     }
     // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
