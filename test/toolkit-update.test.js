@@ -221,6 +221,10 @@ test('Windows replacement helper uses one temporary rollback and never copies re
   assert.match(source, /\[string\]\$StageDir/);
   assert.match(source, /\[string\]\$RollbackDir/);
   assert.match(source, /Move-Item -LiteralPath/);
+  assert.match(source, /\$oldMoveCompleted = \$false/);
+  assert.match(source, /\$replacementStarted = \$false/);
+  assert.match(source, /\$oldMoveCompleted = \$true\s+\$replacementStarted = \$true/);
+  assert.match(source, /if \(\$oldMoveCompleted -and \$replacementStarted\) \{\s+Get-ChildItem -LiteralPath \$install/);
   assert.match(source, /Write-Result 'rolled-back'/);
   assert.match(source, /rmdir \/s \/q/);
   assert.match(source, /Name -ne 'data'/);
