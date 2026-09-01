@@ -248,7 +248,7 @@
     </div>
     <div class="tool-group system-tools">
       <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
-      <button class="btn" onclick="openAccountSync()" title="使用加密的 WebDAV 文件在多台电脑间同步账号">☁ 账号同步</button>
+      <button class="btn" onclick="openAccountSync()" title="使用加密的 WebDAV 文件在多台电脑间同步账号或词库">☁ WebDAV 同步</button>
       <button class="btn primary" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化">＋ 注册账号</button>
       <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加当前账号</button>
       <button class="btn danger" id="patchBtn" onclick="patchPaywall()" title="检查并解除 Typeless 的相关弹窗；已解除时可查看当前状态"><span id="patchLabel">⊘ 解除弹窗</span></button>
@@ -321,7 +321,7 @@
 <!-- 跨设备账号同步 -->
 <div class="mask" id="accountSyncMask" onclick="if(event.target===this)closeModal('accountSyncMask')">
   <div class="modal" style="width:min(560px,96vw)">
-    <div class="hd"><h3>☁ 账号同步</h3><button class="icon-btn" onclick="closeModal('accountSyncMask')">✕</button></div>
+    <div class="hd"><h3>☁ WebDAV 同步</h3><button class="icon-btn" onclick="closeModal('accountSyncMask')">✕</button></div>
     <div class="bd">
       <div class="hint" style="margin-bottom:14px">
         在多台 Windows / Mac 间同步账号及长期 refresh token，或同步主词库。远端文件使用同步密码经 scrypt + AES-256-GCM 加密；不会上传短期 access token、登录快照或设备信息。
@@ -905,11 +905,11 @@ async function testAccountSync(){
 async function runAccountSync(){
   if(!(await saveAccountSync(true))) return;
   const status=document.getElementById('accountSyncStatus');
-  status.textContent='正在加密、合并并同步账号…';
+  status.textContent='正在加密、合并并同步所选内容…';
   try{
     const r=await apiTimed('/api/account-sync/run',{method:'POST'},60000);
-    status.textContent=(r.msg||'同步完成')+(r.data?`\n远端合并后 ${r.data.account_count} 个账号，${r.data.deleted_count} 条删除记录。`:'');
-    toast(r.msg||'账号同步完成',r.status==='OK'?'ok':'err');
+    status.textContent=r.msg||'同步完成';
+    toast(r.msg||'同步完成',r.status==='OK'?'ok':'err');
     if(r.status==='OK') await loadAccounts();
   }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('账号同步失败','err'); }
 }

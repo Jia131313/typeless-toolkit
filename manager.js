@@ -689,7 +689,11 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/account-sync/run') {
       try {
         const result = await accountSync.sync('manual');
-        return send(res, 200, { status: 'OK', data: result, sync_status: accountSync.status(), msg: `账号同步完成：${result.account_count} 个账号` });
+        const scope = normalizeSyncConfig(readAccountSyncConfig()).sync_scope;
+        const parts = [];
+        if (['accounts', 'all'].includes(scope)) parts.push(`账号同步完成：${result.account_count ?? 0} 个账号，${result.deleted_count ?? 0} 条删除记录`);
+        if (['dictionary', 'all'].includes(scope)) parts.push(`词库同步完成：${result.dictionary_count ?? 0} 个词条，${result.dictionary_deleted_count ?? 0} 条删除记录`);
+        return send(res, 200, { status: 'OK', data: result, sync_scope: scope, sync_status: accountSync.status(), msg: parts.join('\n') });
       } catch (e) {
         return send(res, 502, { status: 'FAIL', data: accountSync.status(), msg: e.message });
       }
