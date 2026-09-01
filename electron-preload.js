@@ -15,4 +15,7 @@ contextBridge.exposeInMainWorld('typelessToolkitDesktop', {
     if (target !== 'typeless' && target !== 'toolkit') return { ok: false };
     return ipcRenderer.invoke('typeless-toolkit:reset-privacy-permissions', target);
   },
+  async openToolkitUpdateFile(filePath) {
+    return ipcRenderer.invoke('typeless-toolkit:open-toolkit-update-file', String(filePath || ''));
+  },
 });

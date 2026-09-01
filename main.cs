@@ -154,6 +154,7 @@ class TrayApp
         nodeProcess.StartInfo.RedirectStandardError = true;
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_DATA_DIR"] = dataDir;
         nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_MANAGER_PORT"] = managerPort.ToString();
+        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_HOST_PID"] = Process.GetCurrentProcess().Id.ToString();
 
         try { nodeProcess.Start(); }
         catch (Exception error)
@@ -380,6 +381,13 @@ class TrayApp
 
     static void ExitApplication()
     {
+        ExitForToolkitUpdate();
+    }
+
+    // Windows 自更新 helper 已在临时目录启动后，界面通过 WebView2 请求完整退出。
+    // Cleanup 会结束由本宿主启动的 Node 服务；helper 随后才替换程序文件。
+    internal static void ExitForToolkitUpdate()
+    {
         exiting = true;
         if (managerForm != null) managerForm.Close();
         Application.Exit();
@@ -496,6 +504,7 @@ class ManagerForm : Form
                     string message = args.TryGetWebMessageAsString();
                     if (message == "theme:dark") ApplyTitleBarTheme(true);
                     else if (message == "theme:light") ApplyTitleBarTheme(false);
+                    else if (message == "toolkit-update:quit") TrayApp.ExitForToolkitUpdate();
                 }
                 catch { }
             };

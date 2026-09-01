@@ -161,6 +161,20 @@ ipcMain.handle('typeless-toolkit:reset-privacy-permissions', (event, target) => 
   return { ok: true, message: `已清除 ${plan.appName} 的旧权限记录，请重新启动并按系统提示授权` };
 });
 
+ipcMain.handle('typeless-toolkit:open-toolkit-update-file', async (event, filePath) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    return { ok: false, message: '无效的窗口请求' };
+  }
+  if (process.platform !== 'darwin') return { ok: false, message: '仅支持 macOS' };
+  const target = path.resolve(String(filePath || ''));
+  if (!/^Typeless-Toolkit-\d+(?:\.\d+)+-universal\.dmg$/i.test(path.basename(target))) {
+    return { ok: false, message: '不是受支持的工具集更新包' };
+  }
+  if (!fs.existsSync(target)) return { ok: false, message: '已下载的 DMG 不存在，请重新下载' };
+  const error = await shell.openPath(target);
+  return error ? { ok: false, message: error } : { ok: true };
+});
+
 async function launch() {
   const dataDir = prepareDataDirectory();
   const permissionIdentity = reconcileToolkitPermissionIdentity(dataDir);
