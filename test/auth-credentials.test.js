@@ -188,6 +188,28 @@ test('refreshes a nearly expired access token and persists rotated credentials',
   assert.equal(accounts[0].refresh_token, freshRefresh);
 });
 
+test('migrates legacy records that stored refresh tokens in token', async () => {
+  const oldRefresh = refreshToken('user-1');
+  const freshAccess = accessToken('user-1', 7200);
+  let accounts = [{ user_id: 'user-1', token: oldRefresh }];
+  let requestArgs;
+  const manager = createAccountCredentialManager({
+    readAccountsFn: () => accounts,
+    writeAccountsFn: next => { accounts = next; },
+    refreshRequestFn: async (...args) => {
+      requestArgs = args;
+      return { access_token: freshAccess };
+    },
+    nowFn: () => NOW_MS,
+    appName: 'typeless_webapp',
+  });
+
+  assert.equal(await manager.ensureAccessToken(accounts[0]), freshAccess);
+  assert.deepEqual(requestArgs, [oldRefresh, 'typeless_webapp']);
+  assert.equal(accounts[0].token, freshAccess);
+  assert.equal(accounts[0].refresh_token, oldRefresh);
+});
+
 test('keeps valid access tokens and coalesces concurrent refreshes', async () => {
   const valid = { user_id: 'user-1', token: accessToken('user-1', 3600), refresh_token: refreshToken('user-1') };
   let calls = 0;
