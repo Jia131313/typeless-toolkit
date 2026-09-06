@@ -249,6 +249,7 @@
     <div class="tool-group system-tools">
       <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
       <button class="btn primary" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化">＋ 注册账号</button>
+      <button class="btn" onclick="resetDeviceOnly()" title="清理本机设备标识并回到 Typeless 登录页">↻ 重置设备</button>
       <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加当前账号</button>
       <button class="btn danger" id="patchBtn" onclick="patchPaywall()" title="检查并解除 Typeless 的相关弹窗；已解除时可查看当前状态"><span id="patchLabel">⊘ 解除弹窗</span></button>
     </div>
@@ -789,6 +790,18 @@ async function runDictionarySync(showResults=true){
   else toast(r.msg||'部分账号未对齐，后台会自动重试','err');
   await loadAccounts();
   await refreshDictionarySyncStatus();
+}
+async function resetDeviceOnly(){
+  if(!confirm('确认重置本机 Typeless 设备标识?\n\n将保存当前账号快照、清理设备凭据和缓存，并重启 Typeless 到登录页。\n已有账号快照和词库不会删除。')) return;
+  toast('正在重置设备…');
+  try{
+    const r=await apiTimed('/api/reset-device',{method:'POST'},60000);
+    if(r.status==='OK'){
+      toast(r.msg||'设备已重置','ok');
+      await loadAccounts();
+      detectCurrent();
+    }else toast(r.msg||'设备重置失败','err');
+  }catch(e){ toast('设备重置失败: '+(e.message||e),'err'); }
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;

@@ -12,12 +12,18 @@ function group(name) {
   return html.slice(start, end);
 }
 
-test('places current-account collection beside registration', () => {
+test('places device reset and current-account collection beside registration', () => {
   const primary = group('primary-tools');
   const system = group('system-tools');
-  assert.doesNotMatch(primary, /addAccount\(\)/);
-  assert.match(system, /注册账号[\s\S]*添加当前账号/);
-  assert.ok(system.indexOf('注册账号') < system.indexOf('添加当前账号'));
+  assert.doesNotMatch(primary, /addAccount\(\)|resetDeviceOnly\(\)/);
+  assert.match(system, /注册账号[\s\S]*重置设备[\s\S]*添加当前账号/);
+  assert.ok(system.indexOf('openRegisterWizard()') < system.indexOf('resetDeviceOnly()'));
+  assert.ok(system.indexOf('resetDeviceOnly()') < system.indexOf('addAccount()'));
+});
+
+test('device reset has an explicit destructive confirmation and calls the existing API', () => {
+  assert.match(html, /function resetDeviceOnly\(\)[\s\S]*确认重置本机 Typeless 设备标识/);
+  assert.match(html, /resetDeviceOnly\(\)[\s\S]*apiTimed\('\/api\/reset-device',\{method:'POST'\},60000\)/);
 });
 
 test('opens account collection when the manually detected account is not managed', () => {
