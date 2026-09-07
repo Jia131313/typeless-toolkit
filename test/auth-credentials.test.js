@@ -214,6 +214,41 @@ test('keeps valid access tokens and coalesces concurrent refreshes', async () =>
   assert.equal(calls, 1);
 });
 
+test('background credential refresh keeps the account sync event time and concurrent edits', async () => {
+  const capturedAt = new Date(NOW_MS - 86400000).toISOString();
+  const original = { user_id: 'user-1', nickname: 'before', captured_at: capturedAt,
+    token: accessToken('user-1', 1), refresh_token: refreshToken() };
+  let accounts = [original];
+  const manager = createAccountCredentialManager({
+    readAccountsFn: () => accounts,
+    writeAccountsFn: next => { accounts = next; },
+    refreshRequestFn: async () => {
+      accounts = [{ ...original, nickname: 'edited during refresh' }];
+      return { access_token: accessToken('user-1', 3600) };
+    },
+    nowFn: () => NOW_MS, appName: 'typeless_webapp',
+  });
+  await manager.ensureAccessToken(original);
+  assert.equal(accounts[0].updated_at, capturedAt);
+  assert.equal(accounts[0].nickname, 'edited during refresh');
+});
+
+test('a pending credential refresh cannot recreate a deleted account', async () => {
+  const original = { user_id: 'user-1', token: accessToken('user-1', 1), refresh_token: refreshToken() };
+  let accounts = [original];
+  const manager = createAccountCredentialManager({
+    readAccountsFn: () => accounts,
+    writeAccountsFn: next => { accounts = next; },
+    refreshRequestFn: async () => {
+      accounts = [];
+      return { access_token: accessToken('user-1', 3600) };
+    },
+    nowFn: () => NOW_MS, appName: 'typeless_webapp',
+  });
+  await assert.rejects(manager.ensureAccessToken(original), /已.*删除/);
+  assert.deepEqual(accounts, []);
+});
+
 test('rejects unusable refresh responses without deleting stored credentials', async () => {
   const original = { user_id: 'user-1', token: accessToken('user-1', -1), refresh_token: refreshToken('user-1') };
   const accounts = [original];

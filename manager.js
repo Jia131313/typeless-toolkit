@@ -99,10 +99,12 @@ const accountSync = createAccountSyncService({
   providerFactory: createWebDavProvider,
   readDictionaryFn: readMaster,
   writeDictionaryFn: (terms, merged) => {
+    const changed = JSON.stringify(readMaster()) !== JSON.stringify(terms);
     writeMaster(terms);
     const active = Object.fromEntries((merged?.terms || []).filter(item => !item.deleted_at)
       .map(item => [String(item.term).trim().toLowerCase(), { term: item.term, updated_at: item.updated_at }]));
     writeDictionarySyncMeta({ active, tombstones: readDictionarySyncMeta().tombstones });
+    if (changed) dictionarySync.schedule('webdav-dictionary');
   },
   readDictionaryTombstonesFn: () => readDictionarySyncMeta(),
   writeDictionaryTombstonesFn: tombstones => {
@@ -110,6 +112,7 @@ const accountSync = createAccountSyncService({
   },
 });
 let accountSyncTimer = null;
+let accountSyncInterval = null;
 function scheduleAccountSync(reason, delay = 800) {
   const config = readAccountSyncConfig();
   if (!config.enabled) return;
@@ -118,6 +121,7 @@ function scheduleAccountSync(reason, delay = 800) {
     accountSyncTimer = null;
     accountSync.sync(reason).catch(error => log('[account-sync]', error.message));
   }, delay);
+  accountSyncTimer.unref();
 }
 
 function createDictionarySyncController(syncFn, opts = {}) {
@@ -246,7 +250,10 @@ function createDictionarySyncController(syncFn, opts = {}) {
   return { schedule, run, start, stop, status: snapshot };
 }
 
-const dictionarySync = createDictionarySyncController(syncAllAccounts);
+const dictionarySync = createDictionarySyncController(async () => {
+  try { return await syncAllAccounts(); }
+  finally { scheduleAccountSync('dictionary-aligned'); }
+});
 
 function createPaywallMaintenanceController(statusFn, repairFn, runningFn, opts = {}) {
   const intervalMs = opts.intervalMs || PAYWALL_MAINTENANCE_INTERVAL_MS;
@@ -1166,6 +1173,7 @@ const server = http.createServer(async (req, res) => {
       if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '删除失败') });
       recordDictionaryDeletions([term], `account:${id}`);
       dictionarySync.schedule('word-deleted');
+      scheduleAccountSync('word-deleted');
       return send(res, 200, { status: 'OK', data: r.data, msg: '已删除，并将在后台从其他账号同步移除' });
     }
     // 主 CSV
@@ -1182,6 +1190,7 @@ const server = http.createServer(async (req, res) => {
       }
       const changed = replaceMasterTerms(b.terms || []);
       dictionarySync.schedule('master-edited');
+      scheduleAccountSync('master-edited');
       return send(res, 200, {
         status: 'OK',
         data: changed.terms,
@@ -1251,6 +1260,8 @@ function startServer() {
       dictionarySync.start();
       paywallMaintenance.start();
       scheduleAccountSync('startup', 1500);
+      accountSyncInterval = setInterval(() => scheduleAccountSync('periodic'), AUTO_SYNC_INTERVAL_MS);
+      accountSyncInterval.unref();
       resolve(server);
     };
     server.once('error', onError);
@@ -1264,6 +1275,8 @@ server.on('close', () => {
   paywallMaintenance.stop();
   if (accountSyncTimer) clearTimeout(accountSyncTimer);
   accountSyncTimer = null;
+  if (accountSyncInterval) clearInterval(accountSyncInterval);
+  accountSyncInterval = null;
 });
 
 if (require.main === module) {

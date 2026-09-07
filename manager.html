@@ -852,8 +852,8 @@ function accountSyncPayload(){
   };
 }
 function accountSyncStatusText(status){
-  if(!status) return '尚未同步。保存配置后会在启动、添加或删除账号时同步，也可手动立即同步。';
-  const labels={idle:'尚未同步',syncing:'正在同步',success:'最近同步成功',conflict:'远端冲突',authentication_failure:'认证失败',decryption_failure:'同步密码错误',network_failure:'连接失败'};
+  if(!status) return '尚未同步。保存配置后会自动合并账号与词库的变化，运行期间每 15 分钟检查一次，也可立即同步。';
+  const labels={idle:'尚未同步',syncing:'正在同步',success:'最近同步成功',conflict:'远端冲突',local_changed:'本地仍在变更，请稍后同步',authentication_failure:'认证失败',decryption_failure:'同步密码错误',network_failure:'连接失败'};
   let text=labels[status.state]||status.state||'尚未同步';
   if(status.last_sync_at) text+=' · '+new Date(status.last_sync_at).toLocaleString();
   if(status.error) text+='\n'+status.error;
@@ -1204,7 +1204,12 @@ async function saveSnap(){
   else toast(r.msg||'保存失败','err');
   await loadAccounts();
 }
-function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
+async function rmAccount(){
+  if(!curDetail || !confirm('从管理器移除「'+curDetail.nickname+'」?\n\n若已启用 WebDAV 账号同步，其他设备也会同步移除这条管理记录。不会注销 Typeless 账号。')) return;
+  const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'});
+  if(r.status!=='OK'){ toast(r.msg||'移除失败','err'); return; }
+  closeModal('detailMask'); await loadAccounts(); toast('已移除','ok');
+}
 
 function addAccount(){
   openModal('addMask');
