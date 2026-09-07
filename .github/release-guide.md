@@ -12,6 +12,8 @@ Windows 版本需要 Microsoft Edge WebView2 Runtime；多数 Windows 10/11 电�
 
 ## 已安装用户如何升级
 
+如果当前版本已有「工具集更新」，可在工具集内检查并下载新版：Windows 确认后自动替换程序，macOS 下载后仍需拖入「应用程序」。尚无此入口的旧版用户请按下方步骤手动升级。
+
 ### Windows
 
 1. 从托盘菜单退出 Typeless 工具集。

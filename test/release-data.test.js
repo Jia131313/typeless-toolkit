@@ -16,7 +16,7 @@ test('release version is consistent across packages, launchers, scripts, and doc
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
-  assert.equal(version, '1.6.2');
+  assert.equal(version, '1.7.0');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
