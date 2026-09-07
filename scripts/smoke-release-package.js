@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const artifactPath = path.resolve(process.argv[2] || '');
-if (!process.argv[2]) throw new Error('Usage: node scripts/test-release-package.js <release.zip|release.dmg>');
+if (!process.argv[2]) throw new Error('Usage: node scripts/smoke-release-package.js <release.zip|release.dmg>');
 if (!fs.existsSync(artifactPath)) throw new Error(`Release artifact not found: ${artifactPath}`);
 
 function artifactVersion(filePath) {
