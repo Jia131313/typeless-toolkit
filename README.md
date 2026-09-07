@@ -41,6 +41,11 @@ macOS Release 提供 Universal DMG，同时支持 Apple Silicon 与 Intel Mac。
 拖入“应用程序”即可；升级只替换 App 本体，账号、快照、词库和配置继续保存在
 `~/Library/Application Support/Typeless 工具集/data/`。每个附件均提供独立 SHA-256 校验文件。
 
+工具集会在启动后检查 GitHub Release，并展示版本说明。Windows 的 Portable/Lite 包可由工具集下载、
+校验 SHA-256 后在退出时自动替换程序文件，保留 `data/` 中的账号、快照、词库和配置；macOS 当前
+使用 ad-hoc 签名，工具集会下载并打开已校验的 DMG，仍需手动拖入“应用程序”完成替换。这里的
+“工具集更新”与“安装 Typeless 官方更新”是两个独立入口，后者只处理 Typeless 本体。
+
 两个版本都只有一个需要操作的入口，并会把账号、配置和快照保存在解压目录的 `data/` 中。
 升级时请保留该目录。除此之外还需要：
 
@@ -104,6 +109,7 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 | 去升级弹窗 | 管理器 | 启动、账号变更和官方更新后自动检查修复；自动定位付费墙调用、处理完整性校验，手动入口仅用于状态查看和重试 |
 | 跳过新手引导 | 管理器 | 双写 onboarding 状态并保存到账号快照,切号后自动修复,再重启 Typeless |
 | 安装 Typeless 官方更新 | 管理器(macOS) | 校验 SHA-512、版本、Bundle ID、Developer ID 与 Gatekeeper 后安装 Typeless updater 已下载的本地缓存包,失败自动回滚；不更新 Toolkit |
+| 工具集更新 | 管理器 | 检查 GitHub Release、展示说明并下载 SHA-256 校验包；Windows 退出后自动替换代码且保留 `data/`，macOS 仅打开已校验 DMG 供手动安装 |
 
 ## 配置说明
 

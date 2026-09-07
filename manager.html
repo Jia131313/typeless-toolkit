@@ -194,7 +194,7 @@
   a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
   a.link:hover { text-decoration:underline; }
   @media (max-width:960px){ .stats{grid-template-columns:repeat(2,1fr)} }
-  @media (max-width:1080px){
+  @media (max-width:1280px){
     .toolbar { flex-wrap:wrap; gap:8px; }
     .tool-group { flex-wrap:wrap; }
     .tool-group.primary-tools { flex:1 1 100%; }
@@ -244,7 +244,8 @@
       <button class="btn" onclick="openMaster()" title="查看和编辑跨账号同步使用的主词库">✎ 主词库</button>
       <button class="btn" onclick="backup()" title="备份账号清单和主词库数据">⇩ 备份</button>
       <button class="btn" onclick="openShortcuts()" title="管理 Typeless 功能快捷键">⌨ 快捷键</button>
-      <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 官方更新</button>
+      <button class="btn" id="toolkitUpdateBtn" onclick="openToolkitUpdate()" title="检查 Typeless 工具集是否有新版本">⬆ 工具集更新</button>
+      <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 安装 Typeless 官方更新</button>
     </div>
     <div class="tool-group system-tools">
       <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
@@ -499,6 +500,22 @@
   </div>
 </div>
 
+<div class="mask" id="toolkitUpdateMask" onclick="if(event.target===this)closeModal('toolkitUpdateMask')">
+  <div class="modal" style="width:min(650px,94vw)">
+    <div class="hd"><h3>Typeless 工具集更新</h3><button class="icon-btn" onclick="closeModal('toolkitUpdateMask')">✕</button></div>
+    <div class="bd">
+      <div id="toolkitUpdateSummary" class="permission-intro">正在检查 GitHub Release…</div>
+      <div id="toolkitUpdateProgress" class="hint" style="margin-top:10px"></div>
+      <pre id="toolkitUpdateNotes" class="hint" style="display:none;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:14px 0 0;padding:12px;border-radius:10px"></pre>
+      <div class="row-btns" style="margin-top:14px">
+        <button class="btn primary" id="toolkitUpdateActionBtn" onclick="downloadToolkitUpdate()">检查更新</button>
+        <button class="btn" id="toolkitUpdateReleaseBtn" onclick="openToolkitUpdateRelease()" style="display:none">查看 Release</button>
+      </div>
+      <div class="hint" id="toolkitUpdateBoundary" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -511,6 +528,8 @@ async function apiTimed(p,opt={},timeoutMs=30000){
 let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy = false, currentBusy = false;
 let DICT_SYNC_STATUS = null, MASTER_ORIGINAL = [];
 let ENV_INFO = null, PAYWALL_MAINTENANCE = null, PAYWALL_NOTICE_AT = null, PENDING_MAC_ACTION = null, PAYWALL_SETTINGS_OPENED = false, PAYWALL_FOCUS_RETRY_BUSY = false;
+let TOOLKIT_UPDATE = null, TOOLKIT_UPDATE_POLL = null, TOOLKIT_UPDATE_NOTIFIED = false;
+const TOOLKIT_UPDATE_SHARED_BACKEND = new URLSearchParams(window.location.search).get('toolkit_backend') === 'shared';
 let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
 const SC_CODE_MAP = {
   ControlLeft:'LeftCtrl', ControlRight:'RightCtrl',
@@ -1145,9 +1164,140 @@ async function refreshOfficialUpdate(){
     btn.style.display='';
     const localPackageNote='仅安装 Typeless updater 已下载的本地缓存包，不更新 Typeless Toolkit。';
     btn.classList.remove('primary');
-    if(d.available){ btn.disabled=false; btn.textContent='⬆ 官方更新'; btn.title='可安装 Typeless '+d.pending.version+'：'+d.pending.fileName+'\n'+localPackageNote; }
-    else { btn.disabled=false; btn.textContent='⬆ 官方更新'; btn.title=(d.reason||'未发现可安装更新')+'\n'+localPackageNote; }
+    if(d.available){ btn.disabled=false; btn.textContent='⬆ 安装 Typeless 官方更新'; btn.title='可安装 Typeless '+d.pending.version+'：'+d.pending.fileName+'\n'+localPackageNote; }
+    else { btn.disabled=false; btn.textContent='⬆ 安装 Typeless 官方更新'; btn.title=(d.reason||'未发现可安装更新')+'\n'+localPackageNote; }
   }catch(e){ btn.disabled=false; btn.title='Typeless 官方更新状态读取失败'; }
+}
+
+function updateBytes(value){
+  const bytes=Number(value||0);
+  if(!bytes) return '已下载';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/1024/1024).toFixed(1)+' MB';
+}
+function renderToolkitUpdate(){
+  const btn=document.getElementById('toolkitUpdateBtn');
+  const d=TOOLKIT_UPDATE, u=d?.update;
+  if(btn){
+    btn.disabled=!!d?.running;
+    if(d?.running) btn.textContent='⬆ 工具集更新中…';
+    else if(d?.available) btn.textContent='⬆ 工具集 v'+d.version;
+    else btn.textContent='⬆ 工具集更新';
+    btn.title=d?.available
+      ? `发现 Typeless 工具集 ${d.version}，点击查看更新说明`
+      : (d?.error||'检查 Typeless 工具集的新版本');
+  }
+  const summary=document.getElementById('toolkitUpdateSummary');
+  const progress=document.getElementById('toolkitUpdateProgress');
+  const notes=document.getElementById('toolkitUpdateNotes');
+  const action=document.getElementById('toolkitUpdateActionBtn');
+  const release=document.getElementById('toolkitUpdateReleaseBtn');
+  const boundary=document.getElementById('toolkitUpdateBoundary');
+  if(!summary||!action) return;
+  if(!d){
+    summary.textContent='正在检查 GitHub Release…'; action.textContent='检查更新'; action.disabled=true;
+    progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
+  }
+  if(d.error && !u){
+    summary.textContent='检查更新失败：'+d.error; action.textContent='重试检查'; action.disabled=false;
+    progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
+  }
+  if(!d.available){
+    summary.textContent='当前已是最新版本 v'+(d.current_version||'');
+    action.textContent='重新检查'; action.disabled=!!d.running;
+    progress.textContent=d.error||''; notes.style.display='none'; release.style.display=u?.release_url?'':'none';
+    if(release) release.style.display=u?.release_url?'':'none';
+    if(boundary) boundary.textContent='更新检查只读取 GitHub Release 元数据，不会读取账号、词库或配置。';
+    return;
+  }
+  summary.textContent=`发现 Typeless 工具集 v${d.version}（当前 v${d.current_version}）`;
+  notes.textContent=u?.notes||'该版本未提供更新说明。'; notes.style.display='';
+  if(release) release.style.display=u?.release_url?'':'none';
+  if(u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){
+    progress.textContent=TOOLKIT_UPDATE_SHARED_BACKEND
+      ? '此窗口复用了其他工具集的本地服务，为避免替换仍在使用的程序，请从 Release 手动更新。'
+      : (u.error||d.manual_install_reason||'当前安装只能手动更新。');
+    action.textContent='前往 Release 手动更新'; action.disabled=!u.release_url;
+  }else if(d.state==='downloading'){
+    const p=d.progress||{};
+    progress.textContent=p.total
+      ? `正在下载并校验：${updateBytes(p.downloaded)} / ${updateBytes(p.total)}（${p.percent||0}%）`
+      : `正在下载并校验：${updateBytes(p.downloaded)}`;
+    action.textContent='下载中…'; action.disabled=true;
+  }else if(d.state==='downloaded'){
+    progress.textContent='更新包 SHA-256 校验通过。';
+    action.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG'; action.disabled=false;
+  }else if(d.state==='installing'){
+    progress.textContent='即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
+    action.textContent='正在安装…'; action.disabled=true;
+  }else {
+    progress.textContent=d.error||'';
+    action.textContent=d.state==='error'?'重新下载':'下载更新'; action.disabled=false;
+  }
+  if(boundary){
+    const result=d.last_result?.message ? `上次更新：${d.last_result.message}` : '';
+    boundary.textContent=(d.platform==='macos'
+      ? 'macOS 当前采用 ad-hoc 签名：这里只会校验下载并打开 DMG，仍需你将 App 拖入“应用程序”完成替换。'
+      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。')) + (result?`\n${result}`:'');
+  }
+}
+async function refreshToolkitUpdate(announce=false){
+  try{
+    const r=await apiTimed('/api/toolkit-update',{},25000);
+    if(r.status!=='OK') throw new Error(r.msg||'检查失败');
+    TOOLKIT_UPDATE=r.data||null;
+    if(announce && TOOLKIT_UPDATE?.available&&!TOOLKIT_UPDATE_NOTIFIED){
+      TOOLKIT_UPDATE_NOTIFIED=true;
+      toast('发现 Typeless 工具集 v'+TOOLKIT_UPDATE.version+'，点击“工具集更新”查看','ok');
+    }
+  }catch(e){
+    TOOLKIT_UPDATE={state:'error',running:false,error:e.message||'检查更新失败'};
+  }
+  renderToolkitUpdate();
+  return TOOLKIT_UPDATE;
+}
+function startToolkitUpdatePoll(){
+  if(TOOLKIT_UPDATE_POLL) clearInterval(TOOLKIT_UPDATE_POLL);
+  TOOLKIT_UPDATE_POLL=setInterval(async()=>{
+    try{
+      const r=await api('/api/toolkit-update/status');
+      if(r.status!=='OK') return;
+      TOOLKIT_UPDATE=r.data||TOOLKIT_UPDATE; renderToolkitUpdate();
+      if(!TOOLKIT_UPDATE?.running){ clearInterval(TOOLKIT_UPDATE_POLL); TOOLKIT_UPDATE_POLL=null; }
+    }catch(e){}
+  },500);
+}
+async function openToolkitUpdate(){
+  if(!TOOLKIT_UPDATE||TOOLKIT_UPDATE.state==='error') await refreshToolkitUpdate(false);
+  renderToolkitUpdate(); openModal('toolkitUpdateMask');
+}
+function openToolkitUpdateRelease(){
+  const url=TOOLKIT_UPDATE?.update?.release_url;
+  if(url) window.open(url,'_blank');
+}
+async function downloadToolkitUpdate(){
+  const d=TOOLKIT_UPDATE;
+  if(!d?.available){ await refreshToolkitUpdate(false); return; }
+  if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
+  if(d.state==='downloaded'){
+    if(d.platform==='macos'){
+      const result=await window.typelessToolkitDesktop?.openToolkitUpdateFile?.(d.download_path);
+      if(result?.ok) toast('已在 Finder 中打开 DMG，请拖入“应用程序”完成替换','ok');
+      else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
+      return;
+    }
+    if(!confirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。`)) return;
+    const r=await api('/api/toolkit-update/install',{method:'POST',body:'{}'});
+    if(r.status!=='OK'){ toast(r.msg||'准备更新失败','err'); return; }
+    TOOLKIT_UPDATE={...TOOLKIT_UPDATE,state:'installing',running:true}; renderToolkitUpdate();
+    toast('准备完成，正在退出并安装更新…','ok');
+    try{ window.chrome?.webview?.postMessage('toolkit-update:quit'); }
+    catch(e){ toast('请从托盘菜单退出工具集，更新程序会在退出后继续','err'); }
+    return;
+  }
+  const r=await api('/api/toolkit-update/download',{method:'POST',body:'{}'});
+  if(r.status!=='OK'){ toast(r.msg||'开始下载失败','err'); return; }
+  TOOLKIT_UPDATE=r.data||TOOLKIT_UPDATE; renderToolkitUpdate(); startToolkitUpdatePoll();
 }
 async function installOfficialUpdate(){
   const st=await api('/api/official-update'), d=st.data||{};
@@ -1577,6 +1727,7 @@ document.addEventListener('keydown',e=>{
   await refreshPaywallMaintenanceStatus();
   detectCurrent();
   refreshOfficialUpdate();
+  setTimeout(()=>refreshToolkitUpdate(true),1200);
   refreshDictionarySyncStatus();
 })();
 refreshOnboardingStatus();
@@ -1586,6 +1737,7 @@ setInterval(detectCurrent, 20000);
 setInterval(refreshDictionarySyncStatus, 12000);
 // 弹窗维护由后端执行；页面只读取状态并在需要用户同意时展示一次明确引导。
 setInterval(refreshPaywallMaintenanceStatus, 4000);
+setInterval(()=>refreshToolkitUpdate(false), 6*60*60*1000);
 window.addEventListener('focus',async()=>{
   const mask=document.getElementById('paywallPermissionMask');
   if(!mask?.classList.contains('on')||PAYWALL_FOCUS_RETRY_BUSY) return;

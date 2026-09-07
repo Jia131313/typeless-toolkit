@@ -18,6 +18,7 @@ const {
   redactSyncConfig,
 } = require('./lib/account-sync');
 const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
+const { createToolkitUpdateController } = require('./lib/toolkit-update');
 const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
@@ -613,6 +614,19 @@ const paywallMaintenance = createPaywallMaintenanceController(
   }
 );
 
+const TOOLKIT_VERSION = require('./package.json').version;
+const toolkitBackendOwned = process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
+  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..');
+const toolkitUpdate = createToolkitUpdateController({
+  platform: IS_MAC ? 'darwin' : 'win32',
+  codeRoot: C.CODE_DIR,
+  dataRoot: ROOT,
+  currentVersion: TOOLKIT_VERSION,
+  parentPid: process.pid,
+  hostPid: Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
+  backendOwned: toolkitBackendOwned,
+});
+
 // ---------- HTTP ----------
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -963,6 +977,40 @@ const server = http.createServer(async (req, res) => {
         msg: outcome.ok ? (outcome.result?.msg || outcome.status?.msg) : (outcome.error || outcome.status?.msg),
       });
     }
+    // Typeless Toolkit 自身更新：所有平台可检查并下载经过 SHA-256 校验的发布包。
+    // Windows 在界面退出后由独立 helper 替换代码文件；macOS 只下载并打开 DMG，
+    // 不把 ad-hoc 签名版本伪装成可无感安装的自动更新。
+    if (m === 'GET' && p === '/api/toolkit-update') {
+      try {
+        const status = await toolkitUpdate.check();
+        return send(res, 200, { status: 'OK', data: status });
+      } catch (error) {
+        return send(res, 502, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
+      }
+    }
+    if (m === 'GET' && p === '/api/toolkit-update/status') {
+      return send(res, 200, { status: 'OK', data: toolkitUpdate.status() });
+    }
+    if (m === 'POST' && p === '/api/toolkit-update/download') {
+      await readBody(req);
+      if (toolkitUpdate.status().running) {
+        return send(res, 202, { status: 'OK', data: toolkitUpdate.status(), msg: '工具集更新包正在下载' });
+      }
+      toolkitUpdate.download().catch(error => log('[toolkit-update] 下载失败:', error.message));
+      return send(res, 202, { status: 'OK', data: toolkitUpdate.status(), msg: '已开始下载并校验工具集更新包' });
+    }
+    if (m === 'POST' && p === '/api/toolkit-update/install') {
+      await readBody(req);
+      try {
+        const result = toolkitUpdate.prepareWindowsInstall();
+        return send(res, 202, {
+          status: 'OK', data: result,
+          msg: `工具集 ${result.version} 已准备完成，退出当前窗口后将保留 data 目录并自动替换程序文件`,
+        });
+      } catch (error) {
+        return send(res, 409, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
+      }
+    }
     // 查询 Typeless 官方 updater 已下载的更新包（macOS）
     if (m === 'GET' && p === '/api/official-update') {
       return send(res, 200, { status: 'OK', data: officialUpdateStatus({ typelessAppPath: TYPELESS_APP }) });
@@ -1206,7 +1254,10 @@ const server = http.createServer(async (req, res) => {
     }
     // 运行环境信息(排错用:平台、探测到的路径、凭据名)
     if (m === 'GET' && p === '/api/env') {
-      return send(res, 200, { status: 'OK', data: envInfo() });
+      return send(res, 200, {
+        status: 'OK',
+        data: { ...envInfo(), toolkit_version: TOOLKIT_VERSION, code_root: C.CODE_DIR },
+      });
     }
     // 一键备份(账号表 + 主词库,带时间戳)
     if (m === 'POST' && p === '/api/backup') {
@@ -1278,6 +1329,8 @@ server.on('close', () => {
   if (accountSyncInterval) clearInterval(accountSyncInterval);
   accountSyncInterval = null;
 });
+
+server.on('close', () => toolkitUpdate.cleanupStaging());
 
 if (require.main === module) {
   startServer().catch(error => {
