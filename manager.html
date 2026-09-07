@@ -167,8 +167,8 @@
   .word .del:hover { opacity:1; }
   .pill { font-size:10px; padding:1.5px 7px; border-radius:6px; background:var(--line); }
   .pill.auto { background:var(--warn-soft); color:var(--warn); }
-  input.fld { border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; background:var(--card); color:var(--text); }
-  input.fld:focus { border-color:var(--accent); }
+  input.fld,select.fld { border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; background:var(--card); color:var(--text); }
+  input.fld:focus,select.fld:focus { border-color:var(--accent); }
   input.fld[readonly] { background:var(--bg2); color:var(--sub); }
   .field { margin-bottom:13px; }
   .field label { display:block; font-size:12px; color:var(--sub); margin-bottom:5px; }
@@ -248,6 +248,7 @@
     </div>
     <div class="tool-group system-tools">
       <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
+      <button class="btn" onclick="openAccountSync()" title="使用加密的 WebDAV 文件在多台电脑间同步账号或词库">☁ WebDAV 同步</button>
       <button class="btn primary" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化">＋ 注册账号</button>
       <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加当前账号</button>
       <button class="btn danger" id="patchBtn" onclick="patchPaywall()" title="检查并解除 Typeless 的相关弹窗；已解除时可查看当前状态"><span id="patchLabel">⊘ 解除弹窗</span></button>
@@ -312,6 +313,39 @@
       <div class="row-btns">
         <button class="btn small primary" onclick="saveMaster()">保存</button>
         <a class="btn small" href="/api/master/export">⇩ 导出 txt</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 跨设备账号同步 -->
+<div class="mask" id="accountSyncMask" onclick="if(event.target===this)closeModal('accountSyncMask')">
+  <div class="modal" style="width:min(560px,96vw)">
+    <div class="hd"><h3>☁ WebDAV 同步</h3><button class="icon-btn" onclick="closeModal('accountSyncMask')">✕</button></div>
+    <div class="bd">
+      <div class="hint" style="margin-bottom:14px">
+        在多台 Windows / Mac 间同步账号及长期 refresh token，或同步主词库。远端文件使用同步密码经 scrypt + AES-256-GCM 加密；不会上传短期 access token、登录快照或设备信息。
+      </div>
+      <div class="field"><label>服务</label><select class="fld" id="accountSyncProvider" onchange="updateAccountSyncProvider()">
+        <option value="disabled">关闭同步</option>
+        <option value="nutstore">坚果云</option>
+        <option value="webdav">其他 WebDAV</option>
+      </select></div>
+      <div id="accountSyncFields">
+        <div class="field"><label>同步内容</label><select class="fld" id="accountSyncScope">
+          <option value="accounts">仅账号（refresh token）</option><option value="dictionary">仅词库</option><option value="all">账号和词库</option>
+        </select></div>
+        <div class="field"><label>WebDAV URL</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
+        <div class="field"><label>用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
+        <div class="field"><label>WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空表示保持已保存密码"></div>
+        <div class="field"><label>远端文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"></div>
+        <div class="field"><label>同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密远端账号库"></div>
+      </div>
+      <div id="accountSyncStatus" class="hint" style="min-height:22px;white-space:pre-wrap"></div>
+      <div class="row-btns">
+        <button class="btn small primary" id="accountSyncSaveBtn" onclick="saveAccountSync()">保存</button>
+        <button class="btn small" id="accountSyncTestBtn" onclick="testAccountSync()">测试连接</button>
+        <button class="btn small" id="accountSyncRunBtn" onclick="runAccountSync()">立即同步</button>
       </div>
     </div>
   </div>
@@ -616,6 +650,7 @@ function render(){
     const daysTxt = credentialNeedsUpdate?'需更新':(days==null?'—':(days<0?'已过期':days+'天'));
     const daysCls = credentialNeedsUpdate?'warn':(days==null?'mut':'');
     const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
+    const cloudOnly=!!a.cloud_only && !a.has_snapshot;
     return `<div class="card ${a.user_id===CUR_ID?'active':''} ${valid?'':'invalid'}" onclick="openDetail('${a.user_id}')">
       <div class="ribbon">当前登录</div>
       <div class="chead">
@@ -633,10 +668,12 @@ function render(){
         <div class="m"><div class="k">登录有效期</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
       <div class="cfoot">
-        <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照')}</span>
+        <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${cloudOnly?'云端待启用':(a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照'))}</span>
         <div class="acts">
           <button class="btn small" onclick="event.stopPropagation();openDetail('${a.user_id}')">详情</button>
-          <button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot&&a.snapshot_ok!==false?'':'disabled'}>切换</button>
+          ${cloudOnly
+            ? `<button class="btn small primary" onclick="event.stopPropagation();activateAccount('${a.user_id}')">在此设备启用</button>`
+            : `<button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot&&a.snapshot_ok!==false?'':'disabled'}>切换</button>`}
         </div>
       </div>
     </div>`;
@@ -790,6 +827,92 @@ async function runDictionarySync(showResults=true){
   await loadAccounts();
   await refreshDictionarySyncStatus();
 }
+function updateAccountSyncProvider(){
+  const provider=document.getElementById('accountSyncProvider').value;
+  const fields=document.getElementById('accountSyncFields');
+  fields.style.display=provider==='disabled'?'none':'block';
+  const url=document.getElementById('accountSyncUrl');
+  if(provider==='nutstore'){
+    url.value='https://dav.jianguoyun.com/dav/';
+    url.readOnly=true;
+  }else url.readOnly=false;
+  document.getElementById('accountSyncTestBtn').disabled=provider==='disabled';
+  document.getElementById('accountSyncRunBtn').disabled=provider==='disabled';
+}
+function accountSyncPayload(){
+  const provider=document.getElementById('accountSyncProvider').value;
+  return {
+    enabled:provider!=='disabled', provider,
+    url:document.getElementById('accountSyncUrl').value.trim(),
+    username:document.getElementById('accountSyncUsername').value.trim(),
+    password:document.getElementById('accountSyncPassword').value,
+    sync_password:document.getElementById('accountSyncVaultPassword').value,
+    remote_path:document.getElementById('accountSyncPath').value.trim(),
+    sync_scope:document.getElementById('accountSyncScope').value,
+  };
+}
+function accountSyncStatusText(status){
+  if(!status) return '尚未同步。保存配置后会自动合并账号与词库的变化，运行期间每 15 分钟检查一次，也可立即同步。';
+  const labels={idle:'尚未同步',syncing:'正在同步',success:'最近同步成功',conflict:'远端冲突',local_changed:'本地仍在变更，请稍后同步',authentication_failure:'认证失败',decryption_failure:'同步密码错误',network_failure:'连接失败'};
+  let text=labels[status.state]||status.state||'尚未同步';
+  if(status.last_sync_at) text+=' · '+new Date(status.last_sync_at).toLocaleString();
+  if(status.error) text+='\n'+status.error;
+  return text;
+}
+async function openAccountSync(){
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在读取配置…';
+  openModal('accountSyncMask');
+  try{
+    const [configResult,statusResult]=await Promise.all([
+      api('/api/account-sync/config'), api('/api/account-sync/status'),
+    ]);
+    const c=configResult.data||{};
+    document.getElementById('accountSyncProvider').value=c.enabled?(c.provider||'webdav'):'disabled';
+    document.getElementById('accountSyncScope').value=c.sync_scope||'accounts';
+    document.getElementById('accountSyncUrl').value=c.url||'';
+    document.getElementById('accountSyncUsername').value=c.username||'';
+    document.getElementById('accountSyncPassword').value='';
+    document.getElementById('accountSyncPassword').placeholder=c.password_configured?'已保存；留空保持不变':'请输入 WebDAV 应用密码';
+    document.getElementById('accountSyncVaultPassword').value='';
+    document.getElementById('accountSyncVaultPassword').placeholder=c.sync_password_configured?'已保存；留空保持不变':'各设备必须填写相同的同步密码';
+    document.getElementById('accountSyncPath').value=c.remote_path||'TypelessToolkit/accounts.vault.json';
+    updateAccountSyncProvider();
+    status.textContent=accountSyncStatusText(statusResult.data);
+  }catch(e){ status.textContent='读取失败：'+(e.message||e); }
+}
+async function saveAccountSync(quiet=false){
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在保存…';
+  try{
+    const r=await api('/api/account-sync/config',{method:'POST',body:JSON.stringify(accountSyncPayload())});
+    if(r.status!=='OK'){ status.textContent=r.msg||'保存失败'; if(!quiet) toast(r.msg||'保存失败','err'); return false; }
+    status.textContent=r.msg||'配置已保存';
+    document.getElementById('accountSyncPassword').value='';
+    document.getElementById('accountSyncVaultPassword').value='';
+    if(!quiet) toast(r.msg||'配置已保存','ok');
+    return true;
+  }catch(e){ status.textContent='保存失败：'+(e.message||e); if(!quiet) toast('保存失败','err'); return false; }
+}
+async function testAccountSync(){
+  if(!(await saveAccountSync(true))) return;
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在测试 WebDAV 连接…';
+  const r=await apiTimed('/api/account-sync/test',{method:'POST'},30000);
+  status.textContent=r.msg||'连接测试完成';
+  toast(r.msg||'连接测试完成',r.status==='OK'?'ok':'err');
+}
+async function runAccountSync(){
+  if(!(await saveAccountSync(true))) return;
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在加密、合并并同步所选内容…';
+  try{
+    const r=await apiTimed('/api/account-sync/run',{method:'POST'},60000);
+    status.textContent=r.msg||'同步完成';
+    toast(r.msg||'同步完成',r.status==='OK'?'ok':'err');
+    if(r.status==='OK') await loadAccounts();
+  }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('账号同步失败','err'); }
+}
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
   if(a.snapshot_mismatch || a.snapshot_ok===false){
@@ -806,6 +929,18 @@ async function switchTo(id){
     toast(r.msg||'切换失败','err');
     await loadAccounts();
   }
+}
+async function activateAccount(id){
+  const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
+  if(!confirm('在此设备启用「'+(a.nickname||a.email||id)+'」?\n\n工具会用已加密同步的 refresh token 获取短期 access token，并让 Typeless 切换到该账号、创建本机快照。')) return;
+  toast('正在启用账号，Typeless 将临时重启…');
+  try{
+    const r=await apiTimed('/api/accounts/'+encodeURIComponent(id)+'/activate',{method:'POST'},180000);
+    if(r.status==='OK'){
+      toast(r.msg||'账号已在此设备启用','ok');
+      setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); },5000);
+    }else toast(r.msg||'启用失败','err');
+  }catch(e){ toast('启用失败：'+(e.message||e),'err'); }
 }
 /* —— 注册新账号 —— */
 let regWizardPrevId=null, regWizardTimer=null;
@@ -1069,7 +1204,12 @@ async function saveSnap(){
   else toast(r.msg||'保存失败','err');
   await loadAccounts();
 }
-function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
+async function rmAccount(){
+  if(!curDetail || !confirm('从管理器移除「'+curDetail.nickname+'」?\n\n若已启用 WebDAV 账号同步，其他设备也会同步移除这条管理记录。不会注销 Typeless 账号。')) return;
+  const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'});
+  if(r.status!=='OK'){ toast(r.msg||'移除失败','err'); return; }
+  closeModal('detailMask'); await loadAccounts(); toast('已移除','ok');
+}
 
 function addAccount(){
   openModal('addMask');
