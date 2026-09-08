@@ -16,12 +16,14 @@ test('release version is consistent across packages, launchers, scripts, and doc
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
-  assert.equal(version, '1.7.0');
+  assert.equal(version, '1.7.1');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
   assert.match(localBuild, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}`));
   assert.match(manifest, new RegExp(`version="${version.replaceAll('.', '\\.')}\\.0"`));
+  assert.match(host, new RegExp(`AssemblyVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
+  assert.match(host, new RegExp(`AssemblyFileVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
   assert.match(host, new RegExp(`AssemblyInformationalVersion\\("${version.replaceAll('.', '\\.')}"\\)`));
   assert.match(readme, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}.*portable`));
 });
