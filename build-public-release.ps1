@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$publicVersion = '1.7.0'
+$publicVersion = '1.7.1'
 $nodeVersion = '24.15.0'
 $nodeDist = "node-v$nodeVersion-win-x64"
 $sourceRoot = [IO.Path]::GetFullPath($PSScriptRoot)
