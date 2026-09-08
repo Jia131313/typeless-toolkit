@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$publicVersion = '1.6.2'
+$publicVersion = '1.7.1'
 $nodeVersion = '24.15.0'
 $nodeDist = "node-v$nodeVersion-win-x64"
 $sourceRoot = [IO.Path]::GetFullPath($PSScriptRoot)
@@ -94,7 +94,7 @@ function Assert-PublicData([string]$target) {
   if (@(Get-ChildItem (Join-Path $target 'data\profiles') -Force).Count) {
     throw "Public profiles directory is not empty: $target"
   }
-  foreach ($private in @('webview2-profile', 'chrome-profile', 'backups', 'config.local.json')) {
+  foreach ($private in @('webview2-profile', 'chrome-profile', 'backups', 'config.local.json', 'account-sync.json', 'account-sync-tombstones.json')) {
     if (Test-Path (Join-Path $target "data\$private")) { throw "Private data found: $private" }
   }
 }

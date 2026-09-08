@@ -1,6 +1,7 @@
 name: Build and publish release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -19,7 +20,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Test Windows update replacement and rollback
+        run: node scripts/smoke-windows-update.js
       - run: cmd.exe /c build-public-release.bat
+      - name: Verify extracted Windows release packages
+        shell: pwsh
+        run: |
+          Get-ChildItem ..\release\*.zip | ForEach-Object {
+            node scripts/smoke-release-package.js $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Release smoke test failed: $($_.Name)" }
+          }
       - name: Collect Windows assets
         shell: pwsh
         run: |
@@ -41,6 +51,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:mac:universal
+      - name: Verify packaged macOS app and signature
+        run: node scripts/smoke-release-package.js dist/Typeless-Toolkit-*-universal.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release
@@ -50,6 +62,7 @@ jobs:
           if-no-files-found: error
 
   release:
+    if: github.ref_type == 'tag'
     needs: [windows, macos]
     runs-on: ubuntu-latest
     steps:

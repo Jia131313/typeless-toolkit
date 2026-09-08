@@ -16,12 +16,14 @@ test('release version is consistent across packages, launchers, scripts, and doc
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
-  assert.equal(version, '1.6.2');
+  assert.equal(version, '1.7.1');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
   assert.match(localBuild, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}`));
   assert.match(manifest, new RegExp(`version="${version.replaceAll('.', '\\.')}\\.0"`));
+  assert.match(host, new RegExp(`AssemblyVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
+  assert.match(host, new RegExp(`AssemblyFileVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
   assert.match(host, new RegExp(`AssemblyInformationalVersion\\("${version.replaceAll('.', '\\.')}"\\)`));
   assert.match(readme, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}.*portable`));
 });
@@ -30,6 +32,8 @@ test('public packages start with an empty account list', () => {
   assert.match(publicBuild, /WriteAllText\([^\n]*accountsPath[\s\S]*?'\[\]'/);
   assert.match(publicBuild, /accountsJson\.Trim\(\)\s+-ne\s+'\[\]'/);
   assert.doesNotMatch(publicBuild, /accounts\[0\]\.email/);
+  assert.match(publicBuild, /account-sync\.json/);
+  assert.match(publicBuild, /account-sync-tombstones\.json/);
 });
 
 test('local release initializes only missing account data as empty', () => {

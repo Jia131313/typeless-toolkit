@@ -11,7 +11,14 @@ const fs = require('fs');
 const path = require('path');
 
 const C = require('./lib/common');
+const {
+  createAccountSyncService,
+  createWebDavProvider,
+  normalizeSyncConfig,
+  redactSyncConfig,
+} = require('./lib/account-sync');
 const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
+const { createToolkitUpdateController } = require('./lib/toolkit-update');
 const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
@@ -19,10 +26,11 @@ const {
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
   createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
-  readMaster, replaceMasterTerms,
+  readMaster, writeMaster, replaceMasterTerms,
+  readDictionarySyncMeta, writeDictionarySyncMeta,
   recordDictionaryDeletions, clearDictionaryDeletions,
   curlApi, captureTokenCDP,
-  ensureAccountAccessToken,
+  ensureAccountAccessToken, activateAccountOnDevice,
   fetchAllWords, dictToText, backupData, envInfo,
   liveStatus, syncAccount, syncAllAccounts,
   paywallStatus, patchPaywall,
@@ -41,6 +49,81 @@ const AUTO_SYNC_STARTUP_DELAY_MS = 6000;
 const AUTO_SYNC_DEBOUNCE_MS = 1200;
 const PAYWALL_MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 const PAYWALL_MAINTENANCE_STARTUP_DELAY_MS = 2500;
+const ACCOUNT_SYNC_CONFIG_FILE = path.join(ROOT, 'account-sync.json');
+const ACCOUNT_SYNC_TOMBSTONES_FILE = path.join(ROOT, 'account-sync-tombstones.json');
+
+function readPrivateJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (e) { return fallback; }
+}
+
+function writePrivateJson(file, value) {
+  // Windows 的 rename 不能稳定覆盖已存在的目标文件；这些配置很小，直接覆盖更可靠。
+  fs.writeFileSync(file, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
+  try { fs.chmodSync(file, 0o600); } catch (e) {}
+}
+
+function readAccountSyncConfig() {
+  return readPrivateJson(ACCOUNT_SYNC_CONFIG_FILE, { enabled: false, provider: 'disabled' });
+}
+
+function writeAccountSyncConfig(config) { writePrivateJson(ACCOUNT_SYNC_CONFIG_FILE, config); }
+function readAccountSyncTombstones() { return readPrivateJson(ACCOUNT_SYNC_TOMBSTONES_FILE, []); }
+function writeAccountSyncTombstones(value) { writePrivateJson(ACCOUNT_SYNC_TOMBSTONES_FILE, value); }
+
+function mergeAccountSyncConfig(existing, incoming) {
+  const merged = { ...existing, ...incoming };
+  if (!incoming.password) merged.password = existing.password || '';
+  if (!incoming.sync_password) merged.sync_password = existing.sync_password || '';
+  return normalizeSyncConfig(merged);
+}
+
+function clearAccountDeletion(userId) {
+  const next = readAccountSyncTombstones().filter(item => item.user_id !== userId);
+  writeAccountSyncTombstones(next);
+}
+
+function recordAccountDeletion(account) {
+  if (!account?.user_id) return;
+  const now = new Date().toISOString();
+  const next = readAccountSyncTombstones().filter(item => item.user_id !== account.user_id);
+  next.push({ user_id: account.user_id, deleted_at: now, updated_at: now });
+  writeAccountSyncTombstones(next);
+}
+
+const accountSync = createAccountSyncService({
+  readConfigFn: readAccountSyncConfig,
+  readAccountsFn: readAccounts,
+  writeAccountsFn: writeAccounts,
+  readTombstonesFn: readAccountSyncTombstones,
+  writeTombstonesFn: writeAccountSyncTombstones,
+  providerFactory: createWebDavProvider,
+  readDictionaryFn: readMaster,
+  writeDictionaryFn: (terms, merged) => {
+    const changed = JSON.stringify(readMaster()) !== JSON.stringify(terms);
+    writeMaster(terms);
+    const active = Object.fromEntries((merged?.terms || []).filter(item => !item.deleted_at)
+      .map(item => [String(item.term).trim().toLowerCase(), { term: item.term, updated_at: item.updated_at }]));
+    writeDictionarySyncMeta({ active, tombstones: readDictionarySyncMeta().tombstones });
+    if (changed) dictionarySync.schedule('webdav-dictionary');
+  },
+  readDictionaryTombstonesFn: () => readDictionarySyncMeta(),
+  writeDictionaryTombstonesFn: tombstones => {
+    const meta = readDictionarySyncMeta(); writeDictionarySyncMeta({ active: meta.active, tombstones });
+  },
+});
+let accountSyncTimer = null;
+let accountSyncInterval = null;
+function scheduleAccountSync(reason, delay = 800) {
+  const config = readAccountSyncConfig();
+  if (!config.enabled) return;
+  if (accountSyncTimer) clearTimeout(accountSyncTimer);
+  accountSyncTimer = setTimeout(() => {
+    accountSyncTimer = null;
+    accountSync.sync(reason).catch(error => log('[account-sync]', error.message));
+  }, delay);
+  accountSyncTimer.unref();
+}
 
 function createDictionarySyncController(syncFn, opts = {}) {
   const intervalMs = opts.intervalMs || AUTO_SYNC_INTERVAL_MS;
@@ -168,7 +251,10 @@ function createDictionarySyncController(syncFn, opts = {}) {
   return { schedule, run, start, stop, status: snapshot };
 }
 
-const dictionarySync = createDictionarySyncController(syncAllAccounts);
+const dictionarySync = createDictionarySyncController(async () => {
+  try { return await syncAllAccounts(); }
+  finally { scheduleAccountSync('dictionary-aligned'); }
+});
 
 function createPaywallMaintenanceController(statusFn, repairFn, runningFn, opts = {}) {
   const intervalMs = opts.intervalMs || PAYWALL_MAINTENANCE_INTERVAL_MS;
@@ -528,6 +614,19 @@ const paywallMaintenance = createPaywallMaintenanceController(
   }
 );
 
+const TOOLKIT_VERSION = require('./package.json').version;
+const toolkitBackendOwned = process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
+  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..');
+const toolkitUpdate = createToolkitUpdateController({
+  platform: IS_MAC ? 'darwin' : 'win32',
+  codeRoot: C.CODE_DIR,
+  dataRoot: ROOT,
+  currentVersion: TOOLKIT_VERSION,
+  parentPid: process.pid,
+  hostPid: Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
+  backendOwned: toolkitBackendOwned,
+});
+
 // ---------- HTTP ----------
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -583,6 +682,42 @@ const server = http.createServer(async (req, res) => {
       const html = fs.readFileSync(path.join(C.CODE_DIR, 'manager.html'), 'utf8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(html);
+    }
+    // 跨设备账号同步：配置读取始终脱敏，远端仅保存加密后的 refresh 凭证。
+    if (m === 'GET' && p === '/api/account-sync/config') {
+      return send(res, 200, { status: 'OK', data: redactSyncConfig(readAccountSyncConfig()) });
+    }
+    if (m === 'POST' && p === '/api/account-sync/config') {
+      const body = await readBody(req);
+      const config = mergeAccountSyncConfig(readAccountSyncConfig(), body);
+      if (config.enabled && (!config.username || !config.password || !config.sync_password)) {
+        return send(res, 400, { status: 'FAIL', msg: '请完整填写用户名、应用密码和同步密码' });
+      }
+      writeAccountSyncConfig(config);
+      if (config.enabled) scheduleAccountSync('config-saved', 200);
+      return send(res, 200, { status: 'OK', data: redactSyncConfig(config), msg: config.enabled ? '账号同步配置已保存' : '账号同步已关闭' });
+    }
+    if (m === 'POST' && p === '/api/account-sync/test') {
+      try {
+        const provider = createWebDavProvider(readAccountSyncConfig());
+        const result = await provider.testConnection();
+        return send(res, 200, { status: 'OK', data: result, msg: 'WebDAV 连接成功' });
+      } catch (e) { return send(res, 400, { status: 'FAIL', msg: e.message }); }
+    }
+    if (m === 'GET' && p === '/api/account-sync/status') {
+      return send(res, 200, { status: 'OK', data: accountSync.status() });
+    }
+    if (m === 'POST' && p === '/api/account-sync/run') {
+      try {
+        const result = await accountSync.sync('manual');
+        const scope = normalizeSyncConfig(readAccountSyncConfig()).sync_scope;
+        const parts = [];
+        if (['accounts', 'all'].includes(scope)) parts.push(`账号同步完成：${result.account_count ?? 0} 个账号，${result.deleted_count ?? 0} 条删除记录`);
+        if (['dictionary', 'all'].includes(scope)) parts.push(`词库同步完成：${result.dictionary_count ?? 0} 个词条，${result.dictionary_deleted_count ?? 0} 条删除记录`);
+        return send(res, 200, { status: 'OK', data: result, sync_scope: scope, sync_status: accountSync.status(), msg: parts.join('\n') });
+      } catch (e) {
+        return send(res, 502, { status: 'FAIL', data: accountSync.status(), msg: e.message });
+      }
     }
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
@@ -642,9 +777,12 @@ const server = http.createServer(async (req, res) => {
         refresh_token: b.refresh_token || (idx >= 0 ? accs[idx].refresh_token : null) || null,
         client_user_id: b.client_user_id || (idx >= 0 ? accs[idx].client_user_id : null) || null,
         added_at: idx >= 0 ? accs[idx].added_at : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        cloud_only: false,
       };
       if (idx >= 0) accs[idx] = rec; else accs.push(rec);
       writeAccounts(accs);
+      clearAccountDeletion(rec.user_id);
       // 不杀进程地补写引导完成,再快照,避免「添加时教程未完成」写进 profiles
       try { applyOnboardingCompleteToLiveFiles(); } catch (e) { log('[accounts] onboarding patch:', e.message); }
       try {
@@ -659,6 +797,7 @@ const server = http.createServer(async (req, res) => {
       const snap = inspectSnapshot(rec.user_id);
       dictionarySync.schedule(idx >= 0 ? 'account-updated' : 'account-added');
       paywallMaintenance.schedule(idx >= 0 ? 'account-updated' : 'account-added', 1200);
+      scheduleAccountSync(idx >= 0 ? 'account-updated' : 'account-added');
       return send(res, 200, { status: 'OK', data: accountForClient(rec, null, snap.has_snapshot, snap) });
     }
     // 手动更新当前账号快照(当前 Typeless 登录态 -> 该账号)
@@ -676,6 +815,26 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (e) {
         return send(res, 400, { status: 'FAIL', msg: e.message });
+      }
+    }
+    // 从 WebDAV 拉到的新账号只有长期凭证；用官方 auth:login IPC 在本机建立登录态和快照。
+    if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/activate')) {
+      const id = decodeURIComponent(p.split('/')[3]);
+      const account = readAccounts().find(item => item.user_id === id);
+      if (!account) return send(res, 404, { status: 'FAIL', msg: '账号不存在' });
+      try {
+        const result = await activateAccountOnDevice(account);
+        const snap = inspectSnapshot(id);
+        dictionarySync.schedule('cloud-account-activated');
+        paywallMaintenance.schedule('cloud-account-activated', 1200);
+        scheduleAccountSync('cloud-account-activated');
+        return send(res, 200, {
+          status: 'OK',
+          msg: '账号已在此设备启用并切换，Typeless 已启动',
+          data: accountForClient(result.account, null, snap.has_snapshot, snap),
+        });
+      } catch (e) {
+        return send(res, 500, { status: 'FAIL', msg: '启用云端账号失败：' + e.message });
       }
     }
     // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
@@ -791,6 +950,8 @@ const server = http.createServer(async (req, res) => {
           nickname: b.nickname || '',
         });
         dictionarySync.schedule('registered-account');
+        clearAccountDeletion(result.account.user_id);
+        scheduleAccountSync('registered-account');
         paywallMaintenance.schedule('registered-account', 1200);
         const safeResult = {
           ...result,
@@ -815,6 +976,40 @@ const server = http.createServer(async (req, res) => {
         data: outcome,
         msg: outcome.ok ? (outcome.result?.msg || outcome.status?.msg) : (outcome.error || outcome.status?.msg),
       });
+    }
+    // Typeless Toolkit 自身更新：所有平台可检查并下载经过 SHA-256 校验的发布包。
+    // Windows 在界面退出后由独立 helper 替换代码文件；macOS 只下载并打开 DMG，
+    // 不把 ad-hoc 签名版本伪装成可无感安装的自动更新。
+    if (m === 'GET' && p === '/api/toolkit-update') {
+      try {
+        const status = await toolkitUpdate.check();
+        return send(res, 200, { status: 'OK', data: status });
+      } catch (error) {
+        return send(res, 502, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
+      }
+    }
+    if (m === 'GET' && p === '/api/toolkit-update/status') {
+      return send(res, 200, { status: 'OK', data: toolkitUpdate.status() });
+    }
+    if (m === 'POST' && p === '/api/toolkit-update/download') {
+      await readBody(req);
+      if (toolkitUpdate.status().running) {
+        return send(res, 202, { status: 'OK', data: toolkitUpdate.status(), msg: '工具集更新包正在下载' });
+      }
+      toolkitUpdate.download().catch(error => log('[toolkit-update] 下载失败:', error.message));
+      return send(res, 202, { status: 'OK', data: toolkitUpdate.status(), msg: '已开始下载并校验工具集更新包' });
+    }
+    if (m === 'POST' && p === '/api/toolkit-update/install') {
+      await readBody(req);
+      try {
+        const result = toolkitUpdate.prepareWindowsInstall();
+        return send(res, 202, {
+          status: 'OK', data: result,
+          msg: `工具集 ${result.version} 已准备完成，退出当前窗口后将保留 data 目录并自动替换程序文件`,
+        });
+      } catch (error) {
+        return send(res, 409, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
+      }
     }
     // 查询 Typeless 官方 updater 已下载的更新包（macOS）
     if (m === 'GET' && p === '/api/official-update') {
@@ -923,9 +1118,12 @@ const server = http.createServer(async (req, res) => {
     if (deleteAccountId) {
       const id = deleteAccountId;
       let accs = readAccounts();
+      const removed = accs.find(x => x.user_id === id);
+      recordAccountDeletion(removed || { user_id: id });
       accs = accs.filter(x => x.user_id !== id);
       writeAccounts(accs);
       dictionarySync.schedule('account-removed');
+      scheduleAccountSync('account-removed');
       return send(res, 200, { status: 'OK' });
     }
     // 单账号词库(全量分页)
@@ -1023,6 +1221,7 @@ const server = http.createServer(async (req, res) => {
       if (r._error || r.detail) return send(res, 502, { status: 'FAIL', msg: String(r.detail || r._error || r._raw || '删除失败') });
       recordDictionaryDeletions([term], `account:${id}`);
       dictionarySync.schedule('word-deleted');
+      scheduleAccountSync('word-deleted');
       return send(res, 200, { status: 'OK', data: r.data, msg: '已删除，并将在后台从其他账号同步移除' });
     }
     // 主 CSV
@@ -1039,6 +1238,7 @@ const server = http.createServer(async (req, res) => {
       }
       const changed = replaceMasterTerms(b.terms || []);
       dictionarySync.schedule('master-edited');
+      scheduleAccountSync('master-edited');
       return send(res, 200, {
         status: 'OK',
         data: changed.terms,
@@ -1054,7 +1254,10 @@ const server = http.createServer(async (req, res) => {
     }
     // 运行环境信息(排错用:平台、探测到的路径、凭据名)
     if (m === 'GET' && p === '/api/env') {
-      return send(res, 200, { status: 'OK', data: envInfo() });
+      return send(res, 200, {
+        status: 'OK',
+        data: { ...envInfo(), toolkit_version: TOOLKIT_VERSION, code_root: C.CODE_DIR },
+      });
     }
     // 一键备份(账号表 + 主词库,带时间戳)
     if (m === 'POST' && p === '/api/backup') {
@@ -1107,6 +1310,9 @@ function startServer() {
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
       paywallMaintenance.start();
+      scheduleAccountSync('startup', 1500);
+      accountSyncInterval = setInterval(() => scheduleAccountSync('periodic'), AUTO_SYNC_INTERVAL_MS);
+      accountSyncInterval.unref();
       resolve(server);
     };
     server.once('error', onError);
@@ -1118,7 +1324,13 @@ function startServer() {
 server.on('close', () => {
   dictionarySync.stop();
   paywallMaintenance.stop();
+  if (accountSyncTimer) clearTimeout(accountSyncTimer);
+  accountSyncTimer = null;
+  if (accountSyncInterval) clearInterval(accountSyncInterval);
+  accountSyncInterval = null;
 });
+
+server.on('close', () => toolkitUpdate.cleanupStaging());
 
 if (require.main === module) {
   startServer().catch(error => {
@@ -1132,5 +1344,6 @@ module.exports = {
   isTrustedLocalOrigin, isTrustedLocalHost,
   accountForClient, accountDeleteId, shouldReconnectCurrent,
   createDictionarySyncController, createPaywallMaintenanceController,
+  mergeAccountSyncConfig, readAccountSyncConfig,
   waitForTypelessRunning, writeDiagnosticLog, runPaywallPatchTransaction,
 };

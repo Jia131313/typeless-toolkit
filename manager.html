@@ -11,7 +11,7 @@
     --accent-soft:#eaf0ff; --text:#161d2e; --sub:#6b7280; --line:#e9ebef;
     --ok:#16a34a; --ok-soft:#e7f7ee; --warn:#f59e0b; --warn-soft:#fff4e0;
     --err:#ef4444; --err-soft:#fdecec; --shadow:0 1px 2px rgba(16,24,40,.04);
-    --shadow-lg:0 10px 34px rgba(16,24,40,.10); --r:14px;
+    --shadow-lg:0 10px 34px rgba(16,24,40,.10); --r:12px;
   }
   html[data-theme="dark"] {
     --bg:#0f1420; --bg2:#151b29; --card:#1a2130; --accent:#5b82ff; --accent2:#7d9bff;
@@ -21,59 +21,90 @@
     --shadow-lg:0 12px 40px rgba(0,0,0,.5);
   }
   * { box-sizing:border-box; }
+  [hidden] { display:none!important; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; }
-  .wrap { max-width:1400px; margin:0 auto; padding:0 20px 64px; }
+  button,input,select,textarea { font:inherit; }
+  button:focus-visible,a:focus-visible,[tabindex]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+  .ui-icon { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .wrap { max-width:1280px; margin:0 auto; padding:0 28px 48px; }
+  #homePage { max-width:1200px; padding:0 24px 32px; }
 
   /* 顶栏 */
   .topbar { position:sticky; top:0; z-index:30; background:color-mix(in srgb,var(--bg) 82%,transparent); backdrop-filter:saturate(160%) blur(12px); border-bottom:1px solid var(--line); }
-  .topbar .inner { max-width:1400px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:14px; }
+  .topbar .inner { max-width:1200px; margin:0 auto; padding:14px 24px; display:flex; align-items:center; gap:20px; }
   .logo { display:flex; align-items:center; gap:10px; }
-  .logo .mark { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; box-shadow:0 4px 12px rgba(53,99,255,.35); }
-  .logo h1 { font-size:16px; font-weight:700; margin:0; letter-spacing:.2px; }
-  .logo .sub { font-size:11.5px; color:var(--sub); margin-top:1px; }
+  .logo img { border-radius:9px; flex:none; }
+  .logo h1 { font-size:16px; font-weight:650; margin:0; letter-spacing:.1px; }
   .topbar .spacer { flex:1; }
-  .status-pill { display:inline-flex; align-items:center; gap:7px; min-width:0; font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); padding:6px 12px; border-radius:20px; max-width:420px; cursor:pointer; transition:.14s; }
+  .status-pill { display:inline-flex; align-items:center; gap:7px; min-width:0; font-size:12px; color:var(--sub); background:transparent; border:1px solid transparent; padding:6px 8px; border-radius:8px; max-width:300px; cursor:pointer; transition:.14s; }
   .status-pill:hover { border-color:var(--accent); }
   .status-pill:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .status-pill.busy { cursor:wait; opacity:.78; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--sub); flex:none; }
-  .dot.on { background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .dot.on { background:var(--ok); }
   .dot.warn { background:var(--warn); box-shadow:0 0 0 3px var(--warn-soft); }
   .dot.off { background:var(--err); box-shadow:0 0 0 3px var(--err-soft); }
-  .status-pill b { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .status-pill b { color:var(--text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #envBadge { display:inline-flex; align-items:center; gap:7px; padding:0; font-size:12px; font-weight:400; background:none; cursor:default; }
+  #envBadge::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--sub); }
+  #envBadge[data-state="running"]::before { background:var(--ok); }
+  #envBadge[data-state="missing"]::before { background:var(--warn); }
   .icon-btn { width:36px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--sub); cursor:pointer; font-size:16px; display:inline-flex; align-items:center; justify-content:center; }
   .icon-btn:hover { color:var(--accent); border-color:var(--accent); }
+  #settingsBtn { flex:none; color:var(--sub); }
+  #settingsBtn[aria-pressed="true"] { color:var(--accent); background:var(--accent-soft); }
+  .btn.update-entry { color:var(--accent); background:var(--accent-soft); border-color:transparent; flex:none; }
+  .update-badge { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 5px; border-radius:5px; color:var(--accent); background:var(--accent-soft); font-size:11px; vertical-align:middle; }
+  .update-badge .ui-icon { width:13px; height:13px; }
+  .update-choices { display:grid; gap:12px; }
+  .update-choices .btn { justify-content:flex-start; padding:16px; white-space:normal; text-align:left; }
 
   /* 概览统计 */
-  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:20px 0 6px; }
-  .stat { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; box-shadow:var(--shadow); }
-  .stat .k { font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px; }
-  .stat .v { font-size:22px; font-weight:750; margin-top:6px; letter-spacing:.3px; }
-  .stat .v small { font-size:13px; color:var(--sub); font-weight:500; }
-  .stat .foot { font-size:11.5px; color:var(--sub); margin-top:3px; }
+  .home-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:20px 0 12px; }
+  .home-heading h2 { margin:0; font-size:14px; font-weight:600; white-space:nowrap; }
+  .heading-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:4px 18px; min-width:0; }
+  .home-heading .status-pill { max-width:270px; padding:4px 0; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:20px 0 0; }
+  .stat { position:relative; padding:14px 16px; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
+  .stat > .ui-icon { position:absolute; right:14px; top:15px; width:16px; height:16px; color:var(--sub); }
+  .stat-content { min-width:0; flex:1; }
+  .stat .k { font-size:11.5px; line-height:18px; color:var(--sub); padding-right:20px; }
+  .stat .v { font-size:22px; line-height:1.3; font-weight:700; margin-top:5px; letter-spacing:-.3px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .stat .v small { font-size:11px; color:var(--sub); font-weight:400; }
+  .stat .v .stat-limit { font-size:.72em; color:var(--text); font-weight:400; white-space:nowrap; }
+  .stat .foot { font-size:10.5px; line-height:1.4; color:var(--sub); margin-top:3px; }
 
   /* 工具栏 */
-  .toolbar { display:flex; gap:8px; flex-wrap:nowrap; align-items:center; justify-content:space-between; margin:18px 0 14px; }
-  .tool-group { display:flex; gap:6px; align-items:center; flex-wrap:nowrap; }
-  .tool-group.primary-tools { flex:0 0 auto; }
-  .tool-group.system-tools { flex:0 0 auto; justify-content:flex-end; margin-left:auto; }
-  .btn { background:var(--card); border:1px solid var(--line); color:var(--text); padding:8px 14px; border-radius:10px; font-size:13px; cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
-  .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; box-shadow:0 4px 14px rgba(53,99,255,.3); }
+  .toolbar { display:flex; justify-content:space-between; gap:20px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+  .tool-group { display:flex; gap:8px; align-items:center; min-width:0; }
+  .btn { background:var(--card); border:1px solid var(--line); color:var(--text); padding:8px 13px; min-height:34px; border-radius:8px; font-size:13px; font-weight:500; line-height:1.3; cursor:pointer; transition:background .14s,border-color .14s,color .14s; display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; text-decoration:none; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); background:var(--bg2); }
+  .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
   .btn.primary:hover { color:#fff; filter:brightness(1.05); }
+  .btn.ghost { border-color:transparent; background:transparent; color:var(--sub); }
+  .btn.ghost:hover { color:var(--text); background:var(--bg2); }
   .btn.danger:hover { border-color:var(--err); color:var(--err); }
   .btn.info { border-color:var(--accent2); color:var(--accent2); }
   .btn.info:hover { background:var(--accent2); color:#fff; }
   .btn.info.done { opacity:.85; cursor:pointer; pointer-events:auto; border-color:var(--ok); color:var(--ok); }
   .btn.info.done:hover { background:var(--ok); border-color:var(--ok); color:#fff; }
-  .btn.small { padding:6px 11px; font-size:12px; border-radius:9px; }
+  .btn.small { padding:6px 10px; font-size:12px; min-height:30px; border-radius:7px; }
   .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
-  .toolbar .btn { padding:8px 10px; gap:5px; font-size:12.5px; }
-  .divider { width:1px; height:24px; background:var(--line); margin:0 1px; }
-  .sync-btn { min-width:112px; justify-content:flex-start; }
+  .toolbar .btn { min-height:36px; padding:8px 12px; gap:7px; font-size:12px; border-radius:7px; }
+  .toolbar .btn:not(.primary) { background:transparent; }
+  .toolbar .ui-icon { width:16px; height:16px; }
+  .home-status { display:flex; align-items:center; flex-wrap:wrap; gap:4px 14px; }
+  .maintenance-dot { width:7px; height:7px; border-radius:50%; background:var(--sub); }
+  #patchBtn[data-state="patched"] .maintenance-dot { background:var(--ok); }
+  #patchBtn[data-state="checking"] .maintenance-dot { background:var(--accent); }
+  #patchBtn[data-state="error"] .maintenance-dot,#patchBtn[data-state="permission-required"] .maintenance-dot,#patchBtn[data-state="unsupported"] .maintenance-dot { background:var(--warn); }
+  .status-action { display:inline-flex; gap:7px; align-items:center; border:0; padding:7px 0; background:none; color:var(--sub); font-size:12px; cursor:pointer; white-space:nowrap; }
+  .status-action:hover { color:var(--text); }
+  .status-action[data-state="error"],.status-action[data-state="permission-required"],.status-action[data-state="unsupported"] { color:var(--warn); }
+  .sync-btn { justify-content:flex-start; }
   .sync-btn .sync-dot { width:7px; height:7px; border-radius:50%; background:var(--sub); flex:none; }
   .sync-btn[data-state="checking"] .sync-dot { background:var(--accent); }
-  .sync-btn[data-state="aligned"] .sync-dot { background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .sync-btn[data-state="aligned"] .sync-dot { background:var(--ok); }
   .sync-btn[data-state="partial"] .sync-dot,.sync-btn[data-state="waiting"] .sync-dot { background:var(--warn); }
   .sync-btn[data-state="error"] .sync-dot { background:var(--err); box-shadow:0 0 0 3px var(--err-soft); }
   .sync-overview { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
@@ -104,47 +135,58 @@
   .search::before { content:"⌕"; position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--sub); font-size:15px; }
   select.sort { border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:9px 12px; font-size:13px; cursor:pointer; outline:none; }
 
-  /* 账号卡片 */
+  /* 保留原版网格卡片：每个账号内部聚合信息，不按账号数撑大卡片。 */
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
-  .card { background:var(--card); border-radius:var(--r); padding:16px; border:1px solid var(--line); box-shadow:var(--shadow); cursor:pointer; transition:.16s; position:relative; overflow:hidden; }
-  .card:hover { box-shadow:var(--shadow-lg); transform:translateY(-2px); border-color:color-mix(in srgb,var(--accent) 40%,var(--line)); }
-  .card.active { border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent), var(--shadow); }
+  .card { display:flex; flex-direction:column; background:var(--card); border-radius:var(--r); padding:16px; border:1px solid var(--line); box-shadow:var(--shadow); cursor:pointer; transition:border-color .16s,box-shadow .16s; position:relative; min-width:0; }
+  .card:hover { border-color:color-mix(in srgb,var(--accent) 55%,var(--line)); box-shadow:0 4px 16px rgba(16,24,40,.08); }
+  .card.active { border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent),var(--shadow); }
   .card.invalid { opacity:.82; }
-  .ribbon { position:absolute; top:13px; right:-34px; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; font-size:10px; font-weight:600; padding:3px 38px; transform:rotate(45deg); display:none; letter-spacing:1px; }
-  .card.active .ribbon { display:block; }
-  .chead { display:flex; align-items:center; gap:11px; margin-bottom:14px; }
-  .avatar { width:42px; height:42px; border-radius:12px; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; flex:none; }
+  .chead { display:flex; align-items:center; gap:11px; min-width:0; margin-bottom:14px; }
+  .avatar { width:48px; height:48px; border-radius:9px; background:var(--bg2); color:var(--sub); display:flex; align-items:center; justify-content:center; font-weight:500; font-size:24px; flex:none; }
+  .card .avatar { width:38px; height:38px; font-size:17px; background:var(--accent-soft); color:var(--accent2); font-weight:650; }
+  .card.active .avatar { background:var(--accent-soft); color:var(--accent2); }
   .chead .who { min-width:0; flex:1; }
-  .nick { font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-title { display:flex; align-items:center; gap:7px; min-width:0; }
+  .nick { font-weight:650; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .account-title .badge { border-radius:4px; font-size:10px; font-weight:500; padding:3px 6px; }
   .email { color:var(--sub); font-size:12px; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .badge { font-size:11px; padding:2.5px 9px; border-radius:20px; background:var(--bg2); color:var(--sub); font-weight:600; flex:none; }
+  .account-badges { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .account-badges .badge { border-radius:4px; font-size:10px; font-weight:500; padding:2px 6px; }
   .badge.free { background:var(--warn-soft); color:var(--warn); }
+  .badge.current { background:var(--accent-soft); color:var(--accent2); }
   .badge.pro,.badge.premium { background:var(--ok-soft); color:var(--ok); }
   .badge.invalid { background:var(--err-soft); color:var(--err); }
 
-  .quota { margin:6px 0 12px; }
-  .quota .qtop { display:flex; justify-content:space-between; align-items:baseline; font-size:12px; color:var(--sub); margin-bottom:6px; }
-  .quota .qtop b { color:var(--text); font-weight:650; font-size:13px; }
-  .bar { height:9px; background:var(--bg2); border-radius:6px; overflow:hidden; }
+  .quota { margin:0 0 12px; min-width:0; }
+  .quota .qtop { display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--sub); margin-bottom:7px; }
+  .quota .qtop b { color:var(--text); font-weight:650; font-size:14px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .bar { height:5px; background:var(--bg2); border-radius:6px; overflow:hidden; }
   .bar > i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:6px; transition:width .5s; }
   .bar.warn > i { background:linear-gradient(90deg,var(--warn),#fbbf24); }
   .bar.err > i { background:linear-gradient(90deg,var(--err),#f87171); }
+  .quota-meter { display:flex; align-items:center; gap:8px; }
+  .quota-meter .bar { flex:1; height:6px; background:var(--bg2); }
+  .quota-percent { min-width:30px; color:var(--sub); font-size:11px; text-align:right; font-variant-numeric:tabular-nums; }
 
-  .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:13px; }
-  .mini .m { background:var(--bg2); border-radius:10px; padding:9px 10px; text-align:center; }
-  .mini .m .k { font-size:10.5px; color:var(--sub); }
-  .mini .m .v { font-size:15px; font-weight:700; margin-top:3px; }
+  .mini { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; min-width:0; margin-bottom:14px; }
+  .mini .m { padding:9px 8px; text-align:center; background:var(--bg2); border-radius:8px; }
+  .mini .m .k { font-size:10.5px; color:var(--sub); white-space:nowrap; }
+  .mini .m .v { font-size:15px; font-weight:650; margin-top:4px; font-variant-numeric:tabular-nums; }
   .mini .m .v.mut { color:var(--sub); font-weight:600; }
 
-  .cfoot { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:12px; border-top:1px solid var(--line); }
-  .snap { font-size:11.5px; color:var(--sub); display:inline-flex; align-items:center; gap:5px; }
+  .cfoot { display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid var(--line); padding-top:12px; margin-top:auto; }
+  .snap { font-size:11px; color:var(--sub); display:inline-flex; align-items:center; gap:5px; }
   .snap .d { width:6px; height:6px; border-radius:50%; background:var(--sub); }
   .snap.has .d { background:var(--ok); }
-  .cfoot .acts { display:flex; gap:7px; }
+  .cfoot .acts { display:flex; gap:4px; align-items:center; }
+  .cfoot .btn:not(.primary) { background:transparent; border-color:transparent; }
+  .cfoot .btn.switch-btn { color:var(--accent2); background:var(--accent-soft); min-width:76px; }
+  .cfoot .btn.current-action { background:var(--bg2); color:var(--sub); }
 
   .empty { text-align:center; color:var(--sub); padding:64px 20px; grid-column:1/-1; }
   .empty .big { font-size:40px; margin-bottom:10px; opacity:.5; }
-  .skeleton { background:linear-gradient(90deg,var(--bg2) 25%,var(--line) 50%,var(--bg2) 75%); background-size:200% 100%; animation:sk 1.3s infinite; border-radius:var(--r); height:230px; }
+  .skeleton { background:linear-gradient(90deg,var(--bg2) 25%,var(--line) 50%,var(--bg2) 75%); background-size:200% 100%; animation:sk 1.3s infinite; border-radius:var(--r); height:248px; }
   @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
   /* 弹窗 */
@@ -167,8 +209,8 @@
   .word .del:hover { opacity:1; }
   .pill { font-size:10px; padding:1.5px 7px; border-radius:6px; background:var(--line); }
   .pill.auto { background:var(--warn-soft); color:var(--warn); }
-  input.fld { border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; background:var(--card); color:var(--text); }
-  input.fld:focus { border-color:var(--accent); }
+  input.fld,select.fld { border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13px; width:100%; outline:none; background:var(--card); color:var(--text); }
+  input.fld:focus,select.fld:focus { border-color:var(--accent); }
   input.fld[readonly] { background:var(--bg2); color:var(--sub); }
   .field { margin-bottom:13px; }
   .field label { display:block; font-size:12px; color:var(--sub); margin-bottom:5px; }
@@ -193,65 +235,157 @@
   .toast.ok { background:var(--ok); color:#fff; }
   a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
   a.link:hover { text-decoration:underline; }
-  @media (max-width:960px){ .stats{grid-template-columns:repeat(2,1fr)} }
-  @media (max-width:1080px){
-    .toolbar { flex-wrap:wrap; gap:8px; }
-    .tool-group { flex-wrap:wrap; }
-    .tool-group.primary-tools { flex:1 1 100%; }
-    .tool-group.system-tools { flex:1 1 100%; justify-content:flex-start; margin-left:0; }
+  /* 设置沿用现有业务表单，只改变入口与排布。 */
+  .settings-page { max-width:1200px; padding:20px 24px 32px; }
+  .settings-heading { display:flex; align-items:baseline; gap:12px; margin:10px 0; }
+  .settings-heading h2 { font-size:22px; line-height:1.3; font-weight:600; letter-spacing:-.3px; margin:0; }
+  .settings-heading p { font-size:13px; line-height:1.5; color:var(--sub); margin:0; }
+  .back-btn { min-height:28px; padding:4px 0; }
+  .settings-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; background:var(--bg2); border:1px solid var(--line); border-radius:10px; margin:16px 0 20px; }
+  .settings-tabs button { appearance:none; background:none; border:0; border-radius:7px; padding:9px 16px; color:var(--sub); cursor:pointer; font-size:13px; white-space:nowrap; }
+  .settings-tabs button[aria-selected="true"] { color:var(--text); background:var(--card); box-shadow:var(--shadow); font-weight:600; }
+  .settings-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr); gap:20px; align-items:stretch; }
+  .settings-layout > aside { grid-template-rows:minmax(min-content,1fr) auto; }
+  .settings-stack { display:grid; gap:16px; min-width:0; }
+  .settings-card { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:20px; min-width:0; }
+  .settings-card h3 { font-size:17px; font-weight:600; margin:0; display:flex; align-items:center; gap:9px; }
+  .settings-card h3 .ui-icon { color:var(--sub); width:19px; height:19px; }
+  .settings-card p { font-size:12px; line-height:1.7; color:var(--sub); margin:8px 0 0; }
+  .settings-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+  .settings-card-header .badge { font-size:10px; border-radius:5px; white-space:nowrap; }
+  .sync-service { flex:none; width:136px; }
+  .sync-service label { display:block; color:var(--sub); font-size:11px; margin-bottom:6px; }
+  .sync-service .fld { min-height:32px; padding:6px 9px; font-size:12px; }
+  .settings-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
+  .settings-fields .full { grid-column:1/-1; }
+  .settings-card .fld { background:var(--bg2); border-radius:7px; min-height:36px; }
+  .settings-card .field { margin-bottom:15px; }
+  .settings-card .field label { font-size:13px; color:var(--text); margin-bottom:7px; }
+  .settings-card .field .hint { font-size:11px; line-height:1.65; margin-top:6px; }
+  .sync-scope { border:0; border-top:1px solid var(--line); padding:16px 0 0; margin:0; }
+  .sync-scope legend { float:left; width:100%; margin-bottom:12px; font-size:13px; }
+  .check-options { display:flex; gap:24px; clear:both; }
+  .check-options label { display:inline-flex; gap:8px; align-items:center; font-size:13px; cursor:pointer; }
+  .check-options input { accent-color:var(--accent); width:15px; height:15px; margin:0; }
+  .settings-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap; }
+  .settings-actions .btn { min-height:36px; }
+  .settings-actions .btn:first-child { margin-right:auto; }
+  #accountSyncStatus { min-height:20px; margin-top:14px; font-size:11.5px; line-height:1.65; text-align:center; color:var(--sub); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .settings-values { margin:0; }
+  .settings-values div { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--line); font-size:12px; }
+  .settings-values dt { color:var(--sub); }
+  .settings-values dd { margin:0; text-align:right; overflow-wrap:anywhere; }
+  .settings-note { padding-top:16px; font-size:12px; color:var(--sub); line-height:1.8; overflow-wrap:anywhere; }
+  .settings-backup .row-btns { margin-top:16px; }
+  .settings-backup .btn { min-width:148px; min-height:38px; }
+  .settings-row { display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  .settings-row > div { min-width:0; }
+  .settings-row > .btn { flex:none; }
+  .theme-options { display:inline-flex; padding:4px; gap:4px; border:1px solid var(--line); border-radius:9px; margin-top:20px; background:var(--bg2); }
+  .theme-options button { min-width:92px; border:0; background:none; border-radius:6px; padding:8px 12px; color:var(--sub); font-size:12px; cursor:pointer; }
+  .theme-options button[aria-pressed="true"] { background:var(--card); color:var(--text); box-shadow:var(--shadow); }
+  .settings-platform-note { color:var(--sub); font-size:12px; line-height:1.7; }
+  .about-footer { color:var(--sub); font-size:11px; margin:24px 0 0; display:flex; gap:12px; }
+  @media (max-width:960px){
+    .stat { padding:13px 14px; }
+    .stat .v { font-size:21px; }
+    .toolbar .btn { padding:8px 10px; gap:6px; }
+    .settings-layout { grid-template-columns:minmax(0,1.65fr) minmax(240px,1fr); gap:16px; }
+    .settings-card { padding:20px; }
+    .cfoot .btn { padding:6px 8px; gap:5px; }
+    .sync-service { width:124px; }
   }
   @media (max-width:720px){
-    .stats{grid-template-columns:repeat(2,1fr)}
+    .wrap,#homePage { padding-left:18px; padding-right:18px; }
     .topbar .inner { gap:9px; }
-    .logo .sub { display:none; }
-    .status-pill { max-width:min(310px,45vw); }
+    .topbar .inner { padding:14px 18px; flex-wrap:wrap; }
+    #envBadge { margin-left:auto; }
+    .topbar .spacer { display:none; }
+    .logo h1 { font-size:14px; }
+    .home-heading { flex-wrap:wrap; gap:8px; }
+    .heading-actions { justify-content:flex-start; }
+    .home-heading .status-pill { max-width:100%; }
+    .toolbar { gap:10px; }
+    .grid { grid-template-columns:minmax(0,1fr); }
+    .settings-layout { grid-template-columns:minmax(0,1fr); }
+    .settings-tabs { gap:0; justify-content:space-between; }
+    .settings-tabs button { min-width:0; padding:12px 4px; font-size:13px; }
+    .settings-card-header { flex-wrap:wrap; }
+    .settings-row { align-items:flex-start; flex-direction:column; gap:16px; }
+    .settings-fields { grid-template-columns:minmax(0,1fr); }
+    .stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .tool-group { flex-wrap:wrap; }
   }
+  @media (prefers-reduced-motion:reduce){ *,*::before,*::after { animation:none!important; transition:none!important; } }
 </style>
 </head>
 <body>
-<div class="topbar">
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="ui-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z"/><path d="M4 5v14"/></symbol>
+  <symbol id="ui-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></symbol>
+  <symbol id="ui-book" viewBox="0 0 24 24"><path d="M12 5C8 2 4 3 2 4v16c3-2 6-2 10 0 4-2 7-2 10 0V4c-2-1-6-2-10 1zm0 0v15"/><path d="M5 8h3m-3 4h3m8-4h3m-3 4h3"/></symbol>
+  <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="ui-settings" viewBox="0 0 24 24"><path d="m9 3-.6 2.5-2 .9L4 5.8 2 9l1.8 1.7v2.6L2 15l2 3.2 2.4-.6 2 .9L9 21h6l.6-2.5 2-.9 2.4.6 2-3.2-1.8-1.7v-2.6L22 9l-2-3.2-2.4.6-2-.9L15 3z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ui-cloud" viewBox="0 0 24 24"><path d="M6 19a5 5 0 0 1-1-10 7 7 0 0 1 13-2 6 6 0 0 1 0 12z"/></symbol>
+  <symbol id="ui-shield" viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="ui-back" viewBox="0 0 24 24"><path d="m12 5-7 7 7 7M5 12h15"/></symbol>
+  <symbol id="ui-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+  <symbol id="ui-upgrade" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 17V7m-4 4 4-4 4 4"/></symbol>
+  <symbol id="ui-user" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21v-3a8 6 0 0 1 16 0v3z"/></symbol>
+  <symbol id="ui-user-plus" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-3a7 6 0 0 1 12-4M19 13v8m-4-4h8"/></symbol>
+  <symbol id="ui-switch" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></symbol>
+  <symbol id="ui-details" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/></symbol>
+  <symbol id="ui-chart" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 2v7h7a8 8 0 0 0-7-7z"/></symbol>
+  <symbol id="ui-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="ui-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m4 0h2m4 0h1M6 12h1m4 0h2m4 0h1M7 16h10"/></symbol>
+</svg>
+<div class="topbar" id="homeTopbar">
   <div class="inner">
     <div class="logo">
-      <img src="/icon.png?v=3" width="34" height="34" style="border-radius:10px;box-shadow:0 4px 12px rgba(53,99,255,.35);" alt="Typeless Toolkit">
-      <div>
-        <h1>Typeless 多账号管理</h1>
-        <div class="sub">账号切换 · 词库同步 · 额度总览</div>
-      </div>
+      <img src="/icon.png?v=3" width="30" height="30" alt="Typeless Toolkit">
+      <h1>Typeless 多账号管理</h1>
     </div>
     <div class="spacer"></div>
-    <span class="badge" id="envBadge" title="运行环境" style="cursor:help">…</span>
+    <span class="badge" id="envBadge" title="运行环境">…</span>
+    <button class="btn update-entry" id="homeUpdateNotice" onclick="openAvailableUpdate()" hidden><svg class="ui-icon" aria-hidden="true"><use href="#ui-upgrade"/></svg><span id="homeUpdateLabel">有更新</span></button>
+    <button class="btn ghost" id="settingsBtn" onclick="openSettings()" aria-pressed="false" aria-controls="settingsPage" title="主题、同步、权限与更新">
+      <svg class="ui-icon" aria-hidden="true"><use href="#ui-settings"/></svg>设置
+    </button>
+  </div>
+</div>
+
+<main class="wrap" id="homePage">
+  <div class="stats" id="stats" aria-label="账号概览"></div>
+  <div class="home-heading">
+    <h2>已保存的账号</h2>
+    <div class="heading-actions">
     <div class="status-pill" id="curPill" role="button" tabindex="0" onclick="detectCurrent(true)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();detectCurrent(true)}" title="点击重新检测当前 Typeless 登录账号">
       <span class="dot" id="curDot"></span>
       <b id="curText">检测当前登录…</b>
     </div>
-    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="切换主题">◐</button>
+    <div class="home-status" aria-label="后台维护状态">
+      <button class="status-action sync-btn" id="dictionarySyncBtn" data-state="waiting" onclick="openDictionarySyncStatus()" aria-live="polite" title="查看词库自动对齐状态或立即检查">
+        <span class="sync-dot"></span><span id="dictionarySyncLabel">词库待检查</span>
+      </button>
+      <button class="status-action" id="patchBtn" onclick="patchPaywall()" aria-live="polite" title="弹窗由工具集自动维护；点击可立即检查">
+        <span class="maintenance-dot" aria-hidden="true"></span><span id="patchLabel">检查弹窗状态</span>
+      </button>
+      <button class="status-action" id="accountSyncHomeBtn" onclick="openAccountSync()" title="配置或查看跨设备 WebDAV 同步">
+        <svg class="ui-icon" aria-hidden="true"><use href="#ui-cloud"/></svg><span id="accountSyncHomeLabel">跨设备同步</span>
+      </button>
+    </div>
+    </div>
   </div>
-</div>
-
-<div class="wrap">
-  <!-- 概览 -->
-  <div class="stats" id="stats"></div>
-
   <!-- 工具栏 -->
   <div class="toolbar">
     <div class="tool-group primary-tools">
-      <button class="btn primary" onclick="launch()" title="启动 Typeless 桌面端">⏻ 启动 Typeless</button>
-      <div class="divider"></div>
-      <button class="btn" onclick="loadAccounts()" title="重新读取账号、额度和当前状态">↻ 刷新</button>
-      <button class="btn sync-btn" id="dictionarySyncBtn" data-state="waiting" onclick="openDictionarySyncStatus()" aria-live="polite" title="查看词库自动对齐状态或立即检查">
-        <span class="sync-dot"></span><span id="dictionarySyncLabel">词库待检查</span>
-      </button>
-      <button class="btn" onclick="openMaster()" title="查看和编辑跨账号同步使用的主词库">✎ 主词库</button>
-      <button class="btn" onclick="backup()" title="备份账号清单和主词库数据">⇩ 备份</button>
-      <button class="btn" onclick="openShortcuts()" title="管理 Typeless 功能快捷键">⌨ 快捷键</button>
-      <button class="btn" id="officialUpdateBtn" style="display:none" onclick="installOfficialUpdate()">⬆ 官方更新</button>
+      <button class="btn primary" onclick="launch()" title="启动 Typeless 桌面端"><svg class="ui-icon" aria-hidden="true"><use href="#ui-play"/></svg>启动 Typeless</button>
+      <button class="btn" onclick="loadAccounts()" title="重新读取账号、额度和当前状态"><svg class="ui-icon" aria-hidden="true"><use href="#ui-refresh"/></svg>刷新</button>
+      <button class="btn" onclick="openMaster()" title="查看和编辑跨账号同步使用的主词库"><svg class="ui-icon" aria-hidden="true"><use href="#ui-book"/></svg>主词库</button>
     </div>
     <div class="tool-group system-tools">
-      <button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()" title="查看 Typeless 与工具集各自需要的 macOS 权限和修复方式">🔐 macOS 权限</button>
-      <button class="btn primary" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化">＋ 注册账号</button>
-      <button class="btn" onclick="resetDeviceOnly()" title="清理本机设备标识并回到 Typeless 登录页">↻ 重置设备</button>
-      <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集">＋ 添加当前账号</button>
-      <button class="btn danger" id="patchBtn" onclick="patchPaywall()" title="检查并解除 Typeless 的相关弹窗；已解除时可查看当前状态"><span id="patchLabel">⊘ 解除弹窗</span></button>
+      <button class="btn" onclick="openRegisterWizard()" title="保存当前账号、重置设备、抓取新账号并完成初始化"><svg class="ui-icon" aria-hidden="true"><use href="#ui-user-plus"/></svg>注册账号</button>
+      <button class="btn" onclick="addAccount()" title="抓取当前 Typeless 登录账号并保存到工具集"><svg class="ui-icon" aria-hidden="true"><use href="#ui-user-plus"/></svg>添加当前账号</button>
     </div>
   </div>
 
@@ -268,7 +402,88 @@
   </div>
 
   <div id="grid" class="grid"></div>
-</div>
+</main>
+
+<section class="wrap settings-page" id="settingsPage" hidden aria-label="设置">
+  <button class="btn ghost back-btn" onclick="closeSettings()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-back"/></svg>返回首页</button>
+  <div class="settings-heading"><h2 tabindex="-1" id="settingsHeading">设置</h2><p>Typeless 工具集</p></div>
+  <nav class="settings-tabs" role="tablist" aria-label="设置分类" onkeydown="settingsTabKeydown(event)">
+    <button id="settingsTabGeneral" role="tab" data-settings-tab="general" aria-selected="true" aria-controls="settings-general" onclick="selectSettingsTab('general')">通用</button>
+    <button id="settingsTabSync" role="tab" data-settings-tab="sync" aria-selected="false" aria-controls="settings-sync" tabindex="-1" onclick="selectSettingsTab('sync')">同步与数据</button>
+    <button id="settingsTabMaintenance" role="tab" data-settings-tab="maintenance" aria-selected="false" aria-controls="settings-maintenance" tabindex="-1" onclick="selectSettingsTab('maintenance')">权限与维护</button>
+    <button id="settingsTabUpdates" role="tab" data-settings-tab="updates" aria-selected="false" aria-controls="settings-updates" tabindex="-1" onclick="selectSettingsTab('updates')">关于与更新<span class="update-badge" id="settingsUpdateBadge" hidden aria-hidden="true"><svg class="ui-icon"><use href="#ui-upgrade"/></svg><span id="settingsUpdateCount"></span></span></button>
+  </nav>
+
+  <div class="settings-panel settings-stack" id="settings-general" role="tabpanel" aria-labelledby="settingsTabGeneral">
+    <section class="settings-card">
+      <h3>外观主题</h3><p>跟随系统，或选择你习惯的外观。立即生效并在本机记住。</p>
+      <div class="theme-options" role="group" aria-label="外观主题">
+        <button data-theme-preference="light" aria-pressed="false" onclick="setThemePreference('light')">浅色</button>
+        <button data-theme-preference="dark" aria-pressed="false" onclick="setThemePreference('dark')">深色</button>
+        <button data-theme-preference="system" aria-pressed="true" onclick="setThemePreference('system')">跟随系统</button>
+      </div>
+    </section>
+    <section class="settings-card settings-row">
+      <div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-keyboard"/></svg>功能快捷键</h3><p>管理 Typeless 的听写与其他功能快捷键。保存时会提示重启 Typeless。</p></div>
+      <button class="btn" onclick="openShortcuts()">编辑快捷键</button>
+    </section>
+  </div>
+
+  <div class="settings-panel settings-layout" id="settings-sync" role="tabpanel" aria-labelledby="settingsTabSync" hidden>
+    <section class="settings-card">
+      <fieldset id="accountSyncForm" style="border:0;padding:0;margin:0;min-width:0" disabled>
+        <div class="settings-card-header">
+          <div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-cloud"/></svg>WebDAV 同步 <span class="badge" id="accountSyncConfigured">未配置</span></h3><p>在多台设备之间同步账号和主词库。</p></div>
+          <div class="sync-service"><label for="accountSyncProvider">同步服务</label><select class="fld" id="accountSyncProvider" onchange="updateAccountSyncProvider()">
+            <option value="disabled">关闭同步</option><option value="nutstore">坚果云</option><option value="webdav">其他 WebDAV</option>
+          </select></div>
+        </div>
+        <div id="accountSyncFields">
+          <div class="settings-fields">
+            <div class="field full"><label for="accountSyncUrl">服务器地址</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
+            <div class="field"><label for="accountSyncUsername">用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
+            <div class="field"><label for="accountSyncPassword">WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空保持已保存密码"></div>
+            <div class="field"><label for="accountSyncPath">远端账号文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；词库单独加密存于同目录。</div></div>
+            <div class="field"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
+          </div>
+          <fieldset class="sync-scope"><legend>同步内容</legend><div class="check-options">
+            <label><input type="checkbox" id="accountSyncAccounts" checked>账号凭证</label>
+            <label><input type="checkbox" id="accountSyncDictionary">主词库</label>
+          </div><p>可单独选择，也可以同时同步。</p></fieldset>
+        </div>
+        <div class="settings-actions">
+          <button class="btn ghost" id="accountSyncTestBtn" onclick="testAccountSync()">测试连接</button>
+          <button class="btn" id="accountSyncRunBtn" onclick="runAccountSync()">立即同步</button>
+          <button class="btn primary" id="accountSyncSaveBtn" onclick="saveAccountSync()">保存配置</button>
+        </div>
+      </fieldset>
+      <div id="accountSyncStatus" role="status" aria-live="polite">正在读取配置…</div>
+      <button class="btn small" id="accountSyncReloadBtn" onclick="loadAccountSyncConfig()" hidden>重新读取配置</button>
+    </section>
+    <aside class="settings-stack">
+      <section class="settings-card">
+        <div class="settings-card-header"><h3>同步状态</h3><span class="badge" id="accountSyncState">尚未同步</span></div>
+        <dl class="settings-values"><div><dt>本机账号</dt><dd id="settingsAccountCount">—</dd></div><div><dt>主词库</dt><dd id="settingsMasterCount">—</dd></div><div><dt>上次同步</dt><dd id="accountSyncLastTime">尚未</dd></div></dl>
+        <div class="settings-note" id="accountSyncStateDetail">新增内容合并同步，不会直接覆盖另一台设备的数据。明确的删除也会同步到其他设备。</div>
+        <p>只传输所选内容的加密文件，不上传短期 access token、登录快照或设备信息。</p>
+      </section>
+      <section class="settings-card settings-backup"><h3>本地备份</h3><p>将账号清单与主词库备份到本机。</p><div class="row-btns"><button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>备份数据</button></div></section>
+    </aside>
+  </div>
+
+  <div class="settings-panel settings-stack" id="settings-maintenance" role="tabpanel" aria-labelledby="settingsTabMaintenance" hidden>
+    <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-shield"/></svg>弹窗自动维护</h3><p>启动、账号变更及官方更新后自动检查。平时无需手动操作，首页会持续显示状态。</p><p id="maintenanceState" role="status">正在读取维护状态…</p></div><button class="btn" onclick="patchPaywall()">立即检查</button></section>
+    <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-refresh"/></svg>设备标识重置</h3><p>遇到设备登录数量受限等问题时可手动尝试；普通切号不会自动重置。</p><p id="resetDeviceDescription">会清除 Typeless 当前登录状态并重启到登录页；保留工具集已保存的账号、快照和词库。可登录已有账号，不需要注册新账号。</p></div><button class="btn danger" id="resetDeviceBtn" onclick="resetDeviceOnly()" aria-describedby="resetDeviceDescription">重置设备</button></section>
+    <section class="settings-card settings-row" id="macPermissionCard" hidden><div><h3>macOS 权限</h3><p>区分工具集的 App 管理权限与 Typeless 本体的辅助功能、麦克风权限。</p><p>需要授权时仍会主动提示；这里保留说明和旧权限修复入口。</p></div><button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()">查看权限与修复</button></section>
+    <p class="settings-platform-note" id="windowsPermissionNote" hidden>Windows 无需配置 macOS 的 App 管理、辅助功能和麦克风授权。</p>
+  </div>
+
+  <div class="settings-panel settings-stack" id="settings-updates" role="tabpanel" aria-labelledby="settingsTabUpdates" hidden>
+    <section class="settings-card"><div class="settings-row"><div><h3>Typeless 工具集 <span class="badge" id="settingsToolkitVersion">读取版本中</span></h3><p>更新账号管理工具，保留已保存的账号、快照、词库和配置。</p><p id="settingsToolkitStatus">正在检查更新…</p></div><button class="btn" id="toolkitUpdateBtn" onclick="openToolkitUpdate()">检查工具集更新</button></div><div class="settings-note" id="settingsToolkitBoundary">工具集更新与 Typeless 本体更新相互独立。</div></section>
+    <section class="settings-card" id="officialUpdateCard" hidden><div class="settings-row"><div><h3>Typeless 本体 <span class="badge">官方应用</span></h3><p id="officialUpdateStatus">正在检查本地更新缓存…</p></div><button class="btn" id="officialUpdateBtn" style="display:none" onclick="openOfficialUpdate()">检查本地更新包</button></div><div class="settings-note">仅安装 Typeless updater 已下载的本地缓存包，不检查或更新工具集。</div></section>
+    <div class="about-footer"><span>Typeless 工具集 · 开源辅助工具</span><a class="link" href="https://github.com/Jia131313/typeless-toolkit" target="_blank" rel="noopener noreferrer">GitHub 仓库 ↗</a></div>
+  </div>
+</section>
 
 <!-- 账号详情 -->
 <div class="mask" id="detailMask" onclick="if(event.target===this)closeModal('detailMask')">
@@ -466,6 +681,43 @@
   </div>
 </div>
 
+<div class="mask" id="toolkitUpdateMask" onclick="if(event.target===this)closeModal('toolkitUpdateMask')">
+  <div class="modal" style="width:min(650px,94vw)">
+    <div class="hd"><h3>Typeless 工具集更新</h3><button class="icon-btn" onclick="closeModal('toolkitUpdateMask')">✕</button></div>
+    <div class="bd">
+      <div id="toolkitUpdateSummary" class="permission-intro">正在检查 GitHub Release…</div>
+      <div id="toolkitUpdateProgress" class="hint" style="margin-top:10px"></div>
+      <pre id="toolkitUpdateNotes" class="hint" style="display:none;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:14px 0 0;padding:12px;border-radius:10px"></pre>
+      <div class="row-btns" style="margin-top:14px">
+        <button class="btn primary" id="toolkitUpdateActionBtn" onclick="downloadToolkitUpdate()">检查更新</button>
+        <button class="btn" id="toolkitUpdateReleaseBtn" onclick="openToolkitUpdateRelease()" style="display:none">查看 Release</button>
+      </div>
+      <div class="hint" id="toolkitUpdateBoundary" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="availableUpdatesMask" onclick="if(event.target===this)closeModal('availableUpdatesMask')">
+  <div class="modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="availableUpdatesTitle">
+    <div class="hd"><h3 id="availableUpdatesTitle">可用更新</h3><button class="icon-btn" aria-label="关闭可用更新" onclick="closeModal('availableUpdatesMask')">✕</button></div>
+    <div class="bd"><p class="hint" style="margin:0 0 16px">工具集和 Typeless 本体独立更新，请选择要查看的项目。</p><div class="update-choices">
+      <button class="btn" id="availableToolkitBtn" onclick="closeModal('availableUpdatesMask');openToolkitUpdate()"></button>
+      <button class="btn" id="availableOfficialBtn" onclick="closeModal('availableUpdatesMask');openOfficialUpdate()"></button>
+    </div></div>
+  </div>
+</div>
+<div class="mask" id="officialUpdateMask" onclick="if(event.target===this)closeModal('officialUpdateMask')">
+  <div class="modal" style="max-width:580px" role="dialog" aria-modal="true" aria-labelledby="officialUpdateTitle">
+    <div class="hd"><h3 id="officialUpdateTitle">Typeless 本体更新</h3><button class="icon-btn" aria-label="关闭 Typeless 更新" onclick="closeModal('officialUpdateMask')">✕</button></div>
+    <div class="bd">
+      <div id="officialUpdateSummary" class="permission-intro" role="status">正在检查本地更新缓存…</div>
+      <p class="hint">这里只读取 Typeless updater 已下载的本地官方更新包，不联网查询最新版，也不更新工具集。</p>
+      <p class="hint">安装时会校验更新包和官方开发者签名，备份并替换 Typeless.app，然后重启 Typeless。安装恢复官方签名，工具集会按现有流程检查弹窗维护与权限。</p>
+      <div class="row-btns"><button class="btn primary" id="officialUpdateActionBtn" onclick="installOfficialUpdate()" hidden>安装并重启 Typeless</button><button class="btn" id="officialUpdateCheckBtn" onclick="refreshOfficialUpdate()">重新检查本地缓存</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -478,6 +730,11 @@ async function apiTimed(p,opt={},timeoutMs=30000){
 let ACCOUNTS = [], CUR_ID = null, curDetail = null, curWords = [], captureBusy = false, currentBusy = false;
 let DICT_SYNC_STATUS = null, MASTER_ORIGINAL = [];
 let ENV_INFO = null, PAYWALL_MAINTENANCE = null, PAYWALL_NOTICE_AT = null, PENDING_MAC_ACTION = null, PAYWALL_SETTINGS_OPENED = false, PAYWALL_FOCUS_RETRY_BUSY = false;
+let TOOLKIT_UPDATE = null, TOOLKIT_UPDATE_POLL = null, TOOLKIT_UPDATE_NOTIFIED = false;
+let OFFICIAL_UPDATE = null, OFFICIAL_UPDATE_BUSY = false, OFFICIAL_UPDATE_CHECKED_AT = 0;
+let SETTINGS_TAB = 'general', HOME_SCROLL = 0, ACCOUNT_SYNC_LOADED = false, ACCOUNT_SYNC_LOADING = null;
+let ACCOUNT_SYNC_ENABLED = false;
+const TOOLKIT_UPDATE_SHARED_BACKEND = new URLSearchParams(window.location.search).get('toolkit_backend') === 'shared';
 let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
 const SC_CODE_MAP = {
   ControlLeft:'LeftCtrl', ControlRight:'RightCtrl',
@@ -551,19 +808,73 @@ async function resetMacPermissions(target){
     }else toast(result?.message||'权限记录清除失败','err');
   }catch(e){ toast('权限记录清除失败: '+(e.message||e),'err'); }
 }
-function esc(s){ return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+function esc(s){
+  return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])).replaceAll('"','&quot;').replaceAll("'",'&#39;');
+}
 function pct(v,l){ return l? Math.min(100, Math.round(v/l*100)):0; }
 function nfmt(n){ return (n||0).toLocaleString(); }
+function uiIcon(name){ return `<svg class="ui-icon" aria-hidden="true"><use href="#ui-${name}"/></svg>`; }
+
+/* 设置导航只切换视图，不重新创建表单或重置未保存的输入。 */
+function openSettings(tab=SETTINGS_TAB){
+  if(document.getElementById('settingsPage').hidden) HOME_SCROLL=window.scrollY;
+  document.getElementById('homeTopbar').hidden=true;
+  document.getElementById('homePage').hidden=true;
+  document.getElementById('settingsPage').hidden=false;
+  document.getElementById('settingsBtn').setAttribute('aria-pressed','true');
+  selectSettingsTab(tab);
+  window.scrollTo(0,0);
+  document.getElementById('settingsHeading').focus({preventScroll:true});
+}
+function selectSettingsTab(tab){
+  if(!['general','sync','maintenance','updates'].includes(tab)) tab='general';
+  SETTINGS_TAB=tab;
+  document.querySelectorAll('[data-settings-tab]').forEach(btn=>{
+    const selected=btn.dataset.settingsTab===tab;
+    btn.setAttribute('aria-selected',String(selected));
+    btn.tabIndex=selected?0:-1;
+  });
+  document.querySelectorAll('.settings-panel').forEach(panel=>{ panel.hidden=panel.id!=='settings-'+tab; });
+  if(tab==='sync'){
+    if(!ACCOUNT_SYNC_LOADED) loadAccountSyncConfig();
+    else refreshAccountSyncStatus();
+  }
+  if(tab==='updates') refreshOfficialUpdate();
+}
+function closeSettings(){
+  document.getElementById('settingsPage').hidden=true;
+  document.getElementById('homeTopbar').hidden=false;
+  document.getElementById('homePage').hidden=false;
+  document.getElementById('settingsBtn').setAttribute('aria-pressed','false');
+  window.scrollTo(0,HOME_SCROLL);
+  document.getElementById('settingsBtn').focus({preventScroll:true});
+}
+function settingsTabKeydown(event){
+  const tabs=[...document.querySelectorAll('[data-settings-tab]')];
+  const index=tabs.indexOf(event.target);
+  if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+  selectSettingsTab(tabs[next].dataset.settingsTab); tabs[next].focus();
+}
 
 /* 主题 */
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
-  document.getElementById('themeBtn').textContent = t==='dark'?'☀':'◐';
+  const preference=localStorage.getItem('tl_theme')||'system';
+  document.querySelectorAll('[data-theme-preference]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.themePreference===preference)));
   try{ window.typelessToolkitDesktop?.setTheme(t); }catch(e){}
   try{ window.chrome.webview.postMessage('theme:'+t); }catch(e){}
 }
-function toggleTheme(){ const cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'; localStorage.setItem('tl_theme',cur); applyTheme(cur); }
+function setThemePreference(preference){
+  if(preference==='system') localStorage.removeItem('tl_theme');
+  else localStorage.setItem('tl_theme',preference);
+  applyTheme(preference==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):preference);
+}
 applyTheme(localStorage.getItem('tl_theme') || (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
+  if(!localStorage.getItem('tl_theme')) setThemePreference('system');
+});
 
 /* 概览统计 */
 function renderStats(){
@@ -573,10 +884,11 @@ function renderStats(){
   ACCOUNTS.forEach(a=>{ const u=a.live?.usage||{}; if(u.week_word_usage_value!=null){used+=u.week_word_usage_value; lim+=(u.week_word_usage_limit||8000);} dict+=(a.live?.dict_count||0); saved+=(u.mins_saved||0); });
   const rp=pct(used,lim);
   document.getElementById('stats').innerHTML=`
-    <div class="stat"><div class="k">👥 账号</div><div class="v">${n} <small>个</small></div><div class="foot">有效 ${valid} · 失效 ${n-valid}</div></div>
-    <div class="stat"><div class="k">⚡ 本周额度</div><div class="v">${nfmt(used)} <small>/ ${nfmt(lim)}</small></div><div class="foot">合计已用 ${rp}% · 剩 ${nfmt(lim-used)} 字</div></div>
-    <div class="stat"><div class="k">📖 词库</div><div class="v">${nfmt(dict)} <small>条</small></div><div class="foot">各账号合计</div></div>
-    <div class="stat"><div class="k">⏱ 累计节省</div><div class="v">${nfmt(saved)} <small>分钟</small></div><div class="foot">全部账号听写</div></div>`;
+    <div class="stat">${uiIcon('user')}<div class="stat-content"><div class="k">账号</div><div class="v">${n}</div><div class="foot">有效 ${valid} · 失效 ${n-valid}</div></div></div>
+    <div class="stat">${uiIcon('chart')}<div class="stat-content"><div class="k">本周额度</div><div class="v">${nfmt(used)} <small class="stat-limit">/ ${nfmt(lim)}</small></div><div class="foot">合计已用 ${rp}% · 剩 ${nfmt(lim-used)} 字</div></div></div>
+    <div class="stat">${uiIcon('book')}<div class="stat-content"><div class="k">词库合计</div><div class="v">${nfmt(dict)}</div><div class="foot">各账号合计</div></div></div>
+    <div class="stat">${uiIcon('clock')}<div class="stat-content"><div class="k">累计节省</div><div class="v">${nfmt(Math.round(saved))} <small>分钟</small></div><div class="foot">全部账号听写</div></div></div>`;
+  document.getElementById('settingsAccountCount').textContent=n+' 个';
 }
 
 async function launch(){ toast('启动中…'); const r=await api('/api/launch',{method:'POST'}); toast(r.msg||'已启动','ok'); setTimeout(detectCurrent,3000); }
@@ -617,16 +929,18 @@ function render(){
     const daysTxt = credentialNeedsUpdate?'需更新':(days==null?'—':(days<0?'已过期':days+'天'));
     const daysCls = credentialNeedsUpdate?'warn':(days==null?'mut':'');
     const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
+    const cloudOnly=!!a.cloud_only && !a.has_snapshot;
     return `<div class="card ${a.user_id===CUR_ID?'active':''} ${valid?'':'invalid'}" onclick="openDetail('${a.user_id}')">
-      <div class="ribbon">当前登录</div>
       <div class="chead">
         <div class="avatar">${esc(ini)}</div>
-        <div class="who"><div class="nick">${esc(a.nickname)}</div><div class="email">${esc(a.email||a.user_id)}</div></div>
-        <span class="badge ${valid?(a.role||''):'invalid'}">${valid?(a.role||'未知'):'失效'}</span>
+        <div class="who"><div class="account-title"><div class="nick" title="${esc(a.nickname||a.email||a.user_id)}">${esc(a.nickname||a.email||a.user_id)}</div>${a.user_id===CUR_ID?'<span class="badge current">当前账号</span>':''}</div>${a.nickname&&a.nickname!==a.email?`<div class="email" title="${esc(a.email||a.user_id)}">${esc(a.email||a.user_id)}</div>`:''}
+          <div class="account-badges"><span class="badge ${valid?(a.role||''):'invalid'}">${valid?(a.role==='free'?'免费版':a.role||'未知'):'失效'}</span>
+          </div>
+        </div>
       </div>
       <div class="quota">
         <div class="qtop"><span>本周额度</span><b>${ok?nfmt(used):'—'} / ${nfmt(lim)}</b></div>
-        <div class="bar ${pcls}"><i style="width:${p}%"></i></div>
+        <div class="quota-meter"><div class="bar ${pcls}"><i style="width:${p}%"></i></div><span class="quota-percent">${ok?p+'%':'—'}</span></div>
       </div>
       <div class="mini">
         <div class="m"><div class="k">词库</div><div class="v">${live.dict_count??'-'}</div></div>
@@ -634,10 +948,12 @@ function render(){
         <div class="m"><div class="k">登录有效期</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
       <div class="cfoot">
-        <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照')}</span>
+        <span class="snap ${a.snapshot_mismatch?'':(a.has_snapshot&&a.snapshot_ok!==false?'has':'')}" title="${a.snapshot_mismatch?esc('串号: 内容是 '+(a.snapshot_email||a.snapshot_user_id||'')) : ''}"><span class="d"></span>${cloudOnly?'云端待启用':(a.snapshot_mismatch?'快照串号':(a.has_snapshot?'快照已存':'未存快照'))}</span>
         <div class="acts">
-          <button class="btn small" onclick="event.stopPropagation();openDetail('${a.user_id}')">详情</button>
-          <button class="btn small primary" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot&&a.snapshot_ok!==false?'':'disabled'}>切换</button>
+          <button class="btn small" onclick="event.stopPropagation();openDetail('${a.user_id}')">${uiIcon('details')}详情</button>
+          ${cloudOnly
+            ? `<button class="btn small primary" onclick="event.stopPropagation();activateAccount('${a.user_id}')">在此设备启用</button>`
+            : `<button class="btn small switch-btn ${a.user_id===CUR_ID?'current-action':''}" onclick="event.stopPropagation();switchTo('${a.user_id}')" ${a.has_snapshot&&a.snapshot_ok!==false?'':'disabled'}>${uiIcon('switch')}${a.user_id===CUR_ID?'重新切换':'切换'}</button>`}
         </div>
       </div>
     </div>`;
@@ -722,6 +1038,7 @@ function renderDictionarySyncStatus(status){
   const last=document.getElementById('syncLastTime');
   const nowBtn=document.getElementById('syncNowBtn');
   if(master) master.textContent=summary.master_count==null?'—':summary.master_count+' 条';
+  document.getElementById('settingsMasterCount').textContent=summary.master_count==null?'—':summary.master_count+' 条';
   if(aligned) aligned.textContent=summary.account_count==null?'—':`${summary.aligned_count||0}/${summary.account_count}`;
   if(last) last.textContent=syncTime(DICT_SYNC_STATUS.last_finished_at);
   if(nowBtn){ nowBtn.disabled=!!DICT_SYNC_STATUS.running; nowBtn.textContent=DICT_SYNC_STATUS.running?'正在检查…':'立即检查'; }
@@ -791,17 +1108,153 @@ async function runDictionarySync(showResults=true){
   await loadAccounts();
   await refreshDictionarySyncStatus();
 }
+function updateAccountSyncProvider(){
+  const provider=document.getElementById('accountSyncProvider').value;
+  const fields=document.getElementById('accountSyncFields');
+  fields.style.display=provider==='disabled'?'none':'block';
+  const url=document.getElementById('accountSyncUrl');
+  if(provider==='nutstore'){
+    url.value='https://dav.jianguoyun.com/dav/';
+    url.readOnly=true;
+  }else url.readOnly=false;
+  document.getElementById('accountSyncTestBtn').disabled=provider==='disabled';
+  document.getElementById('accountSyncRunBtn').disabled=provider==='disabled';
+}
+function accountSyncPayload(){
+  const provider=document.getElementById('accountSyncProvider').value;
+  const accounts=document.getElementById('accountSyncAccounts').checked;
+  const dictionary=document.getElementById('accountSyncDictionary').checked;
+  if(provider!=='disabled'&&!accounts&&!dictionary) throw new Error('请至少选择一项同步内容：账号凭证或主词库');
+  return {
+    enabled:provider!=='disabled', provider,
+    url:document.getElementById('accountSyncUrl').value.trim(),
+    username:document.getElementById('accountSyncUsername').value.trim(),
+    password:document.getElementById('accountSyncPassword').value,
+    sync_password:document.getElementById('accountSyncVaultPassword').value,
+    remote_path:document.getElementById('accountSyncPath').value.trim(),
+    sync_scope:accounts&&dictionary?'all':dictionary?'dictionary':'accounts',
+  };
+}
+function accountSyncStatusText(status){
+  if(!status) return '尚未同步。保存配置后会自动合并账号与词库的变化，运行期间每 15 分钟检查一次，也可立即同步。';
+  const labels={idle:'尚未同步',syncing:'正在同步',success:'最近同步成功',conflict:'远端冲突',local_changed:'本地仍在变更，请稍后同步',authentication_failure:'认证失败',decryption_failure:'同步密码错误',network_failure:'连接失败'};
+  let text=labels[status.state]||status.state||'尚未同步';
+  if(status.last_sync_at) text+=' · '+new Date(status.last_sync_at).toLocaleString();
+  if(status.error) text+='\n'+status.error;
+  return text;
+}
+function openAccountSync(){ openSettings('sync'); }
+function renderAccountSyncStatus(status){
+  const state=status?.state||'idle';
+  const labels={idle:'尚未同步',syncing:'正在同步',success:'已对齐',conflict:'同步待重试',local_changed:'等待本地变更',authentication_failure:'认证失败',decryption_failure:'同步密码错误',network_failure:'连接失败'};
+  const text=ACCOUNT_SYNC_ENABLED?(labels[state]||'同步待重试'):'未开启';
+  const home=document.getElementById('accountSyncHomeBtn');
+  document.getElementById('accountSyncHomeLabel').textContent=ACCOUNT_SYNC_ENABLED?'跨设备 · '+text:'跨设备同步未开启';
+  home.dataset.state=status?.error?'error':state;
+  home.title=ACCOUNT_SYNC_ENABLED?accountSyncStatusText(status):'在设置中开启加密 WebDAV 账号同步或词库同步';
+  document.getElementById('accountSyncState').textContent=text;
+  document.getElementById('accountSyncLastTime').textContent=status?.last_sync_at?new Date(status.last_sync_at).toLocaleString():'尚未';
+}
+async function refreshAccountSyncStatus(){
+  try{
+    const [config,status]=await Promise.all([api('/api/account-sync/config'),api('/api/account-sync/status')]);
+    if(config.status!=='OK'||status.status!=='OK') throw new Error(config.msg||status.msg||'状态读取失败');
+    ACCOUNT_SYNC_ENABLED=!!config.data?.enabled;
+    renderAccountSyncStatus(status.data);
+  }catch(e){
+    document.getElementById('accountSyncHomeLabel').textContent='同步状态读取失败';
+    document.getElementById('accountSyncHomeBtn').dataset.state='error';
+    document.getElementById('accountSyncState').textContent='读取失败';
+  }
+}
+function loadAccountSyncConfig(){
+  if(ACCOUNT_SYNC_LOADING) return ACCOUNT_SYNC_LOADING;
+  ACCOUNT_SYNC_LOADING=(async()=>{
+    const status=document.getElementById('accountSyncStatus'), form=document.getElementById('accountSyncForm');
+    status.textContent='正在读取配置…'; form.disabled=true;
+    document.getElementById('accountSyncReloadBtn').hidden=true;
+    try{
+      const configResult=await api('/api/account-sync/config');
+      if(configResult.status!=='OK') throw new Error(configResult.msg||'无法读取同步配置');
+      const c=configResult.data||{};
+      ACCOUNT_SYNC_ENABLED=!!c.enabled;
+      document.getElementById('accountSyncProvider').value=c.enabled?(c.provider||'webdav'):'disabled';
+      const scope=c.sync_scope||'accounts';
+      document.getElementById('accountSyncAccounts').checked=['accounts','all'].includes(scope);
+      document.getElementById('accountSyncDictionary').checked=['dictionary','all'].includes(scope);
+      document.getElementById('accountSyncUrl').value=c.url||'';
+      document.getElementById('accountSyncUsername').value=c.username||'';
+      document.getElementById('accountSyncPassword').value='';
+      document.getElementById('accountSyncPassword').placeholder=c.password_configured?'已保存；留空保持不变':'请输入 WebDAV 应用密码';
+      document.getElementById('accountSyncVaultPassword').value='';
+      document.getElementById('accountSyncVaultPassword').placeholder=c.sync_password_configured?'已保存；留空保持不变':'各设备必须填写相同的同步密码';
+      document.getElementById('accountSyncPath').value=c.remote_path||'TypelessToolkit/accounts.vault.json';
+      updateAccountSyncProvider();
+      document.getElementById('accountSyncConfigured').textContent=c.enabled?'已配置':'未开启';
+      status.textContent=c.enabled?'配置已保存，下次无需重复填写。密码留空会保留已保存的值。':'选择同步服务后即可配置。未开启时不会上传账号或词库。';
+      ACCOUNT_SYNC_LOADED=true; form.disabled=false;
+      refreshAccountSyncStatus();
+    }catch(e){ status.textContent='读取失败：'+(e.message||e); document.getElementById('accountSyncReloadBtn').hidden=false; }
+  })().finally(()=>{ ACCOUNT_SYNC_LOADING=null; });
+  return ACCOUNT_SYNC_LOADING;
+}
+async function saveAccountSync(quiet=false){
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在保存…';
+  try{
+    const payload=accountSyncPayload();
+    const r=await api('/api/account-sync/config',{method:'POST',body:JSON.stringify(payload)});
+    if(r.status!=='OK'){ status.textContent=r.msg||'保存失败'; if(!quiet) toast(r.msg||'保存失败','err'); return false; }
+    status.textContent=r.msg||'配置已保存，下次无需重复填写';
+    ACCOUNT_SYNC_ENABLED=payload.enabled;
+    document.getElementById('accountSyncConfigured').textContent=payload.enabled?'已配置':'未开启';
+    document.getElementById('accountSyncPassword').value='';
+    document.getElementById('accountSyncVaultPassword').value='';
+    if(payload.password) document.getElementById('accountSyncPassword').placeholder='已保存；留空保持不变';
+    if(payload.sync_password) document.getElementById('accountSyncVaultPassword').placeholder='已保存；留空保持不变';
+    refreshAccountSyncStatus();
+    if(!quiet) toast(r.msg||'配置已保存','ok');
+    return true;
+  }catch(e){ status.textContent='保存失败：'+(e.message||e); if(!quiet) toast('保存失败','err'); return false; }
+}
+async function testAccountSync(){
+  if(!(await saveAccountSync(true))) return;
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在测试 WebDAV 连接…';
+  try{
+    const r=await apiTimed('/api/account-sync/test',{method:'POST'},30000);
+    status.textContent=r.msg||'连接测试完成';
+    toast(r.msg||'连接测试完成',r.status==='OK'?'ok':'err');
+  }catch(e){ status.textContent='连接测试失败：'+(e.message||e); toast('连接测试失败','err'); }
+}
+async function runAccountSync(){
+  if(!(await saveAccountSync(true))) return;
+  const status=document.getElementById('accountSyncStatus');
+  status.textContent='正在加密、合并并同步所选内容…';
+  try{
+    const r=await apiTimed('/api/account-sync/run',{method:'POST'},60000);
+    status.textContent=r.msg||'同步完成';
+    toast(r.msg||'同步完成',r.status==='OK'?'ok':'err');
+    if(r.status==='OK'){ await loadAccounts(); refreshDictionarySyncStatus(); }
+    refreshAccountSyncStatus();
+  }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('账号同步失败','err'); }
+}
 async function resetDeviceOnly(){
-  if(!confirm('确认重置本机 Typeless 设备标识?\n\n将保存当前账号快照、清理设备凭据和缓存，并重启 Typeless 到登录页。\n已有账号快照和词库不会删除。')) return;
-  toast('正在重置设备…');
+  const btn=document.getElementById('resetDeviceBtn');
+  if(btn.disabled) return;
+  if(!confirm('确认重置本机 Typeless 设备标识?\n\n将尝试保存当前账号快照，清理设备凭据、缓存及当前登录状态，并重启 Typeless 到登录页。\n工具集已保存的账号、快照和词库不会删除。\n\n重置后可登录已有账号，不需要注册新账号。是否继续？')) return;
+  btn.disabled=true;
+  btn.textContent='正在重置…';
+  toast('正在重置设备，Typeless 将关闭并重新打开…');
   try{
     const r=await apiTimed('/api/reset-device',{method:'POST'},60000);
     if(r.status==='OK'){
-      toast(r.msg||'设备已重置','ok');
+      toast('已执行设备重置，请在 Typeless 登录页登录需要使用的账号','ok');
       await loadAccounts();
-      detectCurrent();
+      await detectCurrent();
     }else toast(r.msg||'设备重置失败','err');
-  }catch(e){ toast('设备重置失败: '+(e.message||e),'err'); }
+  }catch(e){ toast('设备重置请求失败：'+(e.message||e)+'。请检查 Typeless 当前状态后再操作。','err'); }
+  finally{ btn.disabled=false; btn.textContent='重置设备'; }
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
@@ -819,6 +1272,18 @@ async function switchTo(id){
     toast(r.msg||'切换失败','err');
     await loadAccounts();
   }
+}
+async function activateAccount(id){
+  const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
+  if(!confirm('在此设备启用「'+(a.nickname||a.email||id)+'」?\n\n工具会用已加密同步的 refresh token 获取短期 access token，并让 Typeless 切换到该账号、创建本机快照。')) return;
+  toast('正在启用账号，Typeless 将临时重启…');
+  try{
+    const r=await apiTimed('/api/accounts/'+encodeURIComponent(id)+'/activate',{method:'POST'},180000);
+    if(r.status==='OK'){
+      toast(r.msg||'账号已在此设备启用','ok');
+      setTimeout(()=>{ loadAccounts(); detectCurrent(); refreshOnboardingStatus(); },5000);
+    }else toast(r.msg||'启用失败','err');
+  }catch(e){ toast('启用失败：'+(e.message||e),'err'); }
 }
 /* —— 注册新账号 —— */
 let regWizardPrevId=null, regWizardTimer=null;
@@ -950,26 +1415,28 @@ async function refreshPaywallMaintenanceStatus(){
     const r=await api('/api/paywall-maintenance'), s=r.data||{};
     PAYWALL_MAINTENANCE=s;
     const btn=document.getElementById('patchBtn'), label=document.getElementById('patchLabel');
+    if(btn) btn.dataset.state=s.state||'waiting';
+    document.getElementById('maintenanceState').textContent=s.msg||({patched:'弹窗已解除',checking:'正在检查',deferred:'等待下次受控重启',idle:'等待自动检查'}[s.state]||'点击立即检查可重试');
     if(s.state==='checking'){
-      if(label) label.textContent='… 自动修复中';
+      if(label) label.textContent='自动修复中';
       if(btn) btn.title=s.msg||'正在自动检查弹窗补丁';
     }else if(s.state==='permission-required'){
-      if(label) label.textContent='⚠ 需开启 App 管理';
+      if(label) label.textContent='需开启 App 管理';
       if(btn) btn.title=s.msg||'开启 App 管理权限后会自动继续';
       if(ENV_INFO?.platform==='macos') showPaywallPermissionPrompt(s.msg);
     }else if(s.state==='patched'){
       if(!PENDING_MAC_ACTION) closeModal('paywallPermissionMask');
-      if(label) label.textContent='✓ 弹窗已解除';
+      if(label) label.textContent='弹窗已解除';
       if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查';
       if(s.last_success_at && s.last_success_at!==PAYWALL_NOTICE_AT && !s.result?.already){
         PAYWALL_NOTICE_AT=s.last_success_at;
         notifyTypelessPermissionReset(s.result?.resign);
       }
     }else if(s.state==='deferred'){
-      if(label) label.textContent='↻ 弹窗待自动修复';
+      if(label) label.textContent='弹窗待自动修复';
       if(btn) btn.title=s.msg||'下次受控重启时自动修复';
     }else if(s.state==='error'||s.state==='unsupported'){
-      if(label) label.textContent='⊘ 解除弹窗';
+      if(label) label.textContent='弹窗维护待重试';
       if(btn) btn.title=(s.msg||'自动维护失败')+(s.error?'：'+s.error:'');
     }
   }catch(e){}
@@ -977,8 +1444,8 @@ async function refreshPaywallMaintenanceStatus(){
 async function refreshPatchStatus(){
   try{ const st=await api('/api/paywall-status');
     const label=document.getElementById('patchLabel'), btn=document.getElementById('patchBtn');
-    if(st.data?.patched){ label.textContent='✓ 弹窗已解除'; if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查'; }
-    else if(st.data?.autoDetected){ label.textContent='↻ 弹窗待自动修复'; if(btn) btn.title='已自动识别当前 Typeless 版本，工具集会自动解除相关弹窗'; }
+    if(st.data?.patched){ label.textContent='弹窗已解除'; if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查'; }
+    else if(st.data?.autoDetected){ label.textContent='弹窗待自动修复'; if(btn) btn.title='已自动识别当前 Typeless 版本，工具集会自动解除相关弹窗'; }
   }catch(e){}
 }
 async function skipOnboarding(){
@@ -1015,29 +1482,230 @@ async function refreshOnboardingStatus(){
     }
   }catch(e){ btn.className='btn info'; btn.disabled=false; btn.innerHTML='✈ 修复新手教程状态'; }
 }
-async function refreshOfficialUpdate(){
+function getAvailableUpdates(){
+  const updates=[];
+  if(TOOLKIT_UPDATE?.available) updates.push({kind:'toolkit',version:TOOLKIT_UPDATE.version});
+  if(ENV_INFO?.platform!=='windows'&&OFFICIAL_UPDATE?.supported&&OFFICIAL_UPDATE.available&&OFFICIAL_UPDATE.pending?.version){
+    updates.push({kind:'official',version:OFFICIAL_UPDATE.pending.version});
+  }
+  return updates;
+}
+function renderUpdateIndicators(){
+  const updates=getAvailableUpdates();
+  const description=updates.map(u=>(u.kind==='toolkit'?'工具集 v':'Typeless 本体 v')+u.version).join('、');
+  const notice=document.getElementById('homeUpdateNotice');
+  notice.hidden=!updates.length;
+  notice.title=updates.length?description+' 可更新，点击查看':'';
+  notice.setAttribute('aria-label',updates.length?'查看可用更新：'+description:'暂无可用更新');
+  document.getElementById('homeUpdateLabel').textContent=updates.length>1?'2 项更新':updates[0]?.kind==='official'?'Typeless 更新':'工具集更新';
+  document.getElementById('settingsUpdateBadge').hidden=!updates.length;
+  document.getElementById('settingsUpdateCount').textContent=String(updates.length);
+  document.getElementById('settingsTabUpdates').setAttribute('aria-label',updates.length?'关于与更新，'+description+' 可更新':'关于与更新');
+  for(const [kind,id] of [['toolkit','availableToolkitBtn'],['official','availableOfficialBtn']]){
+    const update=updates.find(u=>u.kind===kind), btn=document.getElementById(id);
+    btn.hidden=!update;
+    btn.textContent=update?(kind==='toolkit'?'工具集 v':'Typeless 本体 v')+update.version+' · 查看更新':'';
+  }
+}
+function openAvailableUpdate(){
+  const updates=getAvailableUpdates();
+  if(updates.length===1) return updates[0].kind==='toolkit'?openToolkitUpdate():openOfficialUpdate();
+  if(!updates.length) return openSettings('updates');
+  renderUpdateIndicators(); openModal('availableUpdatesMask');
+}
+function renderOfficialUpdate(){
   const btn=document.getElementById('officialUpdateBtn');
+  const d=OFFICIAL_UPDATE;
+  const supported=ENV_INFO?.platform!=='windows'&&(d?.supported??ENV_INFO?.platform==='macos');
+  const available=supported&&d?.available&&d.pending?.version;
+  document.getElementById('officialUpdateCard').hidden=!supported;
+  btn.style.display=supported?'':'none';
+  btn.disabled=OFFICIAL_UPDATE_BUSY;
+  btn.classList.toggle('primary',!!available);
+  btn.textContent=OFFICIAL_UPDATE_BUSY?'更新中…':available?'查看本体更新':'检查本地更新包';
+  const message=OFFICIAL_UPDATE_BUSY?'正在安装 Typeless，请稍候…':d?.error?'本地更新检查失败：'+d.error:available
+    ? '本地已有可安装的 Typeless v'+d.pending.version+(d.current?.version?'（当前 v'+d.current.version+'）':'')
+    : d?.reason||'正在检查本地更新缓存…';
+  btn.title=message+'；仅处理 Typeless 本体，不更新工具集。';
+  document.getElementById('officialUpdateStatus').textContent=message;
+  document.getElementById('officialUpdateSummary').textContent=message;
+  const action=document.getElementById('officialUpdateActionBtn');
+  action.hidden=!available; action.disabled=OFFICIAL_UPDATE_BUSY;
+  document.getElementById('officialUpdateCheckBtn').disabled=OFFICIAL_UPDATE_BUSY;
+  renderUpdateIndicators();
+}
+async function refreshOfficialUpdate(){
+  if(OFFICIAL_UPDATE_BUSY) return OFFICIAL_UPDATE;
+  OFFICIAL_UPDATE_CHECKED_AT=Date.now();
   try{
     const r=await api('/api/official-update'), d=r.data||{};
-    if(!d.supported){ btn.style.display='none'; return; }
-    btn.style.display='';
-    const localPackageNote='仅安装 Typeless updater 已下载的本地缓存包，不更新 Typeless Toolkit。';
-    btn.classList.remove('primary');
-    if(d.available){ btn.disabled=false; btn.textContent='⬆ 官方更新'; btn.title='可安装 Typeless '+d.pending.version+'：'+d.pending.fileName+'\n'+localPackageNote; }
-    else { btn.disabled=false; btn.textContent='⬆ 官方更新'; btn.title=(d.reason||'未发现可安装更新')+'\n'+localPackageNote; }
-  }catch(e){ btn.disabled=false; btn.title='Typeless 官方更新状态读取失败'; }
+    if(r.status!=='OK') throw new Error(r.msg||'读取失败');
+    OFFICIAL_UPDATE=d;
+  }catch(e){ OFFICIAL_UPDATE={supported:ENV_INFO?.platform==='macos',available:false,error:e.message||'读取失败'}; }
+  renderOfficialUpdate();
+  return OFFICIAL_UPDATE;
+}
+async function openOfficialUpdate(){
+  renderOfficialUpdate(); openModal('officialUpdateMask');
+  await refreshOfficialUpdate();
+}
+
+function updateBytes(value){
+  const bytes=Number(value||0);
+  if(!bytes) return '已下载';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/1024/1024).toFixed(1)+' MB';
+}
+function renderToolkitUpdate(){
+  const btn=document.getElementById('toolkitUpdateBtn');
+  const d=TOOLKIT_UPDATE, u=d?.update;
+  document.getElementById('settingsToolkitVersion').textContent=d?.current_version?'v'+d.current_version:'版本暂不可用';
+  const checking=!d||d.state==='idle'||d.state==='checking';
+  document.getElementById('settingsToolkitStatus').textContent=d?.error?'更新检查或下载失败：'+d.error:d?.running?'正在处理更新…':d?.available?'发现新版本 v'+d.version:checking?'正在检查更新…':'当前已是最新版本';
+  document.getElementById('settingsToolkitBoundary').textContent=(d?.platform||ENV_INFO?.platform)==='macos'
+    ? 'macOS 会下载并校验 DMG，仍需将 App 拖入“应用程序”完成替换。'
+    : 'Windows 会下载并校验更新包，退出后替换程序文件，并保留 data 目录。';
+  renderUpdateIndicators();
+  if(btn){
+    btn.disabled=false;
+    btn.classList.toggle('primary',!!d?.available);
+    if(d?.running) btn.textContent='查看更新进度';
+    else if(d?.available) btn.textContent='查看更新';
+    else btn.textContent='检查工具集更新';
+    btn.title=d?.available
+      ? `发现 Typeless 工具集 ${d.version}，点击查看更新说明`
+      : (d?.error||'检查 Typeless 工具集的新版本');
+  }
+  const summary=document.getElementById('toolkitUpdateSummary');
+  const progress=document.getElementById('toolkitUpdateProgress');
+  const notes=document.getElementById('toolkitUpdateNotes');
+  const action=document.getElementById('toolkitUpdateActionBtn');
+  const release=document.getElementById('toolkitUpdateReleaseBtn');
+  const boundary=document.getElementById('toolkitUpdateBoundary');
+  if(!summary||!action) return;
+  if(checking&&!d?.available&&!d?.error){
+    summary.textContent='正在检查 GitHub Release…'; action.textContent='检查更新'; action.disabled=true;
+    progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
+  }
+  if(d.error && !u){
+    summary.textContent='检查更新失败：'+d.error; action.textContent='重试检查'; action.disabled=false;
+    progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
+  }
+  if(!d.available){
+    summary.textContent='当前已是最新版本 v'+(d.current_version||'');
+    action.textContent='重新检查'; action.disabled=!!d.running;
+    progress.textContent=d.error||''; notes.style.display='none'; release.style.display=u?.release_url?'':'none';
+    if(release) release.style.display=u?.release_url?'':'none';
+    if(boundary) boundary.textContent='更新检查只读取 GitHub Release 元数据，不会读取账号、词库或配置。';
+    return;
+  }
+  summary.textContent=`发现 Typeless 工具集 v${d.version}（当前 v${d.current_version}）`;
+  notes.textContent=u?.notes||'该版本未提供更新说明。'; notes.style.display='';
+  if(release) release.style.display=u?.release_url?'':'none';
+  if(u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){
+    progress.textContent=TOOLKIT_UPDATE_SHARED_BACKEND
+      ? '此窗口复用了其他工具集的本地服务，为避免替换仍在使用的程序，请从 Release 手动更新。'
+      : (u.error||d.manual_install_reason||'当前安装只能手动更新。');
+    action.textContent='前往 Release 手动更新'; action.disabled=!u.release_url;
+  }else if(d.state==='downloading'){
+    const p=d.progress||{};
+    progress.textContent=p.total
+      ? `正在下载并校验：${updateBytes(p.downloaded)} / ${updateBytes(p.total)}（${p.percent||0}%）`
+      : `正在下载并校验：${updateBytes(p.downloaded)}`;
+    action.textContent='下载中…'; action.disabled=true;
+  }else if(d.state==='downloaded'){
+    progress.textContent='更新包 SHA-256 校验通过。';
+    action.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG'; action.disabled=false;
+  }else if(d.state==='installing'){
+    progress.textContent='即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
+    action.textContent='正在安装…'; action.disabled=true;
+  }else {
+    progress.textContent=d.error||'';
+    action.textContent=d.state==='error'?'重新下载':'下载更新'; action.disabled=false;
+  }
+  if(boundary){
+    const result=d.last_result?.message ? `上次更新：${d.last_result.message}` : '';
+    boundary.textContent=(d.platform==='macos'
+      ? 'macOS 当前采用 ad-hoc 签名：这里只会校验下载并打开 DMG，仍需你将 App 拖入“应用程序”完成替换。'
+      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。')) + (result?`\n${result}`:'');
+  }
+}
+async function refreshToolkitUpdate(announce=false){
+  if(TOOLKIT_UPDATE?.running||['downloading','downloaded','installing'].includes(TOOLKIT_UPDATE?.state)){
+    renderToolkitUpdate(); return TOOLKIT_UPDATE;
+  }
+  try{
+    const r=await apiTimed('/api/toolkit-update',{},25000);
+    if(r.status!=='OK') throw new Error(r.msg||'检查失败');
+    TOOLKIT_UPDATE=r.data||null;
+    if(announce && TOOLKIT_UPDATE?.available&&!TOOLKIT_UPDATE_NOTIFIED){
+      TOOLKIT_UPDATE_NOTIFIED=true;
+      toast('发现工具集 v'+TOOLKIT_UPDATE.version+'，可在“设置 → 关于与更新”查看','ok');
+    }
+  }catch(e){
+    TOOLKIT_UPDATE={state:'error',running:false,error:e.message||'检查更新失败'};
+  }
+  renderToolkitUpdate();
+  return TOOLKIT_UPDATE;
+}
+function startToolkitUpdatePoll(){
+  if(TOOLKIT_UPDATE_POLL) clearInterval(TOOLKIT_UPDATE_POLL);
+  TOOLKIT_UPDATE_POLL=setInterval(async()=>{
+    try{
+      const r=await api('/api/toolkit-update/status');
+      if(r.status!=='OK') return;
+      TOOLKIT_UPDATE=r.data||TOOLKIT_UPDATE; renderToolkitUpdate();
+      if(!TOOLKIT_UPDATE?.running){ clearInterval(TOOLKIT_UPDATE_POLL); TOOLKIT_UPDATE_POLL=null; }
+    }catch(e){}
+  },500);
+}
+async function openToolkitUpdate(){
+  renderToolkitUpdate(); openModal('toolkitUpdateMask');
+  if(!TOOLKIT_UPDATE||!TOOLKIT_UPDATE.available||TOOLKIT_UPDATE.state==='error') await refreshToolkitUpdate(false);
+  renderToolkitUpdate();
+}
+function openToolkitUpdateRelease(){
+  const url=TOOLKIT_UPDATE?.update?.release_url;
+  if(url) window.open(url,'_blank');
+}
+async function downloadToolkitUpdate(){
+  const d=TOOLKIT_UPDATE;
+  if(!d?.available){ await refreshToolkitUpdate(false); return; }
+  if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
+  if(d.state==='downloaded'){
+    if(d.platform==='macos'){
+      const result=await window.typelessToolkitDesktop?.openToolkitUpdateFile?.(d.download_path);
+      if(result?.ok) toast('已在 Finder 中打开 DMG，请拖入“应用程序”完成替换','ok');
+      else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
+      return;
+    }
+    if(!confirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。`)) return;
+    const r=await api('/api/toolkit-update/install',{method:'POST',body:'{}'});
+    if(r.status!=='OK'){ toast(r.msg||'准备更新失败','err'); return; }
+    TOOLKIT_UPDATE={...TOOLKIT_UPDATE,state:'installing',running:true}; renderToolkitUpdate();
+    toast('准备完成，正在退出并安装更新…','ok');
+    try{ window.chrome?.webview?.postMessage('toolkit-update:quit'); }
+    catch(e){ toast('请从托盘菜单退出工具集，更新程序会在退出后继续','err'); }
+    return;
+  }
+  const r=await api('/api/toolkit-update/download',{method:'POST',body:'{}'});
+  if(r.status!=='OK'){ toast(r.msg||'开始下载失败','err'); return; }
+  TOOLKIT_UPDATE=r.data||TOOLKIT_UPDATE; renderToolkitUpdate(); startToolkitUpdatePoll();
 }
 async function installOfficialUpdate(){
-  const st=await api('/api/official-update'), d=st.data||{};
-  if(!d.available){ toast(d.reason||'当前没有可安装的官方更新','err'); return; }
-  if(!confirm(`安装 Typeless 官方 ${d.pending.version}?\n\n将校验官方更新包与开发者签名,完整备份当前 Typeless.app 后再替换并重启。\n升级会清除当前弹窗补丁并恢复官方签名。`)) return;
+  if(OFFICIAL_UPDATE_BUSY) return;
+  const displayedVersion=OFFICIAL_UPDATE?.pending?.version;
+  const d=await refreshOfficialUpdate();
+  if(!d?.supported||!d.available){ toast(d?.error||d?.reason||'当前没有可安装的官方更新','err'); return; }
+  if(d.pending.version!==displayedVersion){ toast('本地更新包已变化，请确认新版本后再安装'); return; }
+  closeModal('officialUpdateMask');
   const action=()=>performOfficialUpdate(d);
   if(!(await requestMacAppManagement(action))) return;
   await action();
 }
 async function performOfficialUpdate(updateStatus){
-  const btn=document.getElementById('officialUpdateBtn');
-  btn.disabled=true; btn.textContent='更新中…';
+  if(OFFICIAL_UPDATE_BUSY) return;
+  OFFICIAL_UPDATE_BUSY=true; renderOfficialUpdate();
   try {
     const r=await api('/api/official-update/install',{
       method:'POST', body:JSON.stringify({app_management_confirmed:true})
@@ -1068,7 +1736,7 @@ async function performOfficialUpdate(updateStatus){
       showPaywallPermissionPrompt(r.msg||'请开启 App 管理权限后继续。',()=>performOfficialUpdate(updateStatus));
     }else toast(r.msg||'官方升级失败','err');
   } catch(e) { toast('官方升级请求失败:'+e.message,'err'); }
-  finally { btn.disabled=false; refreshOfficialUpdate(); }
+  finally { OFFICIAL_UPDATE_BUSY=false; refreshOfficialUpdate(); }
 }
 async function backup(){
   toast('备份中…');
@@ -1082,7 +1750,12 @@ async function saveSnap(){
   else toast(r.msg||'保存失败','err');
   await loadAccounts();
 }
-function rmAccount(){ if(!curDetail) return; if(!confirm('从管理器移除「'+curDetail.nickname+'」?(不影响 Typeless)')) return; fetch('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'}).then(()=>{closeModal('detailMask');loadAccounts();toast('已移除','ok');}); }
+async function rmAccount(){
+  if(!curDetail || !confirm('从管理器移除「'+curDetail.nickname+'」?\n\n若已启用 WebDAV 账号同步，其他设备也会同步移除这条管理记录。不会注销 Typeless 账号。')) return;
+  const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'});
+  if(r.status!=='OK'){ toast(r.msg||'移除失败','err'); return; }
+  closeModal('detailMask'); await loadAccounts(); toast('已移除','ok');
+}
 
 function addAccount(){
   openModal('addMask');
@@ -1380,7 +2053,11 @@ async function fetchEnv(){
     const permissionBtn=document.getElementById('macPermissionBtn');
     if(updateBtn) updateBtn.style.display=e.platform==='macos'?'':'none';
     if(permissionBtn) permissionBtn.style.display=e.platform==='macos'?'':'none';
+    document.getElementById('macPermissionCard').hidden=e.platform!=='macos';
+    document.getElementById('officialUpdateCard').hidden=e.platform!=='macos';
+    document.getElementById('windowsPermissionNote').hidden=e.platform!=='windows';
     const osName={windows:'Windows',macos:'macOS'}[e.platform]||e.platform;
+    b.dataset.state=!e.exe_found?'missing':e.typeless_running?'running':'stopped';
     if(e.exe_found){
       b.textContent=osName+(e.typeless_running?' · 运行中':'');
       const tips=['平台 '+osName, 'Typeless: '+e.typeless_exe];
@@ -1438,7 +2115,9 @@ async function detectCurrent(manual=false){
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
   if(SC_STATE.recordingId){ stopRecordShortcut(); return; }
-  document.querySelectorAll('.mask.on').forEach(m=>{
+  const masks=document.querySelectorAll('.mask.on');
+  if(!masks.length&&!document.getElementById('settingsPage').hidden){ closeSettings(); return; }
+  masks.forEach(m=>{
     if(m.id==='shortcutMask') closeShortcuts();
     else m.classList.remove('on');
   });
@@ -1450,16 +2129,21 @@ document.addEventListener('keydown',e=>{
   await refreshPaywallMaintenanceStatus();
   detectCurrent();
   refreshOfficialUpdate();
+  setTimeout(()=>refreshToolkitUpdate(true),1200);
   refreshDictionarySyncStatus();
+  refreshAccountSyncStatus();
 })();
 refreshOnboardingStatus();
 // 每 20 秒自动探测一次,避免手动刷新
 setInterval(detectCurrent, 20000);
 // 只轮询轻量状态，不在页面轮询中直接触发词库写操作
 setInterval(refreshDictionarySyncStatus, 12000);
+setInterval(refreshAccountSyncStatus, 20000);
 // 弹窗维护由后端执行；页面只读取状态并在需要用户同意时展示一次明确引导。
 setInterval(refreshPaywallMaintenanceStatus, 4000);
+setInterval(()=>refreshToolkitUpdate(false), 6*60*60*1000);
 window.addEventListener('focus',async()=>{
+  if(ENV_INFO?.platform==='macos'&&Date.now()-OFFICIAL_UPDATE_CHECKED_AT>30000) refreshOfficialUpdate();
   const mask=document.getElementById('paywallPermissionMask');
   if(!mask?.classList.contains('on')||PAYWALL_FOCUS_RETRY_BUSY) return;
   PAYWALL_FOCUS_RETRY_BUSY=true;
