@@ -473,6 +473,7 @@
 
   <div class="settings-panel settings-stack" id="settings-maintenance" role="tabpanel" aria-labelledby="settingsTabMaintenance" hidden>
     <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-shield"/></svg>弹窗自动维护</h3><p>启动、账号变更及官方更新后自动检查。平时无需手动操作，首页会持续显示状态。</p><p id="maintenanceState" role="status">正在读取维护状态…</p></div><button class="btn" onclick="patchPaywall()">立即检查</button></section>
+    <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-refresh"/></svg>设备标识重置</h3><p>遇到设备登录数量受限等问题时可手动尝试；普通切号不会自动重置。</p><p id="resetDeviceDescription">会清除 Typeless 当前登录状态并重启到登录页；保留工具集已保存的账号、快照和词库。可登录已有账号，不需要注册新账号。</p></div><button class="btn danger" id="resetDeviceBtn" onclick="resetDeviceOnly()" aria-describedby="resetDeviceDescription">重置设备</button></section>
     <section class="settings-card settings-row" id="macPermissionCard" hidden><div><h3>macOS 权限</h3><p>区分工具集的 App 管理权限与 Typeless 本体的辅助功能、麦克风权限。</p><p>需要授权时仍会主动提示；这里保留说明和旧权限修复入口。</p></div><button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()">查看权限与修复</button></section>
     <p class="settings-platform-note" id="windowsPermissionNote" hidden>Windows 无需配置 macOS 的 App 管理、辅助功能和麦克风授权。</p>
   </div>
@@ -1237,6 +1238,23 @@ async function runAccountSync(){
     if(r.status==='OK'){ await loadAccounts(); refreshDictionarySyncStatus(); }
     refreshAccountSyncStatus();
   }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('账号同步失败','err'); }
+}
+async function resetDeviceOnly(){
+  const btn=document.getElementById('resetDeviceBtn');
+  if(btn.disabled) return;
+  if(!confirm('确认重置本机 Typeless 设备标识?\n\n将尝试保存当前账号快照，清理设备凭据、缓存及当前登录状态，并重启 Typeless 到登录页。\n工具集已保存的账号、快照和词库不会删除。\n\n重置后可登录已有账号，不需要注册新账号。是否继续？')) return;
+  btn.disabled=true;
+  btn.textContent='正在重置…';
+  toast('正在重置设备，Typeless 将关闭并重新打开…');
+  try{
+    const r=await apiTimed('/api/reset-device',{method:'POST'},60000);
+    if(r.status==='OK'){
+      toast('已执行设备重置，请在 Typeless 登录页登录需要使用的账号','ok');
+      await loadAccounts();
+      await detectCurrent();
+    }else toast(r.msg||'设备重置失败','err');
+  }catch(e){ toast('设备重置请求失败：'+(e.message||e)+'。请检查 Typeless 当前状态后再操作。','err'); }
+  finally{ btn.disabled=false; btn.textContent='重置设备'; }
 }
 async function switchTo(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
