@@ -204,6 +204,9 @@ manager.js（Node，共享业务后端）
 - 用户反馈连续四包重建时 Tauri 的 DMG 布局步骤反复弹出 Finder 窗口并打断输入。已确认不是安装四份软件：本机只使用 arm64 Portable，其余三包仅为发布产物；所有挂载与构建进程已结束。最后一次逐包验证改用无界面挂载，后续不再重复构建或安装。最后一次重建相对已安装候选只更新包内 README 文案，不为此再次重启用户 App。
 - 用户已验收当前候选并授权：最终验证通过后提交 PR、合并并发布 Release；正式发布采用 v1.8.0。本机最终改装 arm64 Lite，复用并记忆现有 NVM Node，不保留其他测试安装。
 - 发布前复核已完成第一轮：`npm run check` 152/152，通过 Rust fmt、clippy、check、Entitlements 与 diff 检查；四个 v1.7.1 最终候选均通过无界面挂载的包结构和隔离 manager/API smoke。正式四包由 GitHub Actions 在 v1.8.0 标签上重建，避免本机 DMG 布局反复唤起 Finder。
+- 已创建中文标题 PR #25 并在提交 `82eafb9` 上触发分支预构建。发布阻断审查发现 Tauri swap/restore 仍固定写入 `/Applications/Typeless.app`，会破坏既有的 `~/Applications` 与自定义 `typeless_exe` 支持；已取消该次预构建，改为由 Node 把实际探测到的目标 App 明确传给 Rust，swap 和 restore 必须使用同一目标。
+- 该次远端 macOS 构建还暴露了干净 checkout 缺少生成态 `assets/icon-rounded.png`：构建脚本错误地在图标生成前准备 bundle。本地之所以未暴露，是旧生成文件仍在工作区。已调整为先从跟踪的 `icon/icon.png` 生成图标，再准备公开 bundle；修复后重新运行完整预构建。
+- 同轮审查发现 Tauri 完成官方更新 swap 后，Node 的官方签名/版本二次校验若失败，原 catch 只处理旧 Node 安装路径，未调用 Rust 恢复已创建的备份。已给官方更新接入配对的宿主恢复回调，失败时复用同一备份恢复同一 `target_app`，不增加第二份备份。
 
 ## 9. 决策日志
 

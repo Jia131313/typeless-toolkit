@@ -539,6 +539,7 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
         operationPhase = '由桌面宿主替换 Typeless.app';
         const swap = await tauriHost.request('swap_typeless_app', {
           staging_app: appStaging.app,
+          target_app: TYPELESS_APP,
           operation: 'paywall-patch',
         });
         appBackup = swap.backup ? { app: swap.backup } : null;
@@ -566,7 +567,10 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       try {
         killTypeless(); await sleep(500);
         if (IS_MAC && tauriHost.available && hostSwapCompleted && appBackup?.app) {
-          await tauriHost.request('restore_typeless_backup', { backup: appBackup.app });
+          await tauriHost.request('restore_typeless_backup', {
+            backup: appBackup.app,
+            target_app: TYPELESS_APP,
+          });
         } else if (IS_MAC && !tauriHost.available) {
           if (appBackup) restoreTypelessAppBackup(appBackup);
         } else if (!IS_MAC) {
@@ -1086,9 +1090,16 @@ const server = http.createServer(async (req, res) => {
           userDataDir: USERDATA_DIR,
           launchInstalledApp: false,
           swapStagedApp: tauriHost.available
-            ? ({ stagingApp, operation }) => tauriHost.request('swap_typeless_app', {
+            ? ({ stagingApp, targetApp, operation }) => tauriHost.request('swap_typeless_app', {
               staging_app: stagingApp,
+              target_app: targetApp,
               operation,
+            })
+            : null,
+          restoreStagedApp: tauriHost.available
+            ? ({ backupApp, targetApp }) => tauriHost.request('restore_typeless_backup', {
+              backup: backupApp,
+              target_app: targetApp,
             })
             : null,
         });

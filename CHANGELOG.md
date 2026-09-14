@@ -14,7 +14,7 @@
 ### 原生宿主与权限
 
 - Tauri 宿主负责单实例、WKWebView、主题、外链、隐私设置跳转、退出回收和 Node 后端生命周期；关闭窗口只隐藏，重新打开恢复同一实例，`Cmd-Q` 才结束宿主与后端。
-- 去弹窗补丁和 Typeless 官方更新先由 Node 在外置 staging 中准备候选 App，再由 Rust 主程序备份、替换 `/Applications/Typeless.app` 并在失败时恢复，使 Portable 与 Lite 使用同一个 App 管理权限主体。
+- 去弹窗补丁和 Typeless 官方更新先由 Node 在外置 staging 中准备候选 App，再由 Rust 主程序按实际探测路径备份、替换并在失败时恢复 Typeless.app；保留 `~/Applications` 与自定义路径支持，同时使 Portable 与 Lite 使用同一个 App 管理权限主体。
 - 保留面向 Typeless 本体的 `@electron/fuses` 和定向签名逻辑；删除的只是工具集自身旧 Electron host/preload 与构建路径。
 
 ### 验证与体积

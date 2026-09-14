@@ -106,8 +106,8 @@ if (!fs.existsSync(tauriCli)) throw new Error(`Tauri CLI is not installed: ${tau
 if (!fs.existsSync(path.join(tauriDir, 'tauri.conf.json'))) throw new Error('Missing src-tauri/tauri.conf.json');
 
 const builds = selectedBuilds();
-run(process.execPath, [path.join(__dirname, 'prepare-tauri-bundle.js')]);
 run('/usr/bin/swift', [path.join(projectRoot, buildConfig.paths.iconGenerator)]);
+run(process.execPath, [path.join(__dirname, 'prepare-tauri-bundle.js')]);
 fs.mkdirSync(distDir, { recursive: true });
 
 for (const { arch, edition } of builds) {

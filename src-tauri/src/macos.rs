@@ -11,7 +11,6 @@ use tauri::{AppHandle, Manager, Theme};
 
 const TOOLKIT_BUNDLE_ID: &str = "com.typeless-toolkit.manager";
 const TYPELESS_BUNDLE_ID: &str = "now.typeless.desktop";
-const TYPELESS_APP: &str = "/Applications/Typeless.app";
 
 #[derive(Debug, Serialize)]
 pub struct HostError {
@@ -242,6 +241,7 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
     }
     verify_app(&staged_app)
         .map_err(|message| HostError::new("INVALID_STAGING", message, Some("verify-staging")))?;
+    let target = target_app(params)?;
 
     if typeless_running() {
         return Err(HostError::new(
@@ -251,15 +251,7 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
         ));
     }
 
-    let target = Path::new(TYPELESS_APP);
-    if !target.is_dir() {
-        return Err(HostError::new(
-            "TARGET_NOT_FOUND",
-            "未找到 /Applications/Typeless.app",
-            Some("preflight"),
-        ));
-    }
-    let previous_requirement = code_requirement(target).ok();
+    let previous_requirement = code_requirement(&target).ok();
     let backup_dir = data_dir
         .join("backups/typeless-app")
         .join(format!("{operation}-{}.noindex", timestamp_for_path()));
@@ -267,26 +259,26 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
         HostError::new("SWAP_FAILED", error.to_string(), Some("create-backup-dir"))
     })?;
     let backup_app = backup_dir.join("Typeless.app.backup");
-    copy_app(target, &backup_app)
+    copy_app(&target, &backup_app)
         .map_err(|message| HostError::new("SWAP_FAILED", message, Some("backup-current")))?;
 
     let install_result = (|| -> Result<(), HostError> {
-        fs::remove_dir_all(target).map_err(|error| {
+        fs::remove_dir_all(&target).map_err(|error| {
             HostError::new(
                 permission_code(&error.to_string()),
                 format!("无法移除现有 Typeless.app: {error}"),
                 Some("remove-current"),
             )
         })?;
-        copy_app(&staged_app, target).map_err(|message| {
+        copy_app(&staged_app, &target).map_err(|message| {
             HostError::new(permission_code(&message), message, Some("install-staging"))
         })?;
-        verify_app(target)
+        verify_app(&target)
             .map_err(|message| HostError::new("SWAP_FAILED", message, Some("verify-installed")))
     })();
 
     if let Err(error) = install_result {
-        let restoration = restore_backup(&backup_app, target);
+        let restoration = restore_backup(&backup_app, &target);
         let message = match restoration {
             Ok(()) => format!("{}；已恢复原 Typeless.app", error.message),
             Err(restore_error) => format!("{}；恢复原 App 失败: {restore_error}", error.message),
@@ -294,7 +286,7 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
         return Err(HostError::new(&error.code, message, error.phase.as_deref()));
     }
 
-    let current_requirement = code_requirement(target).ok();
+    let current_requirement = code_requirement(&target).ok();
     let identity_changed = previous_requirement != current_requirement;
     let privacy_reset = if identity_changed {
         match reset_tcc(TYPELESS_BUNDLE_ID, &["Accessibility", "Microphone"]) {
@@ -316,7 +308,8 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
     mark_app_management_authorized(data_dir)?;
 
     Ok(json!({
-        "installed_app": TYPELESS_APP,
+        "installed_app": target,
+        "target_app": target,
         "backup": backup_app,
         "previous_requirement": previous_requirement,
         "current_requirement": current_requirement,
@@ -357,6 +350,7 @@ pub fn restore_typeless_backup(params: &Value, data_dir: &Path) -> Result<Value,
     }
     verify_app(&backup)
         .map_err(|message| HostError::new("INVALID_BACKUP", message, Some("verify-backup")))?;
+    let target = target_app(params)?;
     if typeless_running() {
         return Err(HostError::new(
             "TARGET_RUNNING",
@@ -365,16 +359,15 @@ pub fn restore_typeless_backup(params: &Value, data_dir: &Path) -> Result<Value,
         ));
     }
 
-    let target = Path::new(TYPELESS_APP);
-    let previous_requirement = code_requirement(target).ok();
-    restore_backup(&backup, target).map_err(|message| {
+    let previous_requirement = code_requirement(&target).ok();
+    restore_backup(&backup, &target).map_err(|message| {
         HostError::new(
             permission_code(&message),
             format!("无法恢复 Typeless.app: {message}"),
             Some("restore-backup"),
         )
     })?;
-    let current_requirement = code_requirement(target).ok();
+    let current_requirement = code_requirement(&target).ok();
     let identity_changed = previous_requirement != current_requirement;
     let privacy_reset = if identity_changed {
         match reset_tcc(TYPELESS_BUNDLE_ID, &["Accessibility", "Microphone"]) {
@@ -395,13 +388,49 @@ pub fn restore_typeless_backup(params: &Value, data_dir: &Path) -> Result<Value,
     };
     mark_app_management_authorized(data_dir)?;
     Ok(json!({
-        "installed_app": TYPELESS_APP,
+        "installed_app": target,
+        "target_app": target,
         "backup": backup,
         "previous_requirement": previous_requirement,
         "current_requirement": current_requirement,
         "identity_changed": identity_changed,
         "privacy_reset": privacy_reset
     }))
+}
+
+fn target_app(params: &Value) -> Result<PathBuf, HostError> {
+    let requested = params
+        .get("target_app")
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
+        .ok_or_else(|| HostError::new("INVALID_ARGUMENT", "缺少 target_app", None))?;
+    if !requested.is_absolute()
+        || requested.extension().and_then(|value| value.to_str()) != Some("app")
+        || !requested.is_dir()
+    {
+        return Err(HostError::new(
+            "INVALID_TARGET",
+            "target_app 必须是现存的绝对 .app Bundle 路径",
+            Some("validate-target"),
+        ));
+    }
+    let target = fs::canonicalize(requested).map_err(|error| {
+        HostError::new(
+            "INVALID_TARGET",
+            format!("无法读取 target_app: {error}"),
+            Some("validate-target"),
+        )
+    })?;
+    let bundle_id = bundle_identifier(&target)
+        .map_err(|message| HostError::new("INVALID_TARGET", message, Some("validate-target")))?;
+    if bundle_id != TYPELESS_BUNDLE_ID {
+        return Err(HostError::new(
+            "INVALID_TARGET",
+            format!("target_app Bundle ID 必须是 {TYPELESS_BUNDLE_ID}，实际为 {bundle_id}"),
+            Some("validate-target"),
+        ));
+    }
+    Ok(target)
 }
 
 fn restore_backup(backup: &Path, target: &Path) -> Result<(), String> {
