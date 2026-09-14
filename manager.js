@@ -9,6 +9,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { runtimeOptions, tauriHost } = require('./lib/tauri-host');
 
 const C = require('./lib/common');
 const {
@@ -24,7 +25,7 @@ const {
   readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
-  createTypelessAppBackup, restoreTypelessAppBackup, verifyTypelessAppSignature,
+  createTypelessAppBackup, createTypelessAppStaging, restoreTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
   readMaster, writeMaster, replaceMasterTerms,
   readDictionarySyncMeta, writeDictionarySyncMeta,
@@ -512,6 +513,8 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
     const rollbackAsar = IS_MAC ? null : ASAR_PATH + '.toolkit-rollback';
     const rollbackExe = IS_MAC ? null : TYPELESS_EXE + '.toolkit-rollback';
     let appBackup = null;
+    let appStaging = null;
+    let hostSwapCompleted = false;
     let result = null;
     let operationError = null;
     let operationPhase = '关闭 Typeless';
@@ -520,13 +523,38 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
     try {
       operationPhase = '创建补丁前备份';
       if (IS_MAC) {
-        appBackup = createTypelessAppBackup('paywall-patch');
+        if (tauriHost.available) appStaging = createTypelessAppStaging('paywall-patch');
+        else appBackup = createTypelessAppBackup('paywall-patch');
       } else {
         fs.copyFileSync(ASAR_PATH, rollbackAsar);
         fs.copyFileSync(TYPELESS_EXE, rollbackExe);
       }
       operationPhase = '修改付费墙与 Electron 完整性配置';
-      result = await patchPaywall();
+      result = await patchPaywall(tauriHost.available ? {
+        executable: appStaging.executable,
+        staging: true,
+        deferPrivacyReset: true,
+      } : {});
+      if (IS_MAC && tauriHost.available) {
+        operationPhase = '由桌面宿主替换 Typeless.app';
+        const swap = await tauriHost.request('swap_typeless_app', {
+          staging_app: appStaging.app,
+          operation: 'paywall-patch',
+        });
+        appBackup = swap.backup ? { app: swap.backup } : null;
+        hostSwapCompleted = true;
+        result.host_swap = swap;
+        if (result.resign && typeof swap.identity_changed === 'boolean') {
+          result.resign.identity_changed = swap.identity_changed;
+          result.resign.privacy_reset = swap.privacy_reset || null;
+        }
+        result.msg = '补丁已打好,升级/会员弹窗将不再弹出(重启 Typeless 生效)' +
+          (swap.identity_changed
+            ? (swap.privacy_reset?.ok
+              ? ';已完成 ad-hoc 重签名，并清理签名变化前的旧权限记录。Typeless 重新启动后只需按系统提示为本体重新授权一次'
+              : ';已完成 ad-hoc 重签名，但自动清理旧权限记录失败。请在工具集的“macOS 权限说明”中执行一次清理后重新授权')
+            : ';已保留当前代码身份并完成严格签名验证');
+      }
       operationPhase = '验证 macOS 代码签名';
       if (IS_MAC) verifyTypelessAppSignature();
       operationPhase = '启动补丁版 Typeless';
@@ -537,9 +565,11 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       operationError = error;
       try {
         killTypeless(); await sleep(500);
-        if (IS_MAC) {
+        if (IS_MAC && tauriHost.available && hostSwapCompleted && appBackup?.app) {
+          await tauriHost.request('restore_typeless_backup', { backup: appBackup.app });
+        } else if (IS_MAC && !tauriHost.available) {
           if (appBackup) restoreTypelessAppBackup(appBackup);
-        } else {
+        } else if (!IS_MAC) {
           if (rollbackAsar && fs.existsSync(rollbackAsar)) fs.copyFileSync(rollbackAsar, ASAR_PATH);
           if (rollbackExe && fs.existsSync(rollbackExe)) fs.copyFileSync(rollbackExe, TYPELESS_EXE);
         }
@@ -558,6 +588,9 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
         try { if (rollbackAsar) fs.unlinkSync(rollbackAsar); } catch (error) {}
         try { if (rollbackExe) fs.unlinkSync(rollbackExe); } catch (error) {}
       }
+      if (appStaging?.staging_dir) {
+        try { fs.rmSync(appStaging.staging_dir, { recursive: true, force: true }); } catch (error) {}
+      }
     }
 
     if (operationError) {
@@ -572,7 +605,9 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       });
       const details = [
         `打补丁失败（${operationPhase}）:` + operationError.message,
-        rollbackError ? '完整回滚失败:' + rollbackError.message : '已恢复补丁前版本',
+        rollbackError
+          ? '完整回滚失败:' + rollbackError.message
+          : (tauriHost.available ? '未替换或已由桌面宿主恢复补丁前版本' : '已恢复补丁前版本'),
         restartError ? '恢复后自动启动失败:' + restartError.message : null,
         appBackup && appBackup.app ? '完整备份:' + appBackup.app : null,
         '诊断日志:' + diagnosticLog,
@@ -588,7 +623,7 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       throw error;
     }
     if (appBackup && appBackup.app) result.backup = appBackup.app;
-    if (IS_MAC) markToolkitAppManagementAuthorized();
+    if (IS_MAC && !tauriHost.available) markToolkitAppManagementAuthorized();
     return result;
   })();
 
@@ -605,7 +640,7 @@ const paywallMaintenance = createPaywallMaintenanceController(
   isTypelessRunning,
   // macOS 源码模式由 Terminal/Node 承担 TCC 身份，不能替打包后的工具集申请 App 管理。
   {
-    automaticEnabled: !IS_MAC || !!process.versions.electron,
+    automaticEnabled: !IS_MAC || tauriHost.available,
     // 定期检查先比较元数据；Typeless 程序未变化时不复制和解析整个 app.asar。
     fingerprintFn: () => {
       const stat = fs.statSync(ASAR_PATH);
@@ -615,16 +650,20 @@ const paywallMaintenance = createPaywallMaintenanceController(
 );
 
 const TOOLKIT_VERSION = require('./package.json').version;
-const toolkitBackendOwned = process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
-  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..');
+const toolkitBackendOwned = tauriHost.available || (
+  process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
+  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..')
+);
 const toolkitUpdate = createToolkitUpdateController({
   platform: IS_MAC ? 'darwin' : 'win32',
   codeRoot: C.CODE_DIR,
   dataRoot: ROOT,
   currentVersion: TOOLKIT_VERSION,
   parentPid: process.pid,
-  hostPid: Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
+  hostPid: runtimeOptions.hostPid || Number(process.env.TYPELESS_TOOLKIT_HOST_PID || 0) || process.pid,
   backendOwned: toolkitBackendOwned,
+  flavor: IS_MAC ? runtimeOptions.edition : undefined,
+  arch: IS_MAC ? runtimeOptions.arch : undefined,
 });
 
 // ---------- HTTP ----------
@@ -962,6 +1001,27 @@ const server = http.createServer(async (req, res) => {
         return send(res, 500, { status: 'FAIL', msg: '完成新号流程失败:' + e.message });
       }
     }
+    if (m === 'POST' && p === '/api/desktop-host') {
+      const body = await readBody(req);
+      if (!tauriHost.available) {
+        return send(res, 409, { status: 'FAIL', msg: '当前不是 Tauri 桌面宿主模式' });
+      }
+      const methods = new Set([
+        'set_theme',
+        'open_privacy_settings',
+        'reset_privacy_permissions',
+        'open_toolkit_update_file',
+      ]);
+      if (!methods.has(body.method)) {
+        return send(res, 400, { status: 'FAIL', msg: '不支持的桌面宿主操作' });
+      }
+      try {
+        const result = await tauriHost.request(body.method, body.params || {});
+        return send(res, 200, { status: 'OK', data: result });
+      } catch (error) {
+        return send(res, 409, { status: 'FAIL', msg: error.message });
+      }
+    }
     // 查询去弹窗补丁状态(只读)
     if (m === 'GET' && p === '/api/paywall-status') {
       return send(res, 200, { status: 'OK', data: paywallStatus() });
@@ -1025,8 +1085,14 @@ const server = http.createServer(async (req, res) => {
           dataRoot: ROOT,
           userDataDir: USERDATA_DIR,
           launchInstalledApp: false,
+          swapStagedApp: tauriHost.available
+            ? ({ stagingApp, operation }) => tauriHost.request('swap_typeless_app', {
+              staging_app: stagingApp,
+              operation,
+            })
+            : null,
         });
-        if (IS_MAC) markToolkitAppManagementAuthorized();
+        if (IS_MAC && !tauriHost.available) markToolkitAppManagementAuthorized();
       } catch (error) {
         if (isMacAppManagementError(error)) {
           return send(res, 409, {

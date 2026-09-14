@@ -1,8 +1,7 @@
 {
   "name": "typeless-toolkit",
   "version": "1.7.1",
-  "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Electron）。",
-  "main": "electron-main.js",
+  "description": "Typeless 多账号管理、词库同步与桌面工具集（Windows WebView2 / macOS Tauri）。",
   "author": "Typeless Toolkit contributors",
   "private": true,
   "repository": {
@@ -13,15 +12,16 @@
   "type": "commonjs",
   "scripts": {
     "start": "node manager.js",
-    "start:electron": "electron .",
     "sync": "node typeless-dict-sync.js",
-    "check": "node --check electron-main.js && node --check electron-preload.js && node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/desktop-host.js && node --check lib/official-update.js && node --check lib/toolkit-update.js && node --check scripts/prepare-mac-build.js && node --check scripts/hide-mac-build-app.js && node --check scripts/write-mac-checksum.js && node --check scripts/install-mac-build.js && node --check scripts/prepare-release-notes.js && node --test",
-    "prepare:mac": "node scripts/prepare-mac-build.js",
-    "hide:mac-build": "node scripts/hide-mac-build-app.js",
+    "check": "node --check manager.js && node --check typeless-dict-sync.js && node --check lib/common.js && node --check lib/platform.js && node --check lib/desktop-host.js && node --check lib/tauri-host.js && node --check lib/official-update.js && node --check lib/toolkit-update.js && node --check scripts/prepare-tauri-bundle.js && node --check scripts/fetch-mac-node.js && node --check scripts/build-mac-tauri.js && node --check scripts/write-mac-checksum.js && node --check scripts/install-mac-build.js && node --check scripts/prepare-release-notes.js && node --test",
     "generate:icon:mac": "swift scripts/generate-mac-icon.swift",
-    "build:mac": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --arm64 --publish never && npm run hide:mac-build && node scripts/write-mac-checksum.js arm64",
-    "build:mac:universal": "npm run prepare:mac && npm run generate:icon:mac && npm run check && electron-builder --mac dmg --universal --publish never && npm run hide:mac-build && node scripts/write-mac-checksum.js universal",
-    "install:mac": "node scripts/install-mac-build.js arm64",
+    "build:mac": "node scripts/build-mac-tauri.js",
+    "build:mac:all": "node scripts/build-mac-tauri.js all",
+    "build:mac:arm64:portable": "node scripts/build-mac-tauri.js arm64 portable",
+    "build:mac:arm64:lite": "node scripts/build-mac-tauri.js arm64 lite",
+    "build:mac:x64:portable": "node scripts/build-mac-tauri.js x64 portable",
+    "build:mac:x64:lite": "node scripts/build-mac-tauri.js x64 lite",
+    "install:mac": "node scripts/install-mac-build.js",
     "deploy:mac": "npm run build:mac && npm run install:mac"
   },
   "dependencies": {
@@ -29,65 +29,6 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "electron": "43.1.0",
-    "electron-builder": "26.15.3"
-  },
-  "build": {
-    "appId": "com.typeless-toolkit.manager",
-    "productName": "Typeless 工具集",
-    "asar": true,
-    "files": [
-      "electron-main.js",
-      "electron-preload.js",
-      "manager.js",
-      "manager.html",
-      "assets/icon-rounded.png",
-      "icon/icon.png",
-      "typeless-dict-sync.js",
-      "lib/**/*",
-      "config.json",
-      "LICENSE",
-      "node_modules/ws/**/*",
-      "node_modules/@electron/fuses/**/*"
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "assets"
-    },
-    "mac": {
-      "category": "public.app-category.utilities",
-      "icon": "assets/icon.icns",
-      "identity": "-",
-      "hardenedRuntime": true,
-      "strictVerify": true,
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "title": "Typeless 工具集 ${version}",
-      "artifactName": "Typeless-Toolkit-${version}-${arch}.${ext}",
-      "window": {
-        "width": 540,
-        "height": 380
-      },
-      "contents": [
-        {
-          "x": 140,
-          "y": 185
-        },
-        {
-          "x": 400,
-          "y": 185,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    }
+    "@tauri-apps/cli": "2.11.4"
   }
 }

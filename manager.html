@@ -722,6 +722,11 @@
 
 <script>
 const api = (p, opt={}) => fetch(p, { headers:{'Content-Type':'application/json'}, ...opt }).then(r=>r.json());
+async function desktopHost(method,params={}){
+  const response=await api('/api/desktop-host',{method:'POST',body:JSON.stringify({method,params})});
+  if(response.status!=='OK') throw new Error(response.msg||'桌面宿主操作失败');
+  return response.data||{};
+}
 async function apiTimed(p,opt={},timeoutMs=30000){
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{ return await api(p,{...opt,signal:controller.signal}); }
@@ -766,8 +771,8 @@ function showPaywallPermissionPrompt(message, pendingAction){
   }
 }
 function openMacPrivacySettings(section){
-  if(window.typelessToolkitDesktop?.openPrivacySettings){
-    window.typelessToolkitDesktop.openPrivacySettings(section);
+  if(ENV_INFO?.desktop_host==='tauri'){
+    desktopHost('open_privacy_settings',{section}).catch(e=>toast(e.message,'err'));
   }else{
     toast('请在系统设置 → 隐私与安全性中打开对应权限','err');
   }
@@ -800,7 +805,9 @@ async function resetMacPermissions(target){
   const scope=target==='toolkit'?'App 管理及误加的辅助功能':'辅助功能和麦克风';
   if(!confirm(`清除 ${appName} 的旧${scope}权限记录?\n\n这相当于在系统设置里删除旧条目，不会删除应用、账号、词库或快照。清除后需要重新启动 ${appName} 并再次授权。`)) return;
   try{
-    const result=await window.typelessToolkitDesktop?.resetPrivacyPermissions?.(target);
+    const result=ENV_INFO?.desktop_host==='tauri'
+      ? await desktopHost('reset_privacy_permissions',{target})
+      : null;
     if(result?.ok){
       toast(result.message,'ok');
       if(target==='typeless') openMacPrivacySettings('accessibility');
@@ -863,7 +870,7 @@ function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   const preference=localStorage.getItem('tl_theme')||'system';
   document.querySelectorAll('[data-theme-preference]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.themePreference===preference)));
-  try{ window.typelessToolkitDesktop?.setTheme(t); }catch(e){}
+  if(ENV_INFO?.desktop_host==='tauri') desktopHost('set_theme',{theme:t}).catch(()=>{});
   try{ window.chrome.webview.postMessage('theme:'+t); }catch(e){}
 }
 function setThemePreference(preference){
@@ -1674,7 +1681,9 @@ async function downloadToolkitUpdate(){
   if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
   if(d.state==='downloaded'){
     if(d.platform==='macos'){
-      const result=await window.typelessToolkitDesktop?.openToolkitUpdateFile?.(d.download_path);
+      const result=ENV_INFO?.desktop_host==='tauri'
+        ? await desktopHost('open_toolkit_update_file',{file_path:d.download_path})
+        : null;
       if(result?.ok) toast('已在 Finder 中打开 DMG，请拖入“应用程序”完成替换','ok');
       else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
       return;
@@ -2049,6 +2058,7 @@ async function fetchEnv(){
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
     ENV_INFO=e;
+    if(e.desktop_host==='tauri') applyTheme(document.documentElement.getAttribute('data-theme')||'light');
     const updateBtn=document.getElementById('officialUpdateBtn');
     const permissionBtn=document.getElementById('macPermissionBtn');
     if(updateBtn) updateBtn.style.display=e.platform==='macos'?'':'none';
