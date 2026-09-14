@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布 - macOS Tauri 轻量客户端
+## 1.8.0 - macOS Tauri 轻量客户端 (2026-09-14)
 
 本轮只替换 macOS 桌面宿主和发行方式，账号、快照、词库、WebDAV、补丁与官方更新等业务继续复用现有 Node 后端和管理页面；Windows 仍使用 WebView2，不受迁移影响。
 
@@ -17,7 +17,7 @@
 - 去弹窗补丁和 Typeless 官方更新先由 Node 在外置 staging 中准备候选 App，再由 Rust 主程序备份、替换 `/Applications/Typeless.app` 并在失败时恢复，使 Portable 与 Lite 使用同一个 App 管理权限主体。
 - 保留面向 Typeless 本体的 `@electron/fuses` 和定向签名逻辑；删除的只是工具集自身旧 Electron host/preload 与构建路径。
 
-### 当前验证
+### 验证与体积
 
 - arm64 Portable 与 Lite 已在真实安装目录启动，复用原账号数据；主题、单实例、关闭/恢复、退出回收和 Lite Node 路径记忆均通过。
 - 当前候选体积约为 arm64 Lite 6.4 MiB、arm64 Portable 41 MiB、x64 Lite 6.6 MiB、x64 Portable 43 MiB；x64 真实启动仍需 Intel/CI 环境完成。

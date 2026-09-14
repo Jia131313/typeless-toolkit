@@ -1,6 +1,6 @@
 # macOS Tauri 轻量化迁移计划
 
-**状态：** 进行中（仅功能分支，不合并、不发布）
+**状态：** 发布准备中（用户已授权通过验证后提交 PR、合并并发布 v1.8.0）
 
 **分支：** `codex/tauri-macos-migration`
 
@@ -24,7 +24,8 @@
 9. 移植现有单实例、窗口、主题、外链、隐私设置、权限身份变化处理、Toolkit 更新等宿主能力。
 10. 完成替代并确认无引用后，删除 Electron 入口、preload、依赖、构建脚本和失效测试路径。
 11. Windows 保持 C# WinForms + WebView2 + Node，不迁移 Tauri，也不改变现有 Lite/Portable 发布物。
-12. 整条能力闭环并经本机验收前，不合并 `main`，不创建 GitHub Release。
+12. 整条能力闭环并经本机验收前，不合并 `main`，不创建 GitHub Release；2026-09-14 用户已验收当前候选并授权通过最终验证后提交 PR、合并和发布。
+13. 正式发布后，本机只安装 Apple Silicon Lite，复用已有 Node 环境；其他架构和 Portable 仅作为 Release 产物，不保留测试安装。
 
 ## 2. 非目标与边界
 
@@ -131,7 +132,9 @@ manager.js（Node，共享业务后端）
 - [x] 对比四个附件与安装后 App 体积，确认不再含 Electron Framework/Chromium。
 - [x] 验证旧 Electron 文件和依赖已清理；Windows 源码路径未改，实际 Windows 构建由 CI 验证。
 - [x] 将最终 arm64 Portable 候选安装到本机供用户人工验收。
-- [ ] 用户验收后再决定提交、PR、合并和 Release；未授权前不做后三项。
+- [x] 用户已完成候选验收并授权提交 PR、合并和 Release。
+- [ ] 统一 v1.8.0 版本、完成最终检查，通过 PR 合并后由 GitHub Actions 构建并发布。
+- [ ] 安装正式 arm64 Lite，验证自动发现/记忆本机 Node，并清理其他测试安装与临时资源。
 
 ## 6. 验收标准
 
@@ -199,6 +202,8 @@ manager.js（Node，共享业务后端）
 - 已将最终 arm64 Portable 安装到 `/Applications/Typeless 工具集.app`：严格签名验证通过，App 内无 Electron Framework/app.asar；只运行一个 Rust 主程序和一个 arm64 bundled Node，监听 7788。Typeless 本体仍为原 PID 28127。
 - 安装前后账号、主词库、`config.local.json` 与 6 个 profiles 摘要一致；`config.json` 的唯一预期变化是 Lite 验证写入 `node_path`。本轮未产生新的 Typeless App 备份或 staging 残留，也没有遗留临时安装 App。
 - 用户反馈连续四包重建时 Tauri 的 DMG 布局步骤反复弹出 Finder 窗口并打断输入。已确认不是安装四份软件：本机只使用 arm64 Portable，其余三包仅为发布产物；所有挂载与构建进程已结束。最后一次逐包验证改用无界面挂载，后续不再重复构建或安装。最后一次重建相对已安装候选只更新包内 README 文案，不为此再次重启用户 App。
+- 用户已验收当前候选并授权：最终验证通过后提交 PR、合并并发布 Release；正式发布采用 v1.8.0。本机最终改装 arm64 Lite，复用并记忆现有 NVM Node，不保留其他测试安装。
+- 发布前复核已完成第一轮：`npm run check` 152/152，通过 Rust fmt、clippy、check、Entitlements 与 diff 检查；四个 v1.7.1 最终候选均通过无界面挂载的包结构和隔离 manager/API smoke。正式四包由 GitHub Actions 在 v1.8.0 标签上重建，避免本机 DMG 布局反复唤起 Finder。
 
 ## 9. 决策日志
 
@@ -217,4 +222,4 @@ manager.js（Node，共享业务后端）
 ## 10. 当前阻塞与下一步
 
 - 当前无用户侧阻塞。
-- 当前实现、真机闭环、旧路径清理、四包构建与本机安装均已完成；下一步等待用户对已安装候选进行人工验收。未授权前不推送、不提 PR、不合并、不发布 Release。
+- 当前实现、真机闭环、旧路径清理、四包候选验证与用户验收均已完成。正在统一 v1.8.0 版本并执行最终检查；通过后提交 PR、合并并由 GitHub Actions 发布 Release，随后安装正式 arm64 Lite。

@@ -3952,7 +3952,7 @@ checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "typeless-toolkit"
-version = "1.7.1"
+version = "1.8.0"
 dependencies = [
  "plist",
  "serde",
