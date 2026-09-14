@@ -1,8 +1,10 @@
 # macOS Tauri 轻量化迁移计划
 
-**状态：** 进行中（仅功能分支，不合并、不发布）  
-**分支：** `codex/tauri-macos-migration`  
-**基线：** `origin/main` @ `4b4c104`  
+**状态：** 进行中（仅功能分支，不合并、不发布）
+
+**分支：** `codex/tauri-macos-migration`
+
+**基线：** `origin/main` @ `4b4c104`
 **目标：** 用 Tauri 2 + macOS 系统 WKWebView 完整替换 Electron macOS 宿主，同时保留现有业务能力、用户数据路径和 Windows 实现，并按 CPU 架构与 Node 携带方式提供四个更小的 macOS 安装包。
 
 ## 1. 原始需求与已确认决策
@@ -82,53 +84,53 @@ manager.js（Node，共享业务后端）
 - [x] 确认工作区只有既有未跟踪 `output/`，明确保留。
 - [x] 创建 `codex/tauri-macos-migration`。
 - [x] 盘点 Electron 宿主、前端桥、构建、更新、CI、文档和测试耦合。
-- [ ] 完成 Tauri 2 官方机制与最小依赖核对。
-- [ ] 完成宿主/Node/App 管理权限的详细接口设计。
+- [x] 完成 Tauri 2 官方机制与最小依赖核对。
+- [x] 完成宿主/Node/App 管理权限的详细接口设计。
 
 ### 阶段 B：Tauri 宿主最小闭环
 
-- [ ] 安装并验证 Rust/Tauri 2 构建工具链。
-- [ ] 建立 `src-tauri/`，保持产品名、Bundle ID、图标和数据目录。
-- [ ] 创建 WKWebView 窗口并加载已启动的本地管理服务。
-- [ ] 实现单实例、窗口恢复、主题同步、外链限制和正常退出。
-- [ ] 实现 Portable bundled Node 启动。
-- [ ] 实现 Lite Node 发现、版本校验、选择和持久化。
-- [ ] 验证 `/api/env`、`/api/current` 和已有端口服务身份校验。
+- [x] 安装并验证 Rust/Tauri 2 构建工具链。
+- [x] 建立 `src-tauri/`，保持产品名、Bundle ID、图标和数据目录。
+- [x] 创建 WKWebView 窗口并加载已启动的本地管理服务。
+- [x] 实现单实例、窗口恢复、主题同步、外链限制和正常退出。
+- [x] 实现 Portable bundled Node 启动。
+- [x] 实现 Lite Node 发现、版本校验、选择和持久化。
+- [x] 验证 `/api/env`、`/api/current` 和已有端口服务身份校验。
 
 ### 阶段 C：macOS 原生桥与权限闭环
 
-- [ ] 将 Electron preload 的四个桌面操作迁移为 Tauri command。
-- [ ] 移植 Toolkit 自身代码身份比较和旧 TCC 记录清理。
-- [ ] 将 App 管理权限所需的 Typeless.app 最终写入归到 Rust 宿主。
-- [ ] 保持 Typeless 辅助功能/麦克风与 Toolkit App 管理权限的概念和提示分离。
+- [x] 将 Electron preload 的四个桌面操作迁移为 Tauri command。
+- [x] 移植 Toolkit 自身代码身份比较和旧 TCC 记录清理。
+- [x] 将 App 管理权限所需的 Typeless.app 最终写入归到 Rust 宿主。
+- [x] 保持 Typeless 辅助功能/麦克风与 Toolkit App 管理权限的概念和提示分离。
 - [ ] 验证权限设置跳转、返回后的继续操作和身份变化路径。
 
 ### 阶段 D：四包构建与自更新
 
-- [ ] 建立 arm64/x64 × Portable/Lite 构建入口。
-- [ ] 为 Portable 获取并打包对应架构 Node；Lite 不携带 Node。
-- [ ] 统一 App、DMG、checksum 的架构/edition 命名。
-- [ ] 修改 Toolkit 更新发现、摘要、下载和打开/安装路径，严格保持当前 edition。
-- [ ] 修改 CI 为四包矩阵，Windows job 保持原样。
-- [ ] 修改公开包 smoke 验证以识别 Tauri bundle、edition 和 Node 运行方式。
+- [x] 建立 arm64/x64 × Portable/Lite 构建入口。
+- [x] 为 Portable 获取并打包对应架构 Node；Lite 不携带 Node。
+- [x] 统一 App、DMG、checksum 的架构/edition 命名。
+- [x] 修改 Toolkit 更新发现、摘要、下载和打开/安装路径，严格保持当前 edition。
+- [x] 修改 CI 为四包矩阵，Windows job 保持原样。
+- [x] 修改公开包 smoke 验证以识别 Tauri bundle、edition 和 Node 运行方式。
 
 ### 阶段 E：删除 Electron 与统一文档
 
-- [ ] 删除 `electron-main.js`、`electron-preload.js` 和 Electron 专属脚本。
-- [ ] 删除 `electron`、`electron-builder`、`@electron/fuses` 依赖与失效配置。
-- [ ] 调整 Electron 专属测试/断言为 Tauri 边界，保留共享业务验证。
-- [ ] 更新 README、CHANGELOG、Release 指南和发布说明生成器。
-- [ ] 全仓搜索并清除失效的 Universal/Electron/macOS 旧入口引用。
+- [x] 删除 `electron-main.js`、`electron-preload.js` 和 Electron 专属脚本。
+- [x] 删除工具集宿主的 `electron`、`electron-builder` 依赖与失效配置；保留修改 Typeless 本体所需的 `@electron/fuses`。
+- [x] 调整 Electron 专属测试/断言为 Tauri 边界，保留共享业务验证。
+- [x] 更新 README、CHANGELOG、Release 指南和发布说明生成器。
+- [x] 全仓搜索并清除失效的 Universal/Electron/macOS 旧入口引用；历史版本记录与 Typeless 本体 Electron 说明保留。
 
 ### 阶段 F：验证、体积报告与用户验收
 
-- [ ] 运行 `npm ci` / `npm run check`。
-- [ ] 本机实际构建 arm64 Portable 与 Lite，并从最终产物启动验证。
-- [ ] 对 x64 产物完成可在 Apple Silicon 主机上执行的静态/架构/smoke 验证；如运行验证受宿主架构限制，明确记录。
-- [ ] 验证两个 edition 都复用原 Application Support 数据目录，且构建/安装未改动真实用户数据。
-- [ ] 对比四个附件与安装后 App 体积，确认不再含 Electron Framework/Chromium。
-- [ ] 验证旧 Electron 文件和依赖已清理，Windows 构建路径未受影响。
-- [ ] 将候选版安装到本机供用户人工验收。
+- [x] 运行 `npm ci` / `npm run check`。
+- [x] 本机实际构建 arm64 Portable 与 Lite，并从最终产物启动验证。
+- [x] 对 x64 产物完成可在 Apple Silicon 主机上执行的静态/架构/smoke 验证；当前机器没有 Rosetta，真实 x64 GUI 留给 Intel/CI。
+- [x] 验证两个 edition 都复用原 Application Support 数据目录，且构建/安装未改动真实账号、词库或 profiles；Lite 仅按设计记忆 `node_path`。
+- [x] 对比四个附件与安装后 App 体积，确认不再含 Electron Framework/Chromium。
+- [x] 验证旧 Electron 文件和依赖已清理；Windows 源码路径未改，实际 Windows 构建由 CI 验证。
+- [x] 将最终 arm64 Portable 候选安装到本机供用户人工验收。
 - [ ] 用户验收后再决定提交、PR、合并和 Release；未授权前不做后三项。
 
 ## 6. 验收标准
@@ -151,6 +153,8 @@ manager.js（Node，共享业务后端）
 - **跨架构 Node：** Portable 必须携带与目标 Rust 二进制同架构的 Node；构建脚本在打包时校验二进制架构。
 - **x64 本机运行验证：** Apple Silicon 可构建/静态检查 x64，但 Rosetta 状态可能影响真实启动；无法在当前机器完整证明时单独列出，不用 arm64 成功代替 x64 验收。
 - **权限归属改造范围：** 只迁移现有需要 App 管理权限的最终写入，不把全部 `lib/platform.js` 重写成 Rust。
+- **外部页面权限面：** WKWebView 继续打开本地 HTTP 页面，但不给该 remote origin 开放宽泛 Tauri API；页面桌面操作先走 Node API，再经专用宿主协议到 Rust。
+- **Tauri 原生 updater：** 官方 updater 强制 `.app.tar.gz` 签名密钥，与本项目当前只有 SHA-256 的 ad-hoc DMG 发布契约不兼容。本轮继续使用现有 GitHub Release 下载 + DMG 安装动线，只把附件匹配扩展为 `arch + edition`；不为换壳额外引入发布私钥体系。
 - **替代清理：** 仅在 Tauri 路径实际通过验证后删除 Electron 路径，删除后用全仓引用检查证明没有旧入口残留。
 
 ## 8. 进度记录
@@ -161,7 +165,40 @@ manager.js（Node，共享业务后端）
 - 已确认 `main` 和 `origin/main` 无差异，创建功能分支 `codex/tauri-macos-migration`。
 - 已保护既有未跟踪 `output/`，本任务不删除、不提交。
 - 已完成第一轮仓库映射：Tauri 可直接复用 `manager.html`、`manager.js`、`lib/desktop-host.js` 和大部分 `lib/platform.js`；替换范围集中于 Electron host/preload、macOS 构建发布、自更新选包和 Electron 专属 smoke/test。
-- 等待中的只读调研：Tauri 2 官方依赖/构建机制、宿主权限边界详细设计。
+- 已完成 Tauri 2 官方调研：锁定稳定 2.x；Portable 使用官方 Node 原始 runtime 作为 external binary，Lite 不依赖尚未正式发布的 `fix-path-env-rs`。
+- 已确定页面不直接获得通用 Tauri 能力：新增 Node ↔ Rust 的逐行 JSON 宿主协议，页面的桌面操作改走受限本地 API。
+- 已确定去弹窗与官方更新采用“Node 在 Application Support staging 中准备和校验，Rust 对 `/Applications/Typeless.app` 做最终 swap/回滚”的权限边界。
+- 已确认 `@electron/fuses` 仍是 Typeless 本体补丁依赖，不能随工具集 Electron 宿主一起删除。
+- 已用 rustup 官方安装器安装最小稳定工具链：`rustc 1.98.1`、`cargo 1.98.1`，当前已安装目标为 `aarch64-apple-darwin`。
+- 已实现 Toolkit 更新资产的四维精确命名和选择：macOS 同时校验 `arch + edition`，不再接受 Universal 默认包；focused 测试 14/14 通过。
+- 已建立 Node 侧 `lib/tauri-host.js` JSONL client 和显式桌面启动参数，Tauri 模式 stdout 专用于协议、普通日志转 stderr。
+- 已将前端主题、隐私设置、TCC 清理和打开 Toolkit DMG 改为受限 `/api/desktop-host` → Rust 领域命令；原 Electron bridge 在迁移未清理前仅作为旧版兼容路径。
+- 已将 macOS 去弹窗流程改为在 `data/staging` 的 Typeless.app 副本上补丁/重签，然后调用 Rust `swap_typeless_app`；原地写入仅保留给非 Tauri 源码/旧宿主路径。
+- 已为官方更新加入同一 Rust swap 回调边界，原有 SHA-512、版本、Bundle ID、Developer ID、Team ID 和 Gatekeeper 预验证保持不变。
+- 已运行 Node 语法检查、macOS 签名/官方更新/Toolkit 更新 focused 测试 22/22，以及管理器 UI/设置/更新/本地 API 测试 42/42，均通过；未对真实 Typeless.app 执行写入。
+- 已移除 npm 中工具集宿主的 `electron` / `electron-builder`，接入 `@tauri-apps/cli 2.11.4`；`npm run check` 全量 152 项通过。
+- arm64 Lite 首次实际 DMG 构建约 6.4 MiB，挂载后的 Bundle ID、签名、资源、无 Electron Framework 和隔离 API smoke 均通过。
+- arm64 Portable 首次 DMG 约 41 MiB；发现 sidecar 经 Hardened Runtime 签名后 `node --version` 可用但执行 JavaScript 会 `SIGTRAP 133`。已定位为 V8 JIT entitlement 缺失，当前正在修正嵌套 Node 签名配置后重打；该产物暂不计为通过。
+- 已为内置 Node 补齐 V8 JIT 所需的 `allow-jit` 与 `allow-unsigned-executable-memory` entitlement；最新 arm64 Portable DMG 内的 Node 已能执行 JavaScript、启动包内 `manager.js` 并通过隔离 API smoke。
+- 已完成四种发行物的构建与静态/资源验证：arm64 Lite 约 6.4 MiB、arm64 Portable 约 41.0 MiB、x64 Lite 约 6.6 MiB、x64 Portable 约 43.0 MiB；当前机器没有 Rosetta，x64 Portable 的真实运行仍需 Intel/CI 环境证明。
+- 已完成 `npm run check`（152/152）、macOS 签名/官方更新/Toolkit 更新 focused 测试（22/22）、管理器 UI/安全 focused 测试（42/42）、`cargo fmt --check`、`cargo clippy -D warnings`、`cargo check`、Entitlements plist 校验和 `git diff --check`。
+- 已确认上轮误启动的递归 `shasum` 进程已经结束；后续安装前后数据一致性只核对账号、主词库、同步元数据、配置与 `profiles/` 聚合，不扫描 `backups/`、`logs/` 或 `staging/`。
+- 当前准备安装最新 `mac-arm64-portable` 候选，验证真实 Rust → Node → JSONL broker → WKWebView 链路、单实例、窗口生命周期和退出回收；本阶段不执行真实补丁、官方更新、切号或设备重置。
+- 已完成首轮 arm64 Portable 真机安装：Rust 主程序成功启动内置 Node，`/api/env`、`/api/current`、首页、JSONL 宿主命令和主题切换均正常；二次打开保持同一主进程和同一 Node，用户数据摘要与 Typeless 本体进程均未变化。
+- 首轮真机窗口生命周期发现缺陷：点击窗口关闭按钮会结束 Tauri 与 Node，而目标是隐藏窗口并保持后台。已在 Tauri 全局窗口事件中拦截 `CloseRequested` 并隐藏窗口，待重打后同时复测关闭/恢复与 `Cmd-Q` 真正退出。
+- 已重打并安装修正版 arm64 Portable：关闭窗口后 Rust、Node 和 API 均保持；再次打开恢复同一组 PID；`Cmd-Q` 后 Rust、Node 和监听端口全部退出，Typeless 本体原 PID 保持；再次启动恢复正常。阶段 B 的真实 GUI、单实例、主题和生命周期闭环通过。
+- 下一步安装 arm64 Lite 真机验证。本次允许的预期数据变化仅为 Lite 将合格 Node 的绝对路径写入 `data/config.json.node_path`；验证完成后恢复安装 Portable 候选供用户验收。
+- arm64 Lite 真机验证通过：App 内不含 Node，首次从 NVM 发现 arm64 Node 22.23.2 并记忆 `node_path`；完全退出后重启改为 `node_source=configured`。随后已恢复安装 arm64 Portable 供用户继续使用。
+- 已开始阶段 E 清理：删除工具集旧 Electron host/preload 与旧 macOS 构建脚本，并移除前端 Electron bridge fallback；历史设计文档和面向 Typeless 本体的 Electron/fuse/签名说明不属于失效入口，继续保留。
+- 最终安装核对发现 Tauri 身份迁移解析缺陷：macOS `codesign -d -r-` 输出以 `# designated =>` 开头，Rust 只接受无 `#` 形式，导致 reconcile 记录未更新。已改为从输出行中的 `designated =>` 片段解析；待重打安装后验证新身份写入、`regrant_required=true`，以及第二次启动不重复清理。
+- Lite → Portable 替换核对发现旧 Lite Node 在 Rust 宿主被终止后成为孤立进程，占用原 7788 端口，新 Portable 因而启动到 7789。已将 JSONL stdin 关闭定义为 Node 退出信号，并让本地安装器同时停止目标 App `Resources/server/manager.js`；待重打后验证原端口复用且无孤立后端。
+- 终端直启捕获到身份解析仍失败的准确原因：`codesign` 将 designated requirement 写到 stdout，而 Rust 只读取 stderr（stderr 只有 Executable 行）。已改为合并 stdout/stderr 后解析；不再猜测系统权限行为。
+- 身份迁移修复已通过真机：状态文件写入当前 Tauri CDHash，`regrant_required=true`、旧授权时间清空；同一构建完全退出再启动时文件摘要和 mtime 均不变，证明不会重复清理 TCC。
+- 宿主异常终止验证通过：向 Rust 主进程发送终止信号后，Node 因 JSONL stdin 关闭自动退出，7788 立即释放；再次启动恢复单一 Portable 主进程和单一内置 Node，无孤立后端。
+- 已从包含全部修复和 Electron 清理的最终代码重建四包并逐包通过 headless manager/API smoke；最终 DMG 为 arm64 Lite 6.4 MiB、arm64 Portable 41 MiB、x64 Lite 6.6 MiB、x64 Portable 43 MiB。
+- 已将最终 arm64 Portable 安装到 `/Applications/Typeless 工具集.app`：严格签名验证通过，App 内无 Electron Framework/app.asar；只运行一个 Rust 主程序和一个 arm64 bundled Node，监听 7788。Typeless 本体仍为原 PID 28127。
+- 安装前后账号、主词库、`config.local.json` 与 6 个 profiles 摘要一致；`config.json` 的唯一预期变化是 Lite 验证写入 `node_path`。本轮未产生新的 Typeless App 备份或 staging 残留，也没有遗留临时安装 App。
+- 用户反馈连续四包重建时 Tauri 的 DMG 布局步骤反复弹出 Finder 窗口并打断输入。已确认不是安装四份软件：本机只使用 arm64 Portable，其余三包仅为发布产物；所有挂载与构建进程已结束。最后一次逐包验证改用无界面挂载，后续不再重复构建或安装。最后一次重建相对已安装候选只更新包内 README 文案，不为此再次重启用户 App。
 
 ## 9. 决策日志
 
@@ -173,8 +210,11 @@ manager.js（Node，共享业务后端）
 | 2026-09-14 | 保持 Bundle ID 和 Application Support 数据目录 | 原地继承现有用户数据并减少升级迁移成本 |
 | 2026-09-14 | 特权最终写入归 Tauri 主程序 | 保持 Portable/Lite 的 App 管理权限主体一致 |
 | 2026-09-14 | 保留当前 Release SHA-256 契约 | 项目明确要求公开发布物带校验值，本任务不另造重复机制 |
+| 2026-09-14 | 不采用 Tauri updater 插件 | 它强制引入 updater 私钥和 `.app.tar.gz/.sig` 发布链；本轮保持现有 DMG 更新产品动线即可满足目标 |
+| 2026-09-14 | 页面桌面操作经 Node 宿主协议转发 | 同时服务前台按钮和后台自动维护，不向 localhost 页面开放通用 Tauri IPC |
+| 2026-09-14 | 保留 `@electron/fuses` | 它用于修改目标 Typeless 的 Electron fuse，不是工具集 Electron 壳依赖 |
 
 ## 10. 当前阻塞与下一步
 
 - 当前无用户侧阻塞。
-- 下一步：合并剩余调研结论，确定 Tauri 依赖和 command 契约；安装 Rust 工具链并建立可启动的最小 Tauri 宿主。
+- 当前实现、真机闭环、旧路径清理、四包构建与本机安装均已完成；下一步等待用户对已安装候选进行人工验收。未授权前不推送、不提 PR、不合并、不发布 Release。
