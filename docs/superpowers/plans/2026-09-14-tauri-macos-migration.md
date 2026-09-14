@@ -1,6 +1,6 @@
 # macOS Tauri 轻量化迁移计划
 
-**状态：** 发布准备中（用户已授权通过验证后提交 PR、合并并发布 v1.8.0）
+**状态：** 正式发布中（PR #25 已合并，准备创建 v1.8.0 标签）
 
 **分支：** `codex/tauri-macos-migration`
 
@@ -209,6 +209,7 @@ manager.js（Node，共享业务后端）
 - 同轮审查发现 Tauri 完成官方更新 swap 后，Node 的官方签名/版本二次校验若失败，原 catch 只处理旧 Node 安装路径，未调用 Rust 恢复已创建的备份。已给官方更新接入配对的宿主恢复回调，失败时复用同一备份恢复同一 `target_app`，不增加第二份备份。
 - PR #25 最终 head `2a2bc6f` 的远端预构建 [Actions #34805913904](https://github.com/Jia131313/typeless-toolkit/actions/runs/34805913904) 已完成：Windows、macOS job 均成功，分支构建的 Release job 按设计跳过；macOS job 完成四包编译以及版本、架构、edition、资源和后端 smoke，Windows job 完成全量检查、更新替换/恢复 smoke、双包构建及解压 smoke。
 - 已下载预构建 artifacts 到临时目录复核：Windows Lite/Portable 与 macOS arm64/x64 × Lite/Portable 共 6 个安装包及各自 SHA-256 文件，总计 12 个文件，命名和 v1.8.0 版本一致，无 Universal、旧版本或额外附件；6 个安装包的实际 SHA-256 均与随附记录一致。PR 当前为 `MERGEABLE / CLEAN`。
+- PR #25 已于 2026-09-14 合并到 `main`，merge commit 为 `d361227`；最终功能代码与通过预构建的 `2a2bc6f` 一致，后续提交仅补充发布验证记录。
 
 ## 9. 决策日志
 
@@ -227,4 +228,4 @@ manager.js（Node，共享业务后端）
 ## 10. 当前阻塞与下一步
 
 - 当前无用户侧阻塞。
-- 当前实现、真机闭环、旧路径清理、四包候选验证、用户验收及远端发布前预构建均已完成。下一步合并 PR #25、创建 `v1.8.0` 标签并等待正式 GitHub Actions Release；正式附件复核通过后安装 arm64 Lite，并完成本机 Node 路径、数据保留和临时资源清理验证。
+- 当前实现、真机闭环、旧路径清理、四包候选验证、用户验收、远端发布前预构建及 PR 合并均已完成。下一步创建 `v1.8.0` 标签并等待正式 GitHub Actions Release；正式附件复核通过后安装 arm64 Lite，并完成本机 Node 路径、数据保留和临时资源清理验证。
