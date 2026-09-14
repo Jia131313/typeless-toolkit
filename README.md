@@ -2,7 +2,7 @@
 
 Typeless 桌面端的多账号管理 + 个人词库跨账号同步 + 去升级弹窗补丁工具集。
 核心是 Node.js 本地服务 + 单页前端；Windows 打包版使用 WebView2 提供独立桌面窗口和托盘，
-macOS 可选 Electron 客户端与 DMG。源码同时支持 Windows 与 macOS。
+macOS 使用 Tauri + 系统 WKWebView 提供轻量原生客户端。源码同时支持 Windows 与 macOS。
 
 ## 这是什么
 
@@ -37,13 +37,17 @@ Windows Release 同时提供两个 ZIP，功能完全相同：
 - **Portable（推荐）**：内置 Node.js，解压后直接双击 `TypelessToolkit.exe`。
 - **Lite**：体积更小，适合电脑上已经安装 Node.js 22.12+ 的用户。
 
-macOS Release 提供 Universal DMG，同时支持 Apple Silicon 与 Intel Mac。将“Typeless 工具集”
-拖入“应用程序”即可；升级只替换 App 本体，账号、快照、词库和配置继续保存在
+macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架构均提供 Portable 和 Lite：
+
+- **Portable（推荐）**：内置对应架构的 Node.js，打开 DMG 后拖入“应用程序”即可；
+- **Lite**：不重复携带 Node.js，适合本机已有同架构 Node.js 22.12+ 的用户。Finder 启动不读取终端配置，工具集会发现、校验并记住所选 Node 路径。
+
+升级只替换 App 本体，账号、快照、词库和配置继续保存在
 `~/Library/Application Support/Typeless 工具集/data/`。每个附件均提供独立 SHA-256 校验文件。
 
 工具集会在启动后检查 GitHub Release，并展示版本说明。Windows 的 Portable/Lite 包可由工具集下载、
 校验 SHA-256 后在退出时自动替换程序文件，保留 `data/` 中的账号、快照、词库和配置；macOS 当前
-使用 ad-hoc 签名，工具集会下载并打开已校验的 DMG，仍需手动拖入“应用程序”完成替换。这里的
+使用 ad-hoc 签名，工具集会按当前 CPU 架构和 Portable/Lite 类型下载并打开已校验的 DMG，仍需手动拖入“应用程序”完成替换。这里的
 “工具集更新”与“安装 Typeless 官方更新”位于「设置 → 关于与更新」，是两个独立入口，后者只处理 Typeless 本体。
 发现可用更新时，首页和设置会显示升级提示，点击对应入口即可打开更新窗口；macOS 本体更新提示仅代表已发现本地缓存包。
 
@@ -63,7 +67,7 @@ macOS Release 提供 Universal DMG，同时支持 Apple Silicon 与 Intel Mac。
 2. **启动管理器**:
    - Windows release：双击 `TypelessToolkit.exe`
    - 源码：`node manager.js` 后访问 `http://127.0.0.1:7788`
-   - macOS 客户端：`npm run build:mac` 生成 DMG，将「Typeless 工具集」拖入“应用程序”后启动
+   - macOS 客户端：`npm run build:mac` 生成当前架构的 Portable DMG；用 `npm run build:mac:all` 生成四种公开包
 3. **添加账号**:在 Typeless 里登录第一个账号 → 管理器点「添加当前账号」(会自动抓 token)。
 4. **词库自动对齐**:添加账号、编辑词库或启动工具集后会自动检查，各账号词库无需手动导入；顶部状态入口可查看结果或立即重试。
 5. **切换账号**:账号卡片点「切换到此号」(从快照还原 + 重启 Typeless)。
@@ -91,8 +95,8 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 `build-release.bat` 用于更新本机自用包，会保留已有账号和快照。准备公开附件时必须运行
 `build-public-release.bat`，它会生成：
 
-- `TypelessToolkit-v1.7.1-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
-- `TypelessToolkit-v1.7.1-win-x64-lite.zip`：使用系统 Node.js 22.12+
+- `TypelessToolkit-v1.8.0-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
+- `TypelessToolkit-v1.8.0-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
 两个公开包都会强制使用空账号列表和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
@@ -175,7 +179,7 @@ A: 可选仅账号、仅词库或两者。账号同步包含账号 ID、昵称�
 
 **Q: 支持 Mac/Linux 吗?**
 A: **Windows 与 macOS 都支持**(平台差异集中在 `lib/platform.js`)。Linux 暂未适配。
-  macOS 启动用本目录的 `.command` 脚本(首次需 `chmod +x *.command`)。详见下方「macOS 适配」。
+  macOS 启动可用 Tauri 客户端或本目录的 `.command` 源码脚本(首次需 `chmod +x *.command`)。详见下方「macOS 适配」。
 
 ## macOS 适配
 
@@ -186,13 +190,13 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
 
 - **启动**:可用 `启动管理器.command` / `同步词库.command` 运行源码
   (首次需在终端执行 `chmod +x *.command` 赋可执行权限;或右键→打开)，也可运行
-  `npm run build:mac` 构建 DMG。开发机可运行 `npm run deploy:mac` 一次完成构建、签名校验、
+  `npm run build:mac` 构建当前架构 Portable DMG，或运行 `npm run build:mac:all` 构建 arm64/x64 的 Portable/Lite 四个 DMG。开发机可运行 `npm run deploy:mac` 一次完成构建、签名校验、
   替换 `/Applications` 中的旧 App 和启动验证；成功后旧 App 会被删除，外置用户数据不会改动。
   工具集使用个人 ad-hoc 签名而非 Developer ID/公证签名，
   首次打开若被 macOS 拦截，请在 Finder 中右键应用选择“打开”。Mac 的 ICNS、Web logo/favicon
-  与 Windows 桌面壳均从 `icon/icon.png` 生成，避免不同平台出现两套图标。macOS Electron 宿主
-  支持单实例恢复；配置端口已由其他 Toolkit 占用时验证 `/api/env` 后复用，被其他程序占用时
-  自动选择回退端口。macOS 使用 Dock 的原生窗口生命周期，不机械复制 Windows 系统托盘。
+  与 Windows 桌面壳均从 `icon/icon.png` 生成，避免不同平台出现两套图标。macOS Tauri 宿主
+  支持单实例恢复；当前实例必须持有自己的 Node/Rust 宿主协议，配置端口被占用时会选择回退端口，
+  不复用缺少该协议的外部后端。macOS 使用 Dock 的原生窗口生命周期，不机械复制 Windows 系统托盘。
 - **连接**:日常账号检测只读取 `app-storage.json`,不会启动调试端口或重启 Typeless。
   仅在「添加当前账号」或注册新号收尾需要更新凭证时，管理器才会临时以
   `--remote-debugging-port` 重启抓取 token，并在 `finally` 中恢复普通模式。所有 macOS 启动
@@ -229,7 +233,7 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   工具集自身也是 ad-hoc 签名；安装新的工具集构建后，它会记录并比较自身代码身份，自动删除旧的
   App 管理条目及历史版本误加的工具集辅助功能条目。下次真正需要修改 Typeless.app 时，只需对
   当前工具集身份重新允许一次，不会继续对着旧的“已开启”开关循环。
-  工具集只在确实需要写入 `Typeless.app`（自动解除弹窗或安装官方更新）时展示明确说明并直接打开
+  Tauri 版先由 Node 在工具集外置 `data/staging/` 中准备并校验候选 App，再由 Tauri 主程序完成 `/Applications/Typeless.app` 的最终替换和失败恢复；因此 Portable 内置 Node 与 Lite 外部 Node 不会成为两套 App 管理权限主体。工具集只在确实需要写入 `Typeless.app`（自动解除弹窗或安装官方更新）时展示明确说明并直接打开
   App 管理设置；开启后回到工具集，原操作自动继续。普通 App 无法替用户自动打开该隐私开关；
   长期免重复授权仍需要稳定的 Developer ID 签名，而不是 ad-hoc 签名。
   补丁会使 Typeless 原生自动安装升级

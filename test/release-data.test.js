@@ -16,7 +16,7 @@ test('release version is consistent across packages, launchers, scripts, and doc
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
-  assert.equal(version, '1.7.1');
+  assert.equal(version, '1.8.0');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
@@ -52,7 +52,8 @@ test('release notes guide users to the correct downloads and safe upgrade path',
   assert.equal(content.title, 'v1.6.2 - 引导旧账号更新长期凭证');
   assert.match(content.notes, /TypelessToolkit-v1\.6\.2-win-x64-portable\.zip/);
   assert.match(content.notes, /TypelessToolkit-v1\.6\.2-win-x64-lite\.zip/);
-  assert.match(content.notes, /Typeless-Toolkit-1\.6\.2-universal\.dmg/);
+  assert.match(content.notes, /Typeless-Toolkit-1\.6\.2-mac-arm64-portable\.dmg/);
+  assert.match(content.notes, /Typeless-Toolkit-1\.6\.2-mac-x64-lite\.dmg/);
   assert.match(content.notes, /不要用公开包内的空 `data\/` 覆盖自己的旧数据/);
   assert.match(content.notes, /替换 App 本体不会删除账号、快照、词库或配置/);
   assert.match(releaseWorkflow, /node scripts\/prepare-release-notes\.js/);

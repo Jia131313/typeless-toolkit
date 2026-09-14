@@ -3,6 +3,7 @@
   "userdata_dir": "",
   "device_cache_dir": "",
   "credential_target": "",
+  "node_path": "",
   "cdp_port": 9222,
   "manager_port": 7788,
   "api_base": "https://api.typeless.com",

@@ -11,18 +11,20 @@
   可在确认工作区干净并执行 `git pull --ff-only origin main` 后直接提交到 `main`。
 - 新功能、行为变化、存在不同实现方向或改动范围较大时，从最新 `origin/main` 创建
   `codex/<topic>` 或清晰命名的功能分支，推送后通过 PR 合并。
-- 2026-07-15：PR #5 已将 Windows 桌面壳、多账号体验与双发布包完整并入；PR #6 又加入
-  macOS Electron 客户端和官方升级功能。后续开发必须以当前上游代码为准，不从旧 fork 重放整套实现。
+- 2026-07-15：PR #5 已将 Windows 桌面壳、多账号体验与双发布包完整并入；PR #6 曾加入
+  macOS Electron 客户端和官方升级功能。当前 macOS 宿主已迁移为 Tauri 2；后续开发必须以当前上游代码为准，不从旧 fork 重放整套实现。
 
 ## 项目结构
 
-- `manager.js`：本地 HTTP API；既可直接运行，也向 Electron 客户端导出 `startServer()`、`server` 和 `PORT`。
-- `manager.html`：成熟的单页管理界面。不要另建简陋前端或把页面重写进 C#/Electron。
+- `manager.js`：本地 HTTP API；既可直接运行，也作为 Windows/Tauri 桌面宿主启动的 Node 业务后端。
+- `manager.html`：成熟的单页管理界面。不要另建简陋前端或把页面重写进 C#/Rust。
 - `lib/common.js`：账号、快照、CDP、词库、补丁与通用环境探测。
 - `lib/platform.js`：Windows/macOS 的进程、路径、凭据、启动和签名差异。
 - `lib/official-update.js`：macOS 官方更新包的发现、校验、安装与回滚。
 - `main.cs`：Windows WebView2 独立窗口、单实例和托盘宿主；不承载业务 UI。
-- `electron-main.js`：macOS Electron 宿主，复用同一个 `manager.js` 服务和 `manager.html`。
+- `src-tauri/`：macOS Tauri 2/WKWebView 宿主，负责窗口、Node 生命周期、原生桥和 App 管理权限写入。
+- `lib/tauri-host.js`：Node 与 Rust 宿主之间的 stdin/stdout JSONL 客户端。
+- `macos-build.json`、`scripts/build-mac-tauri.js`：macOS 四种发行物的统一参数和构建入口。
 - `gen-icon.cs`、`icon/`、`assets/`：Windows ICO/圆角 PNG 与 macOS SVG/ICNS 资源。
 - `test/`：Node 内置测试，当前覆盖付费墙目标检测和官方升级逻辑。
 - `build-tray.bat`：编译 Windows C# 宿主，产物统一写入 `.build/windows/`。
@@ -64,8 +66,8 @@ macOS 构建在 Mac 上运行：
 
 ```bash
 npm run build:mac
-# 或
-npm run build:mac:universal
+# 构建 arm64/x64 × Portable/Lite 全部四个 DMG
+npm run build:mac:all
 ```
 
 验证范围应与改动风险匹配：
@@ -73,12 +75,12 @@ npm run build:mac:universal
 - API/账号改动：检查 `/api/env`、`/api/current`，并覆盖成功、失败、超时和恢复路径。
 - UI 改动：至少检查约 1200px 默认宽度与约 880px 窄窗口，无横向溢出或孤立按钮。
 - Windows 宿主：检查双击启动、单实例恢复、托盘、暗色标题栏、任务栏/窗口图标和配置端口。
-- 发布改动：从最终 ZIP 重新解压启动；确认 Portable 使用包内 Node、Lite 不含 Node、公开数据已脱敏。
+- 发布改动：从最终 ZIP/DMG 重新解压或挂载启动；确认 Portable 使用包内同架构 Node、Lite 不含 Node、公开数据已脱敏。
 - 补丁/升级改动：优先使用只读状态探测和测试夹具；涉及真实程序文件前必须有本次操作的回滚快照。
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.7.1；此 UI 优化版已于 2026-09-08 完成用户验收并获准发布。
+- `package.json` 当前版本为 1.8.0；macOS Tauri 四包迁移已通过本机候选验收，正按用户授权经 PR 与 CI 发布。
 - UI 布局、交互体验优化和 bug 修复使用 patch 版本（如 1.7.0 → 1.7.1）；只有新增明确产品能力
   （如 WebDAV、自更新）时才提升 minor 版本（如 1.7.x → 1.8.0），不按改动行数或视觉变化幅度升 minor。
 - 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；

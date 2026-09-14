@@ -9,6 +9,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const artifactPath = path.resolve(process.argv[2] || '');
 if (!process.argv[2]) throw new Error('Usage: node scripts/smoke-release-package.js <release.zip|release.dmg>');
 if (!fs.existsSync(artifactPath)) throw new Error(`Release artifact not found: ${artifactPath}`);
+const projectRoot = path.join(__dirname, '..');
+const macBuildConfig = JSON.parse(fs.readFileSync(path.join(projectRoot, 'macos-build.json'), 'utf8'));
 
 function artifactVersion(filePath) {
   const match = path.basename(filePath).match(/(?:^|[-_])v?(\d+(?:\.\d+){2,3})(?=[-_.]|$)/i);
@@ -199,20 +201,28 @@ function findAppBundle(mountPoint) {
   throw new Error('Mounted DMG does not contain an App bundle.');
 }
 
-function inspectMacAsar(electronExecutable, asarPath) {
-  const expression = `const fs=require('fs'),p=require('path'),r=${JSON.stringify(asarPath)};` +
-    `process.stdout.write(JSON.stringify({version:require(p.join(r,'package.json')).version,` +
-    `accounts:fs.existsSync(p.join(r,'accounts.json')),profiles:fs.existsSync(p.join(r,'profiles')),` +
-    `privateFiles:['config.local.json','account-sync.json','account-sync-tombstones.json'].filter(x=>fs.existsSync(p.join(r,x)))}));`;
-  const output = run(electronExecutable, ['-e', expression], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    timeout: 15000,
-  });
-  return JSON.parse(output);
+function macArtifactIdentity() {
+  const match = path.basename(artifactPath).match(/-mac-(arm64|x64)-(portable|lite)\.dmg$/i);
+  assert.ok(match, 'macOS artifact name must end in -mac-<arm64|x64>-<portable|lite>.dmg.');
+  return { arch: match[1].toLowerCase(), edition: match[2].toLowerCase() };
+}
+
+function assertMacPublicResources(serverDir, version, identity) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(serverDir, 'package.json'), 'utf8'));
+  assert.equal(manifest.version, version, 'DMG package version does not match its artifact name.');
+  const buildInfo = JSON.parse(fs.readFileSync(path.join(serverDir, 'toolkit-build.json'), 'utf8'));
+  assert.equal(buildInfo.version, version, 'Tauri build metadata version does not match its artifact name.');
+  assert.equal(buildInfo.arch, identity.arch, 'Tauri build metadata architecture is incorrect.');
+  assert.equal(buildInfo.edition, identity.edition, 'Tauri build metadata edition is incorrect.');
+  for (const name of macBuildConfig.privateDataNames) {
+    assert.equal(fs.existsSync(path.join(serverDir, name)), false, `Private data leaked into macOS app: server/${name}`);
+  }
 }
 
 async function testMacDmg(version) {
   assert.equal(process.platform, 'darwin', 'macOS DMG smoke test must run on macOS.');
+  const identity = macArtifactIdentity();
+  const architecture = macBuildConfig.architectures[identity.arch];
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'Typeless 发布包冒烟 '));
   const mountPoint = path.join(tempRoot, '只读 挂载点');
   fs.mkdirSync(mountPoint, { recursive: true });
@@ -222,23 +232,35 @@ async function testMacDmg(version) {
     mounted = true;
     const appBundle = findAppBundle(mountPoint);
     run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appBundle], { timeout: 30000 });
-    const electronExecutable = path.join(appBundle, 'Contents', 'MacOS', path.basename(appBundle, '.app'));
-    const asarPath = path.join(appBundle, 'Contents', 'Resources', 'app.asar');
-    assert.equal(fs.existsSync(electronExecutable), true, 'App bundle is missing its Electron executable.');
-    assert.equal(fs.existsSync(asarPath), true, 'App bundle is missing Resources/app.asar.');
-    const packaged = inspectMacAsar(electronExecutable, asarPath);
-    assert.equal(packaged.version, version, 'DMG package version does not match its artifact name.');
-    assert.equal(packaged.accounts, false, 'macOS app bundle unexpectedly contains accounts.json.');
-    assert.equal(packaged.profiles, false, 'macOS app bundle unexpectedly contains profiles/.');
-    assert.deepEqual(packaged.privateFiles, [], 'macOS app bundle contains private synchronization configuration.');
+    const infoPlist = path.join(appBundle, 'Contents', 'Info.plist');
+    const identifier = run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleIdentifier', infoPlist]);
+    const bundleVersion = run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', infoPlist]);
+    const executableName = run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', infoPlist]);
+    const appExecutable = path.join(appBundle, 'Contents', 'MacOS', executableName);
+    const serverDir = path.join(appBundle, 'Contents', 'Resources', 'server');
+    const bundledNode = path.join(appBundle, 'Contents', 'MacOS', 'node');
+    assert.equal(identifier, macBuildConfig.bundleIdentifier, 'Tauri app bundle identifier is incorrect.');
+    assert.equal(bundleVersion, version, 'Tauri app bundle version does not match its artifact name.');
+    assert.equal(fs.existsSync(appExecutable), true, 'Tauri app bundle is missing its main executable.');
+    assert.ok(run('/usr/bin/lipo', ['-archs', appExecutable]).split(/\s+/).includes(architecture.binaryArch), 'Tauri executable architecture is incorrect.');
+    assert.equal(fs.existsSync(path.join(appBundle, 'Contents', 'Resources', 'app.asar')), false, 'Electron app.asar leaked into Tauri bundle.');
+    assert.equal(fs.existsSync(path.join(appBundle, 'Contents', 'Frameworks', 'Electron Framework.framework')), false, 'Electron Framework leaked into Tauri bundle.');
+    assert.equal(fs.existsSync(path.join(serverDir, 'manager.js')), true, 'Tauri app bundle is missing Resources/server/manager.js.');
+    assertMacPublicResources(serverDir, version, identity);
+    assert.equal(fs.existsSync(bundledNode), identity.edition === 'portable', `${identity.edition} package has the wrong Node.js layout.`);
+    if (identity.edition === 'portable') {
+      assert.ok(run('/usr/bin/lipo', ['-archs', bundledNode]).split(/\s+/).includes(architecture.binaryArch), 'Bundled Node.js architecture is incorrect.');
+      if (process.arch === identity.arch) {
+        assert.equal(run(bundledNode, ['--version']), `v${macBuildConfig.nodeVersion}`, 'Bundled Node.js version is incorrect.');
+      }
+    }
 
     const port = await freePort();
     const environment = isolatedEnvironment(tempRoot, port);
-    environment.env.ELECTRON_RUN_AS_NODE = '1';
     await smokeManager({
-      executable: electronExecutable,
-      args: [path.join(asarPath, 'manager.js')],
-      cwd: path.dirname(asarPath),
+      executable: identity.edition === 'portable' && process.arch === identity.arch ? bundledNode : process.execPath,
+      args: [path.join(serverDir, 'manager.js')],
+      cwd: serverDir,
       environment,
       version,
     });

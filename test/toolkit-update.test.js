@@ -23,16 +23,21 @@ const {
 
 const HASH = 'a'.repeat(64);
 
-test('selects an update package that exactly matches the platform and Windows flavor', () => {
+test('selects an update package that exactly matches platform, architecture, and edition', () => {
   assert.deepEqual(assetNames('1.6.3', 'win32', 'portable'), {
     archive: 'TypelessToolkit-v1.6.3-win-x64-portable.zip',
     checksum: 'TypelessToolkit-v1.6.3-win-x64-portable.zip.sha256.txt',
   });
-  assert.deepEqual(assetNames('1.6.3', 'darwin'), {
-    archive: 'Typeless-Toolkit-1.6.3-universal.dmg',
-    checksum: 'Typeless-Toolkit-1.6.3-universal.dmg.sha256.txt',
+  assert.deepEqual(assetNames('1.6.3', 'darwin', 'portable', 'arm64'), {
+    archive: 'Typeless-Toolkit-1.6.3-mac-arm64-portable.dmg',
+    checksum: 'Typeless-Toolkit-1.6.3-mac-arm64-portable.dmg.sha256.txt',
+  });
+  assert.deepEqual(assetNames('1.6.3', 'darwin', 'lite', 'x64'), {
+    archive: 'Typeless-Toolkit-1.6.3-mac-x64-lite.dmg',
+    checksum: 'Typeless-Toolkit-1.6.3-mac-x64-lite.dmg.sha256.txt',
   });
   assert.equal(assetNames('1.6.3', 'win32', 'unknown'), null);
+  assert.equal(assetNames('1.6.3', 'darwin', 'portable', 'unknown'), null);
   assert.equal(compareVersions('v1.6.10', '1.6.2'), 1);
   assert.equal(compareVersions('1.6.2', '1.6.2'), 0);
 });
@@ -116,11 +121,11 @@ test('reused Windows backend is explicitly manual-update only', async () => {
 
 test('downloads an update to staging and verifies SHA-256 before exposing it', async t => {
   const version = '1.6.3';
-  const names = assetNames(version, 'darwin');
+  const names = assetNames(version, 'darwin', 'portable', 'arm64');
   const payload = Buffer.from('verified-dmg-fixture');
   const checksum = crypto.createHash('sha256').update(payload).digest('hex');
   const controller = createToolkitUpdateController({
-    platform: 'darwin', currentVersion: '1.6.2',
+    platform: 'darwin', currentVersion: '1.6.2', flavor: 'portable', arch: 'arm64',
     fetchFn: async url => {
       if (url.includes('/releases/latest')) return {
         ok: true,
@@ -144,14 +149,6 @@ test('downloads an update to staging and verifies SHA-256 before exposing it', a
   const stage = state.stage_dir;
   controller.cleanupStaging();
   assert.equal(fs.existsSync(stage), false);
-});
-
-test('macOS IPC only opens a regular DMG in the exact updater staging directory', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'electron-main.js'), 'utf8');
-  assert.match(source, /fs\.lstatSync\(target\)/);
-  assert.match(source, /fs\.realpathSync\(os\.tmpdir\(\)\)/);
-  assert.match(source, /path\.dirname\(realStage\) !== realTemp/);
-  assert.match(source, /path\.basename\(realStage\)\.startsWith\('typeless-toolkit-update-'\)/);
 });
 
 test('accepts the single top-level directory produced by the public Windows ZIP', t => {

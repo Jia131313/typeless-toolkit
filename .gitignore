@@ -21,6 +21,9 @@ dist/
 TypelessToolkit.exe
 gen-icon.exe
 .build/
+src-tauri/target/
+src-tauri/binaries/node-*
+src-tauri/gen/
 Microsoft.Web.WebView2.Core.dll
 Microsoft.Web.WebView2.WinForms.dll
 WebView2Loader.dll

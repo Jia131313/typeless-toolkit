@@ -76,7 +76,7 @@
 - Design-token constraints: extend the existing variables and components; do not add a new CSS framework or dependency.
 - Performance constraints: synchronization is single-flight, debounced, periodic at a modest interval, and must avoid high-frequency writes when the normalized master list is unchanged.
 - Paywall maintenance constraints: startup and account/update workflows may trigger repair when the patch is missing; periodic checks defer while Typeless is active, and the visible action remains a status/retry surface.
-- Compatibility constraints: Node.js 22.12+, Windows WebView2 host, macOS Electron host, and current local API security checks.
+- Compatibility constraints: Node.js 22.12+, Windows WebView2 host, macOS Tauri/WKWebView host, and current local API security checks.
 - Test/screenshot expectations: run `npm run check`, `git diff --check`, and inspect approximately 1200 px and 880 px layouts with no horizontal overflow or isolated controls.
 
 ## Open questions

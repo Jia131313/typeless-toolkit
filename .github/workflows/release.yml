@@ -50,9 +50,19 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run build:mac:universal
-      - name: Verify packaged macOS app and signature
-        run: node scripts/smoke-release-package.js dist/Typeless-Toolkit-*-universal.dmg
+      - name: Prepare Rust targets
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: npm run check
+      - name: Build Apple Silicon and Intel Portable/Lite packages
+        run: node scripts/build-mac-tauri.js all
+      - name: Verify packaged macOS apps, architectures and editions
+        run: |
+          for artifact in dist/Typeless-Toolkit-*-mac-*.dmg; do
+            node scripts/smoke-release-package.js "$artifact"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release

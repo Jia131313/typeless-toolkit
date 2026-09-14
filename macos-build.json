@@ -1,0 +1,52 @@
+{
+  "nodeVersion": "22.23.2",
+  "minimumNodeVersion": "22.12.0",
+  "productName": "Typeless 工具集",
+  "bundleIdentifier": "com.typeless-toolkit.manager",
+  "artifactName": "Typeless-Toolkit-{version}-mac-{arch}-{edition}.dmg",
+  "architectures": {
+    "arm64": {
+      "rustTarget": "aarch64-apple-darwin",
+      "nodeArch": "arm64",
+      "binaryArch": "arm64"
+    },
+    "x64": {
+      "rustTarget": "x86_64-apple-darwin",
+      "nodeArch": "x64",
+      "binaryArch": "x86_64"
+    }
+  },
+  "editions": [
+    "portable",
+    "lite"
+  ],
+  "paths": {
+    "buildRoot": ".build/macos",
+    "bundleServer": ".build/macos/bundle/server",
+    "nodeCache": ".build/macos/node",
+    "tauriDir": "src-tauri",
+    "tauriBinaryBase": "src-tauri/binaries/node",
+    "tauriCli": "node_modules/.bin/tauri",
+    "distDir": "dist",
+    "iconGenerator": "scripts/generate-mac-icon.swift"
+  },
+  "serverFiles": [
+    "manager.js",
+    "manager.html",
+    "typeless-dict-sync.js",
+    "package.json",
+    "package-lock.json",
+    "LICENSE"
+  ],
+  "privateDataNames": [
+    "accounts.json",
+    "profiles",
+    "config.local.json",
+    "account-sync.json",
+    "account-sync-tombstones.json",
+    "dictionary-sync-meta.json",
+    "backups",
+    "webview2-profile",
+    "chrome-profile"
+  ]
+}

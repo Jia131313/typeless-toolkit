@@ -6,7 +6,10 @@
 | --- | --- | --- |
 | Windows | `TypelessToolkit-v{{VERSION}}-win-x64-portable.zip` | **推荐大多数用户使用**，已内置 Node.js，解压后运行 `TypelessToolkit.exe` |
 | Windows | `TypelessToolkit-v{{VERSION}}-win-x64-lite.zip` | 体积较小，电脑需要已安装 Node.js 22.12+ |
-| macOS | `Typeless-Toolkit-{{VERSION}}-universal.dmg` | 同时支持 Apple Silicon 与 Intel Mac，拖入“应用程序”即可 |
+| Apple Silicon Mac | `Typeless-Toolkit-{{VERSION}}-mac-arm64-portable.dmg` | **推荐大多数 Mac 用户使用**，已内置 Node.js |
+| Apple Silicon Mac | `Typeless-Toolkit-{{VERSION}}-mac-arm64-lite.dmg` | 更小，电脑需要已安装同架构 Node.js 22.12+ |
+| Intel Mac | `Typeless-Toolkit-{{VERSION}}-mac-x64-portable.dmg` | **推荐 Intel Mac 用户使用**，已内置 Node.js |
+| Intel Mac | `Typeless-Toolkit-{{VERSION}}-mac-x64-lite.dmg` | 更小，电脑需要已安装同架构 Node.js 22.12+ |
 
 Windows 版本需要 Microsoft Edge WebView2 Runtime；多数 Windows 10/11 电脑已自带。
 
@@ -25,7 +28,7 @@ Windows 版本需要 Microsoft Edge WebView2 Runtime；多数 Windows 10/11 电�
 
 ### macOS
 
-打开新版 DMG，将“Typeless 工具集”拖入“应用程序”并选择替换。用户数据保存在 `~/Library/Application Support/Typeless 工具集/data/`，替换 App 本体不会删除账号、快照、词库或配置。
+先在「关于本机」确认芯片类型，再打开对应架构与当前 Portable/Lite 类型的新版 DMG，将“Typeless 工具集”拖入“应用程序”并选择替换。工具集内检查更新时也只会下载当前架构和类型。用户数据保存在 `~/Library/Application Support/Typeless 工具集/data/`，替换 App 本体不会删除账号、快照、词库或配置。
 
 当前 macOS 版本使用 ad-hoc 签名；首次打开若被系统拦截，请在 Finder 中右键应用并选择“打开”。版本升级后若出现权限提示，请按工具集内的 macOS 权限说明重新允许当前版本。
 

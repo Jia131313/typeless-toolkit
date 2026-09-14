@@ -1,5 +1,27 @@
 # 更新日志
 
+## 1.8.0 - macOS Tauri 轻量客户端 (2026-09-14)
+
+本轮只替换 macOS 桌面宿主和发行方式，账号、快照、词库、WebDAV、补丁与官方更新等业务继续复用现有 Node 后端和管理页面；Windows 仍使用 WebView2，不受迁移影响。
+
+### 轻量化与发行物
+
+- 用 Tauri 2 + 系统 WKWebView 替代工具集自带的 Electron/Chromium，保持 `com.typeless-toolkit.manager` Bundle ID 和原 Application Support 数据目录。
+- Apple Silicon 与 Intel 分开发布；每种架构均提供内置对应 Node 的 Portable 和复用本机 Node 22.12+ 的 Lite，共四个 DMG。
+- Lite 会从常见安装位置及 NVM 版本目录查找、校验并记住同架构 Node；Portable 不依赖本机开发环境。
+- 工具集更新严格选择当前架构与 Portable/Lite 类型，继续使用既有 GitHub Release、DMG 和 SHA-256 流程。
+
+### 原生宿主与权限
+
+- Tauri 宿主负责单实例、WKWebView、主题、外链、隐私设置跳转、退出回收和 Node 后端生命周期；关闭窗口只隐藏，重新打开恢复同一实例，`Cmd-Q` 才结束宿主与后端。
+- 去弹窗补丁和 Typeless 官方更新先由 Node 在外置 staging 中准备候选 App，再由 Rust 主程序按实际探测路径备份、替换并在失败时恢复 Typeless.app；保留 `~/Applications` 与自定义路径支持，同时使 Portable 与 Lite 使用同一个 App 管理权限主体。
+- 保留面向 Typeless 本体的 `@electron/fuses` 和定向签名逻辑；删除的只是工具集自身旧 Electron host/preload 与构建路径。
+
+### 验证与体积
+
+- arm64 Portable 与 Lite 已在真实安装目录启动，复用原账号数据；主题、单实例、关闭/恢复、退出回收和 Lite Node 路径记忆均通过。
+- 当前候选体积约为 arm64 Lite 6.4 MiB、arm64 Portable 41 MiB、x64 Lite 6.6 MiB、x64 Portable 43 MiB；x64 真实启动仍需 Intel/CI 环境完成。
+
 ## 1.7.1 - 首页布局与设置体验优化 (2026-09-08)
 
 本版在 1.7.0 的账号词库同步与工具集更新功能基础上，整理日常操作和设置入口，改善窄窗口布局与更新提示。同步、账号和更新的处理方式不变，已有账号、快照、词库和配置继续保留。
