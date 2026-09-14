@@ -1,6 +1,6 @@
 # macOS Tauri 轻量化迁移计划
 
-**状态：** 正式发布中（PR #25 已合并，准备创建 v1.8.0 标签）
+**状态：** 已完成（PR #25、v1.8.0 Release 与本机 arm64 Lite 安装均已验收）
 
 **分支：** `codex/tauri-macos-migration`
 
@@ -104,7 +104,7 @@ manager.js（Node，共享业务后端）
 - [x] 移植 Toolkit 自身代码身份比较和旧 TCC 记录清理。
 - [x] 将 App 管理权限所需的 Typeless.app 最终写入归到 Rust 宿主。
 - [x] 保持 Typeless 辅助功能/麦克风与 Toolkit App 管理权限的概念和提示分离。
-- [ ] 验证权限设置跳转、返回后的继续操作和身份变化路径。
+- [x] 验证权限设置跳转、返回后的继续操作和身份变化路径。
 
 ### 阶段 D：四包构建与自更新
 
@@ -133,8 +133,8 @@ manager.js（Node，共享业务后端）
 - [x] 验证旧 Electron 文件和依赖已清理；Windows 源码路径未改，实际 Windows 构建由 CI 验证。
 - [x] 将最终 arm64 Portable 候选安装到本机供用户人工验收。
 - [x] 用户已完成候选验收并授权提交 PR、合并和 Release。
-- [ ] 统一 v1.8.0 版本、完成最终检查，通过 PR 合并后由 GitHub Actions 构建并发布。
-- [ ] 安装正式 arm64 Lite，验证自动发现/记忆本机 Node，并清理其他测试安装与临时资源。
+- [x] 统一 v1.8.0 版本、完成最终检查，通过 PR 合并后由 GitHub Actions 构建并发布。
+- [x] 安装正式 arm64 Lite，验证自动发现/记忆本机 Node，并清理其他测试安装与临时资源。
 
 ## 6. 验收标准
 
@@ -210,6 +210,12 @@ manager.js（Node，共享业务后端）
 - PR #25 最终 head `2a2bc6f` 的远端预构建 [Actions #34805913904](https://github.com/Jia131313/typeless-toolkit/actions/runs/34805913904) 已完成：Windows、macOS job 均成功，分支构建的 Release job 按设计跳过；macOS job 完成四包编译以及版本、架构、edition、资源和后端 smoke，Windows job 完成全量检查、更新替换/恢复 smoke、双包构建及解压 smoke。
 - 已下载预构建 artifacts 到临时目录复核：Windows Lite/Portable 与 macOS arm64/x64 × Lite/Portable 共 6 个安装包及各自 SHA-256 文件，总计 12 个文件，命名和 v1.8.0 版本一致，无 Universal、旧版本或额外附件；6 个安装包的实际 SHA-256 均与随附记录一致。PR 当前为 `MERGEABLE / CLEAN`。
 - PR #25 已于 2026-09-14 合并到 `main`，merge commit 为 `d361227`；最终功能代码与通过预构建的 `2a2bc6f` 一致，后续提交仅补充发布验证记录。
+- 已创建并推送 `v1.8.0` 标签。正式 [Actions #34806654235](https://github.com/Jia131313/typeless-toolkit/actions/runs/34806654235) 全部成功：Windows 3m10s、macOS 8m16s、Release 15s；Windows 双包和 macOS 四包均完成各自 smoke 后上传。
+- [v1.8.0 - macOS Tauri 轻量客户端](https://github.com/Jia131313/typeless-toolkit/releases/tag/v1.8.0) 已发布，状态为非草稿、非预发布；6 个安装包和 6 个配套 SHA-256 文件全部存在，无 Universal、旧版本或额外附件。
+- 已从正式 Release 下载并校验 `Typeless-Toolkit-1.8.0-mac-arm64-lite.dmg`，无界面替换 `/Applications/Typeless 工具集.app`。安装后版本 1.8.0、Bundle ID `com.typeless-toolkit.manager`、arm64/Lite 元数据和签名结构正确，App 内不含 bundled Node 或 Electron Framework。
+- 正式 Lite 真机启动验证通过：`/api/env` 返回 `service=typeless-toolkit`、`desktop_host=tauri`、`toolkit_edition=lite`、`toolkit_arch=arm64`；唯一 Node 子进程来自已记忆的 `/Users/ygtt/.nvm/versions/node/v22.23.2/bin/node`，`node_source=configured`。重复打开保持同一 Rust/Node PID，7788 正常监听，`/api/current` 返回 OK。
+- 安装前后账号、主词库、`config.local.json`、`config.json` 的 SHA-256 及 profiles 统计完全一致；Typeless 本体保持原 PID 28127。`/Applications` 只保留正式 Typeless 工具集与 Typeless 本体，没有临时 App 或 DMG 挂载。
+- 已清理约 4.6 GiB 可重建测试资产：旧 `dist/` 四包、`.build/macos/`、`src-tauri/target/`、预构建 artifacts 和正式 Lite 下载临时目录；保留既有未跟踪 `output/`、Application Support 用户数据与正式安装 App。
 
 ## 9. 决策日志
 
@@ -228,4 +234,4 @@ manager.js（Node，共享业务后端）
 ## 10. 当前阻塞与下一步
 
 - 当前无用户侧阻塞。
-- 当前实现、真机闭环、旧路径清理、四包候选验证、用户验收、远端发布前预构建及 PR 合并均已完成。下一步创建 `v1.8.0` 标签并等待正式 GitHub Actions Release；正式附件复核通过后安装 arm64 Lite，并完成本机 Node 路径、数据保留和临时资源清理验证。
+- macOS Tauri 迁移、四包拆分、Lite Node 自动发现、PR 合并、v1.8.0 Release、本机正式 arm64 Lite 安装、数据保留核对和测试资产清理均已完成。当前仅保留已知验证边界：x64 通过 CI 构建、签名、Mach-O 架构、资源和后端 smoke，没有 Intel 真机 GUI 证据。
