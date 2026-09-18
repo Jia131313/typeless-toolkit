@@ -426,6 +426,142 @@ class TrayApp
         catch (Exception error) { AppendLauncherLog("创建开始菜单快捷方式失败：" + error.Message); }
     }
 
+    // ---------- 自绘提示窗口 ----------
+    // 系统通知(ShowBalloonTip)在未注册 AppUserModelID 的便携应用上，会把“应用名”
+    // 显示成乱码，且注册表项、开始菜单快捷方式、重启 explorer 都无法消除。
+    // 因此改用自绘窗口：外观可控，也不依赖系统通知平台。
+
+    class ToastForm : Form
+    {
+        readonly System.Windows.Forms.Timer closeTimer;
+        int remaining;
+
+        // 不抢焦点:用户正在听写或打字时弹提示，绝不能把键盘输入抢走
+        protected override bool ShowWithoutActivation { get { return true; } }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW:不出现在 Alt+Tab
+                return cp;
+            }
+        }
+
+        public ToastForm(string title, string body, bool warning)
+        {
+            Font titleFont = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Bold);
+            Font bodyFont = new Font("Microsoft YaHei UI", 9f);
+            Font metaFont = new Font("Microsoft YaHei UI", 8f);
+
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            StartPosition = FormStartPosition.Manual;
+            BackColor = Color.FromArgb(32, 33, 38);
+            Padding = new Padding(0);
+
+            Size bodySize = TextRenderer.MeasureText(body, bodyFont,
+                new Size(326, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+            Width = 386;
+            Height = 34 + 24 + bodySize.Height + 16;
+
+            Color accent = warning ? Color.FromArgb(240, 190, 70) : Color.FromArgb(96, 170, 245);
+
+            var appName = new Label();
+            appName.Text = AppTitle;
+            appName.ForeColor = Color.FromArgb(150, 152, 160);
+            appName.Font = metaFont;
+            appName.AutoSize = false;
+            appName.Location = new Point(16, 8);
+            appName.Size = new Size(240, 16);
+
+            var close = new Label();
+            close.Text = "✕";
+            close.ForeColor = Color.FromArgb(150, 152, 160);
+            close.Font = metaFont;
+            close.AutoSize = false;
+            close.TextAlign = ContentAlignment.MiddleCenter;
+            close.Location = new Point(Width - 30, 6);
+            close.Size = new Size(20, 18);
+            close.Cursor = Cursors.Hand;
+            close.Click += (s, e) => HideToast();
+
+            var mark = new Label();
+            mark.Text = warning ? "!" : "i";
+            mark.ForeColor = accent;
+            mark.Font = new Font("Segoe UI", 17f, FontStyle.Bold);
+            mark.AutoSize = false;
+            mark.TextAlign = ContentAlignment.MiddleCenter;
+            mark.Location = new Point(16, 34);
+            mark.Size = new Size(26, 30);
+
+            var titleLabel = new Label();
+            titleLabel.Text = title;
+            titleLabel.ForeColor = Color.White;
+            titleLabel.Font = titleFont;
+            titleLabel.AutoSize = false;
+            titleLabel.Location = new Point(50, 38);
+            titleLabel.Size = new Size(312, 22);
+
+            var bodyLabel = new Label();
+            bodyLabel.Text = body;
+            bodyLabel.ForeColor = Color.FromArgb(198, 200, 208);
+            bodyLabel.Font = bodyFont;
+            bodyLabel.AutoSize = false;
+            bodyLabel.Location = new Point(50, 62);
+            bodyLabel.Size = new Size(326, bodySize.Height);
+
+            Controls.Add(appName);
+            Controls.Add(close);
+            Controls.Add(mark);
+            Controls.Add(titleLabel);
+            Controls.Add(bodyLabel);
+
+            // 点窗体和点正文都打开管理器
+            EventHandler open = (s, e) => { HideToast(); OpenManager(); };
+            Click += open;
+            titleLabel.Click += open;
+            bodyLabel.Click += open;
+            mark.Click += open;
+            appName.Click += open;
+
+            closeTimer = new System.Windows.Forms.Timer();
+            closeTimer.Interval = 1000;
+            closeTimer.Tick += (s, e) => { if (--remaining <= 0) HideToast(); };
+        }
+
+        public void ShowToast(int seconds)
+        {
+            remaining = seconds;
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            Location = new Point(area.Right - Width - 16, area.Bottom - Height - 16);
+            Show();
+            closeTimer.Start();
+        }
+
+        void HideToast()
+        {
+            closeTimer.Stop();
+            Hide();
+        }
+    }
+
+    static ToastForm activeToast;
+
+    static void ShowToast(string title, string body, bool warning)
+    {
+        try
+        {
+            if (activeToast != null && !activeToast.IsDisposed) activeToast.Dispose();
+            activeToast = new ToastForm(title, body, warning);
+            activeToast.ShowToast(8);
+        }
+        catch (Exception error) { AppendLauncherLog("提示窗口失败：" + error.Message); }
+    }
+
     static void AppendLauncherLog(string message)
     {
         try
@@ -594,12 +730,13 @@ class TrayApp
                 string alertId = autoSwitch ? alert.Substring(5) : alert;
                 if (!Regex.IsMatch(alertId, @"^\d+-\d+$")) return;
                 lastQuotaAlert = alert;
+                // 用自绘提示替代系统气泡:便携应用的系统通知会把“应用名”显示成乱码
                 if (autoSwitch)
-                    trayIcon.ShowBalloonTip(8000, "Typeless 即将自动切换账号",
-                        "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", ToolTipIcon.Warning);
+                    ShowToast("Typeless 即将自动切换账号",
+                        "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", true);
                 else
-                    trayIcon.ShowBalloonTip(8000, "Typeless 额度提醒",
-                        "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", ToolTipIcon.Info);
+                    ShowToast("Typeless 额度提醒",
+                        "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", false);
             }
             catch (WebException) { /* 后端重启或暂不可用时，下次轮询重试。 */ }
             catch (Exception error) { AppendLauncherLog("额度提醒失败：" + error.Message); }
