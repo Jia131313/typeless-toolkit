@@ -826,10 +826,13 @@ const server = http.createServer(async (req, res) => {
     // 原生托盘只读提醒标识；不传账号名或凭证，不执行切换。
     if (m === 'GET' && p === '/api/quota-monitor/notification') {
       const state = quotaMonitor.status();
-      const active = state.state === 'low' && isTypelessRunning() &&
+      const active = isTypelessRunning() &&
         detectCurrentAccountFromFile().user_id === state.current?.user_id;
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end(active ? state.alert_id : '');
+      if (!active || !state.alert_id) return res.end('');
+      // 倒计时期间用 auto: 前缀区分,托盘据此提示“即将自动切换”而不是“额度不足”
+      if (state.state === 'auto_countdown') return res.end('auto:' + state.alert_id);
+      return res.end(state.state === 'low' ? state.alert_id : '');
     }
     if (m === 'POST' && p === '/api/quota-monitor/config') {
       try {

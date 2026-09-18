@@ -460,10 +460,17 @@ class TrayApp
                         return reader.ReadToEnd().Trim();
                 });
                 if (exiting || trayIcon == null || string.IsNullOrEmpty(alert) || alert == lastQuotaAlert) return;
-                if (!Regex.IsMatch(alert, @"^\d+-\d+$")) return;
+                // auto: 前缀表示自动切号倒计时已开始，需要与普通额度提醒区分文案
+                bool autoSwitch = alert.StartsWith("auto:", StringComparison.Ordinal);
+                string alertId = autoSwitch ? alert.Substring(5) : alert;
+                if (!Regex.IsMatch(alertId, @"^\d+-\d+$")) return;
                 lastQuotaAlert = alert;
-                trayIcon.ShowBalloonTip(8000, "Typeless 额度提醒",
-                    "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", ToolTipIcon.Info);
+                if (autoSwitch)
+                    trayIcon.ShowBalloonTip(8000, "Typeless 即将自动切换账号",
+                        "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", ToolTipIcon.Warning);
+                else
+                    trayIcon.ShowBalloonTip(8000, "Typeless 额度提醒",
+                        "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", ToolTipIcon.Info);
             }
             catch (WebException) { /* 后端重启或暂不可用时，下次轮询重试。 */ }
             catch (Exception error) { AppendLauncherLog("额度提醒失败：" + error.Message); }
