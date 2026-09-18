@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -76,6 +77,7 @@ class TrayApp
 
         SetCurrentProcessExplicitAppUserModelID(AppId);
         EnsureAppUserModelId();
+        EnsureStartMenuShortcut();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -317,6 +319,111 @@ class TrayApp
             }
         }
         catch (Exception error) { AppendLauncherLog("注册通知标识失败：" + error.Message); }
+    }
+
+    // ---------- 开始菜单快捷方式 ----------
+    // Win32 应用要在系统通知里正确显示“应用名”，除了注册 AppUserModelId 注册表项，
+    // 还必须在开始菜单有一个携带同一 AppUserModelID 的快捷方式。
+    // 便携版没有安装程序，只能首次启动时自己补一个。
+
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    internal class ShellLinkCoClass { }
+
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cch, IntPtr pfd, int fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out short pwHotkey);
+        void SetHotkey(short wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cch, out int piIcon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, int dwReserved);
+        void Resolve(IntPtr hwnd, int fFlags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    [ComImport, Guid("0000010b-0000-0000-C000-000000000046"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPersistFile
+    {
+        void GetClassID(out Guid pClassID);
+        [PreserveSig] int IsDirty();
+        void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, int dwMode);
+        void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, [MarshalAs(UnmanagedType.Bool)] bool fRemember);
+        void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+        void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    internal struct PropertyKey
+    {
+        public Guid fmtid;
+        public int pid;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct PropVariant
+    {
+        [FieldOffset(0)] public short vt;
+        [FieldOffset(8)] public IntPtr pointerValue;
+    }
+
+    [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPropertyStore
+    {
+        void GetCount(out int cProps);
+        void GetAt(int iProp, out PropertyKey pkey);
+        void GetValue(ref PropertyKey key, out PropVariant pv);
+        void SetValue(ref PropertyKey key, ref PropVariant pv);
+        void Commit();
+    }
+
+    static void EnsureStartMenuShortcut()
+    {
+        try
+        {
+            string exe = Application.ExecutablePath;
+            string linkPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppTitle + ".lnk");
+            // 已存在就直接沿用,不反复重建(避免覆盖用户自己调整过的快捷方式)
+            if (File.Exists(linkPath)) return;
+
+            var link = (IShellLinkW)(object)new ShellLinkCoClass();
+            link.SetPath(exe);
+            link.SetWorkingDirectory(Path.GetDirectoryName(exe));
+            link.SetIconLocation(exe, 0);
+            link.SetDescription(AppTitle);
+
+            var key = new PropertyKey();
+            key.fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"); // PKEY_AppUserModel_ID
+            key.pid = 5;
+            var value = new PropVariant();
+            value.vt = 31; // VT_LPWSTR
+            value.pointerValue = Marshal.StringToCoTaskMemUni(AppId);
+            try
+            {
+                var store = (IPropertyStore)link;
+                store.SetValue(ref key, ref value);
+                store.Commit();
+            }
+            finally { Marshal.FreeCoTaskMem(value.pointerValue); }
+
+            ((IPersistFile)link).Save(linkPath, true);
+            Marshal.FinalReleaseComObject(link);
+        }
+        catch (Exception error) { AppendLauncherLog("创建开始菜单快捷方式失败：" + error.Message); }
     }
 
     static void AppendLauncherLog(string message)
