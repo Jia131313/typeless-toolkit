@@ -61,7 +61,8 @@ function harness({ confirmed = true, disabled = false, request = async () => ({ 
         return button;
       },
     },
-    confirm(message) {
+    // 页面改用内对话框(appConfirm),不再是原生 confirm
+    async appConfirm(message) {
       confirmations.push(message);
       return confirmed;
     },
@@ -188,6 +189,8 @@ test('a second click while reset is pending cannot confirm or send another reque
   const pending = new Promise(resolve => { resolveRequest = resolve; });
   const h = harness({ request: () => pending });
   const first = h.context.resetDeviceOnly();
+  // 确认框改为内对话框后是异步的,第一次调用要先越过 await 才会发出请求
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.button.disabled, true);
   assert.equal(h.requests.length, 1);
   await h.context.resetDeviceOnly();
@@ -208,7 +211,7 @@ test('ordinary account switching uses only the switch API, never the manual rese
   const unexpectedActions = [];
   const context = vm.createContext({
     ACCOUNTS: [{ user_id: 'saved-account', nickname: '已有账号', snapshot_ok: true }],
-    confirm: () => true,
+    appConfirm: async () => true,
     toast() {},
     async api(route, options) {
       requests.push({ route, options: JSON.parse(JSON.stringify(options)) });

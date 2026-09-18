@@ -192,6 +192,9 @@
   /* 弹窗 */
   .mask { position:fixed; inset:0; background:rgba(10,14,22,.45); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
   .mask.on { display:flex; animation:fade .15s; }
+  /* 通用确认框:需盖在详情等弹窗之上 */
+  #appPromptMask { z-index:80; }
+  .app-prompt-msg { font-size:13px; line-height:1.75; white-space:pre-wrap; word-break:break-word; }
   @keyframes fade { from{opacity:0} to{opacity:1} }
   .modal { background:var(--card); border-radius:18px; width:min(720px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:var(--shadow-lg); border:1px solid var(--line); animation:pop .18s; }
   @keyframes pop { from{transform:translateY(10px) scale(.98);opacity:0} to{transform:none;opacity:1} }
@@ -486,6 +489,20 @@
 </section>
 
 <!-- 账号详情 -->
+<!-- 通用确认框(替代原生 confirm/alert,见 appPrompt) -->
+<div class="mask" id="appPromptMask" onclick="if(event.target===this)appPromptClose(false)">
+  <div class="modal" style="width:min(440px,96vw)">
+    <div class="hd"><h3 id="appPromptTitle">确认</h3></div>
+    <div class="bd">
+      <div class="app-prompt-msg" id="appPromptMsg"></div>
+      <div class="row-btns" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn" id="appPromptCancel" onclick="appPromptClose(false)">取消</button>
+        <button class="btn primary" id="appPromptOk" onclick="appPromptClose(true)">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="mask" id="detailMask" onclick="if(event.target===this)closeModal('detailMask')">
   <div class="modal">
     <div class="hd"><h3 id="dTitle">账号详情</h3><button class="icon-btn" onclick="closeModal('detailMask')">✕</button></div>
@@ -760,6 +777,32 @@ const SC_CODE_MAP = {
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function openModal(id){ document.getElementById(id).classList.add('on'); }
 function closeModal(id){ document.getElementById(id).classList.remove('on'); }
+// macOS WKWebView(Tauri)不弹原生 confirm/alert:confirm 会直接返回 false,
+// 导致切号、重置设备等确认类操作被静默取消(表现为点按钮毫无反应)。
+// 统一改用页面内对话框,Electron / WebView2 走同一套逻辑。
+let appPromptResolve=null;
+function appPrompt(message,opts){
+  const o=opts||{};
+  return new Promise(resolve=>{
+    appPromptResolve=resolve;
+    document.getElementById('appPromptTitle').textContent=o.title||(o.alertOnly?'提示':'确认');
+    document.getElementById('appPromptMsg').textContent=String(message==null?'':message);
+    document.getElementById('appPromptOk').textContent=o.okText||'确定';
+    document.getElementById('appPromptCancel').style.display=o.alertOnly?'none':'';
+    openModal('appPromptMask');
+    setTimeout(()=>{ try{ document.getElementById('appPromptOk').focus(); }catch(e){} },30);
+  });
+}
+function appConfirm(message,opts){ return appPrompt(message,opts); }
+function appAlert(message,opts){ return appPrompt(message,Object.assign({},opts,{alertOnly:true})); }
+// 关闭并兑现等待中的 Promise;Esc / 点遮罩 / 取消都走这里
+function appPromptClose(ok){
+  const mask=document.getElementById('appPromptMask');
+  if(!mask.classList.contains('on')) return;
+  closeModal('appPromptMask');
+  const r=appPromptResolve; appPromptResolve=null;
+  if(r) r(!!ok);
+}
 function openMacPermissionGuide(){ openModal('macPermissionMask'); }
 function showPaywallPermissionPrompt(message, pendingAction){
   if(message) document.getElementById('paywallPermissionMessage').textContent=message;
@@ -803,7 +846,7 @@ async function retryMacAppManagement(){
 async function resetMacPermissions(target){
   const appName=target==='toolkit'?'Typeless 工具集':'Typeless';
   const scope=target==='toolkit'?'App 管理及误加的辅助功能':'辅助功能和麦克风';
-  if(!confirm(`清除 ${appName} 的旧${scope}权限记录?\n\n这相当于在系统设置里删除旧条目，不会删除应用、账号、词库或快照。清除后需要重新启动 ${appName} 并再次授权。`)) return;
+  if(!await appConfirm(`清除 ${appName} 的旧${scope}权限记录?\n\n这相当于在系统设置里删除旧条目，不会删除应用、账号、词库或快照。清除后需要重新启动 ${appName} 并再次授权。`)) return;
   try{
     const result=ENV_INFO?.desktop_host==='tauri'
       ? await desktopHost('reset_privacy_permissions',{target})
@@ -1017,7 +1060,7 @@ async function addWord(){
   if(r.status==='OK'){ toast('已添加，后台会自动对齐其他账号','ok'); document.getElementById('wordInput').value=''; refreshDict(); refreshDictionarySyncStatus(); } else toast('失败','err');
 }
 async function delWord(term){
-  if(!curDetail) return; if(!confirm('删除「'+term+'」?\n\n这是明确的同步删除：它会从主词库移除，并在后台从其他已管理账号中一并删除。')) return;
+  if(!curDetail) return; if(!await appConfirm('删除「'+term+'」?\n\n这是明确的同步删除：它会从主词库移除，并在后台从其他已管理账号中一并删除。')) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/word?term='+encodeURIComponent(term),{method:'DELETE'});
   if(r.status==='OK'){ toast(r.msg||'已删除，后台会同步到其他账号','ok'); curWords=curWords.filter(w=>w.term!==term); renderDict(); refreshDictionarySyncStatus(); } else toast('失败','err');
 }
@@ -1249,8 +1292,9 @@ async function runAccountSync(){
 async function resetDeviceOnly(){
   const btn=document.getElementById('resetDeviceBtn');
   if(btn.disabled) return;
-  if(!confirm('确认重置本机 Typeless 设备标识?\n\n将尝试保存当前账号快照，清理设备凭据、缓存及当前登录状态，并重启 Typeless 到登录页。\n工具集已保存的账号、快照和词库不会删除。\n\n重置后可登录已有账号，不需要注册新账号。是否继续？')) return;
+  // 确认框是异步的,先在等待期间锁住按钮,避免重复触发
   btn.disabled=true;
+  if(!await appConfirm('确认重置本机 Typeless 设备标识?\n\n将尝试保存当前账号快照，清理设备凭据、缓存及当前登录状态，并重启 Typeless 到登录页。\n工具集已保存的账号、快照和词库不会删除。\n\n重置后可登录已有账号，不需要注册新账号。是否继续？')){ btn.disabled=false; return; }
   btn.textContent='正在重置…';
   toast('正在重置设备，Typeless 将关闭并重新打开…');
   try{
@@ -1269,7 +1313,7 @@ async function switchTo(id){
     toast('该账号快照已串号或无效,请先登录该号后点「更新快照」','err');
     return;
   }
-  if(!confirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。\n若该号快照教程未完成,会自动补写跳过标记。')) return;
+  if(!await appConfirm('切换到「'+a.nickname+'」?将关闭并重启 Typeless。\n若该号快照教程未完成,会自动补写跳过标记。')) return;
   toast('切换中…Typeless 将重启');
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/switch',{method:'POST'});
   if(r.status==='OK'){
@@ -1282,7 +1326,7 @@ async function switchTo(id){
 }
 async function activateAccount(id){
   const a=ACCOUNTS.find(x=>x.user_id===id); if(!a) return;
-  if(!confirm('在此设备启用「'+(a.nickname||a.email||id)+'」?\n\n工具会用已加密同步的 refresh token 获取短期 access token，并让 Typeless 切换到该账号、创建本机快照。')) return;
+  if(!await appConfirm('在此设备启用「'+(a.nickname||a.email||id)+'」?\n\n工具会用已加密同步的 refresh token 获取短期 access token，并让 Typeless 切换到该账号、创建本机快照。')) return;
   toast('正在启用账号，Typeless 将临时重启…');
   try{
     const r=await apiTimed('/api/accounts/'+encodeURIComponent(id)+'/activate',{method:'POST'},180000);
@@ -1310,7 +1354,7 @@ function closeRegisterWizard(){
   closeModal('regWizardMask');
 }
 async function registerWizardStart(){
-  if(!confirm('开始注册新账号?\n\n1. 保存当前账号快照\n2. 重置设备 ID 并打开登录页\n3. 请你在 Typeless 注册或登录目标账号\n4. 回到工具集抓取凭证并添加\n5. 自动跳过教程并在后台对齐词库\n\n本地备注名不会代替凭证抓取。')) return;
+  if(!await appConfirm('开始注册新账号?\n\n1. 保存当前账号快照\n2. 重置设备 ID 并打开登录页\n3. 请你在 Typeless 注册或登录目标账号\n4. 回到工具集抓取凭证并添加\n5. 自动跳过教程并在后台对齐词库\n\n本地备注名不会代替凭证抓取。')) return;
   document.getElementById('regStartBtn').disabled=true;
   setRegStatus('正在保存快照并解除设备限制…');
   try{
@@ -1342,7 +1386,7 @@ async function registerWizardPoll(silent){
   }catch(e){ if(!silent) setRegStatus('探测失败: '+(e.message||e)); }
 }
 async function registerWizardFinish(){
-  if(!confirm('确认 Typeless 已登录目标账号?\n将自动抓取 user_id、邮箱和 token，成功后跳过教程、写入管理器，并在后台对齐词库。\n\n本地备注名只影响显示，不参与账号识别。')) return;
+  if(!await appConfirm('确认 Typeless 已登录目标账号?\n将自动抓取 user_id、邮箱和 token，成功后跳过教程、写入管理器，并在后台对齐词库。\n\n本地备注名只影响显示，不参与账号识别。')) return;
   if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
   document.getElementById('regFinishBtn').disabled=true;
   setRegStatus('正在跳过教程、抓取当前登录凭证并添加账号，请稍候 30～90 秒…');
@@ -1378,7 +1422,7 @@ async function patchPaywall(){
   if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
   let msg='立即检查并解除弹窗?\n\n正常情况下工具集会在启动、官方更新和账号变更后自动维护。此按钮用于立即重试。\n程序会创建回滚备份、关闭 Typeless、完成修复并自动重启。';
   if(st.data?.autoDetected) msg+='\n\n🔍 已自动检测到你版本的新函数名,将自动适配并写入配置。';
-  if(!confirm(msg)) return;
+  if(!await appConfirm(msg)) return;
   toast('正在检查并自动修复…');
   const r=await api('/api/patch-paywall',{method:'POST'});
   if(r.status==='OK'){
@@ -1390,15 +1434,15 @@ async function patchPaywall(){
       showPaywallPermissionPrompt(r.msg||'请开启“Typeless 工具集”的 App 管理权限，允许后会自动继续。');
     }else{
       toast('补丁失败，已执行安全回滚','err');
-      alert(r.msg||'打补丁失败，详细原因未返回');
+      await appAlert(r.msg||'打补丁失败，详细原因未返回');
     }
   }
   setTimeout(()=>{ detectCurrent(); refreshPatchStatus(); refreshPaywallMaintenanceStatus(); }, 7000);
 }
-function notifyTypelessPermissionReset(resign){
+async function notifyTypelessPermissionReset(resign){
   if(!resign?.accessibility_regrant_required) return;
   if(resign?.privacy_reset?.ok){
-    alert('Typeless 的代码身份已经变化。旧的辅助功能和麦克风记录已自动清除。\n\n接下来只需按系统提示给 Typeless.app 本体重新授权一次；不要给“Typeless 工具集”开启麦克风或辅助功能。');
+    await appAlert('Typeless 的代码身份已经变化。旧的辅助功能和麦克风记录已自动清除。\n\n接下来只需按系统提示给 Typeless.app 本体重新授权一次；不要给“Typeless 工具集”开启麦克风或辅助功能。');
   }
   openMacPermissionGuide();
 }
@@ -1409,7 +1453,7 @@ async function retryPaywallMaintenance(){
     closeModal('paywallPermissionMask');
     toast(r.msg||'弹窗已自动解除','ok');
     PAYWALL_NOTICE_AT=r.data?.status?.last_success_at||PAYWALL_NOTICE_AT;
-    notifyTypelessPermissionReset(r.data?.result?.resign);
+    await notifyTypelessPermissionReset(r.data?.result?.resign);
     await fetchEnv();
   }else if(r.data?.code==='APP_MANAGEMENT_REQUIRED'){
     showPaywallPermissionPrompt(r.msg||'尚未检测到 App 管理权限，请开启后返回。');
@@ -1437,7 +1481,7 @@ async function refreshPaywallMaintenanceStatus(){
       if(btn) btn.title='弹窗补丁由工具集自动维护；点击可立即检查';
       if(s.last_success_at && s.last_success_at!==PAYWALL_NOTICE_AT && !s.result?.already){
         PAYWALL_NOTICE_AT=s.last_success_at;
-        notifyTypelessPermissionReset(s.result?.resign);
+        await notifyTypelessPermissionReset(s.result?.resign);
       }
     }else if(s.state==='deferred'){
       if(label) label.textContent='弹窗待自动修复';
@@ -1460,7 +1504,7 @@ async function skipOnboarding(){
   try{ const current=await api('/api/onboarding-status'); status=current.data||{}; }
   catch(e){ toast('无法读取 Typeless 新手引导状态','err'); return; }
   const action=status.completed?'重新修复新手引导状态':'跳过新手引导';
-  if(!confirm(action+'?\n\n将同时写入:\n· app-onboarding.json 全部完成标记\n· app-storage 当前平台 onboarding 标记\n· 当前账号 profiles 快照\n\n然后重启 Typeless。该操作可重复执行，用于修复升级或切号后回潮。')) return;
+  if(!await appConfirm(action+'?\n\n将同时写入:\n· app-onboarding.json 全部完成标记\n· app-storage 当前平台 onboarding 标记\n· 当前账号 profiles 快照\n\n然后重启 Typeless。该操作可重复执行，用于修复升级或切号后回潮。')) return;
   toast(status.completed?'正在重新写入并校验引导状态…':'正在跳过并写入快照…');
   const r=await api('/api/skip-onboarding',{method:'POST'});
   if(r.status==='OK'){
@@ -1688,7 +1732,7 @@ async function downloadToolkitUpdate(){
       else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
       return;
     }
-    if(!confirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。`)) return;
+    if(!await appConfirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。`)) return;
     const r=await api('/api/toolkit-update/install',{method:'POST',body:'{}'});
     if(r.status!=='OK'){ toast(r.msg||'准备更新失败','err'); return; }
     TOOLKIT_UPDATE={...TOOLKIT_UPDATE,state:'installing',running:true}; renderToolkitUpdate();
@@ -1724,7 +1768,7 @@ async function performOfficialUpdate(updateStatus){
       const maintenance=r.data?.paywall_maintenance;
       if(maintenance?.ok){
         PAYWALL_NOTICE_AT=maintenance.status?.last_success_at||PAYWALL_NOTICE_AT;
-        notifyTypelessPermissionReset(maintenance.result?.resign);
+        await notifyTypelessPermissionReset(maintenance.result?.resign);
       }else if(maintenance?.code==='APP_MANAGEMENT_REQUIRED'){
         showPaywallPermissionPrompt(
           maintenance.error||'官方更新已完成，但自动解除弹窗仍需要 App 管理权限。开启后返回即可继续。',
@@ -1732,9 +1776,9 @@ async function performOfficialUpdate(updateStatus){
         );
       }else if(r.data?.identity_changed){
         if(r.data?.privacy_reset?.ok){
-          alert('Typeless 已恢复新的官方代码身份，旧权限记录已自动清除。\n\n请按系统提示给 Typeless.app 本体重新授权一次；之后注册和切换账号不会重复要求授权。');
+          await appAlert('Typeless 已恢复新的官方代码身份，旧权限记录已自动清除。\n\n请按系统提示给 Typeless.app 本体重新授权一次；之后注册和切换账号不会重复要求授权。');
         }else{
-          alert('Typeless 的代码身份已经变化，但旧权限记录未能自动清除。\n\n请在接下来的“macOS 权限说明”中执行一次“清除 Typeless 旧权限并重新授权”。');
+          await appAlert('Typeless 的代码身份已经变化，但旧权限记录未能自动清除。\n\n请在接下来的“macOS 权限说明”中执行一次“清除 Typeless 旧权限并重新授权”。');
         }
         openMacPermissionGuide();
       }
@@ -1760,7 +1804,7 @@ async function saveSnap(){
   await loadAccounts();
 }
 async function rmAccount(){
-  if(!curDetail || !confirm('从管理器移除「'+curDetail.nickname+'」?\n\n若已启用 WebDAV 账号同步，其他设备也会同步移除这条管理记录。不会注销 Typeless 账号。')) return;
+  if(!curDetail || !await appConfirm('从管理器移除「'+curDetail.nickname+'」?\n\n若已启用 WebDAV 账号同步，其他设备也会同步移除这条管理记录。不会注销 Typeless 账号。')) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id),{method:'DELETE'});
   if(r.status!=='OK'){ toast(r.msg||'移除失败','err'); return; }
   closeModal('detailMask'); await loadAccounts(); toast('已移除','ok');
@@ -1820,7 +1864,7 @@ async function saveMaster(){
   const terms=document.getElementById('masterArea').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const nextKeys=new Set(terms.map(s=>s.toLowerCase()));
   const removed=MASTER_ORIGINAL.filter(term=>!nextKeys.has(term.toLowerCase()));
-  if(removed.length && !confirm(`确认从主词库移除 ${removed.length} 个词?\n\n这些词会作为明确的同步删除，在后台从所有已管理账号中一并移除。`)) return;
+  if(removed.length && !await appConfirm(`确认从主词库移除 ${removed.length} 个词?\n\n这些词会作为明确的同步删除，在后台从所有已管理账号中一并移除。`)) return;
   const r=await api('/api/master',{method:'POST',body:JSON.stringify({terms})});
   if(r.status==='OK'){
     MASTER_ORIGINAL=r.data||[];
@@ -2031,7 +2075,7 @@ async function saveShortcuts(){
     }
     bindings[f.id]=[b];
   }
-  if(!confirm('将快捷键写入 Typeless 配置并重启 Typeless?\n\n'+features.map(f=>f.label+': '+scCurrentBinding(f.id)).join('\n'))) return;
+  if(!await appConfirm('将快捷键写入 Typeless 配置并重启 Typeless?\n\n'+features.map(f=>f.label+': '+scCurrentBinding(f.id)).join('\n'))) return;
   document.getElementById('shortcutStatus').textContent='保存中…';
   toast('保存快捷键中…');
   try{
@@ -2129,6 +2173,8 @@ document.addEventListener('keydown',e=>{
   if(!masks.length&&!document.getElementById('settingsPage').hidden){ closeSettings(); return; }
   masks.forEach(m=>{
     if(m.id==='shortcutMask') closeShortcuts();
+    // 确认框走关闭函数,否则 Promise 永不兑现,await 会一直挂住
+    else if(m.id==='appPromptMask') appPromptClose(false);
     else m.classList.remove('on');
   });
 });
