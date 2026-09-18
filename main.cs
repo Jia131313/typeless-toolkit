@@ -431,6 +431,25 @@ class TrayApp
     // 显示成乱码，且注册表项、开始菜单快捷方式、重启 explorer 都无法消除。
     // 因此改用自绘窗口：外观可控，也不依赖系统通知平台。
 
+    // 提示窗口跟随管理页面的外观主题;页面还没加载过时先按系统主题取值。
+    // ManagerForm 在另一个类里,所以这里用 internal 以便跨类同步。
+    internal static bool toastDarkTheme = SystemUsesDarkTheme();
+
+    static bool SystemUsesDarkTheme()
+    {
+        try
+        {
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+            {
+                object value = key == null ? null : key.GetValue("AppsUseLightTheme");
+                if (value is int) return (int)value == 0;
+            }
+        }
+        catch (Exception) { }
+        return true; // 取不到时按深色,与工具集默认观感一致
+    }
+
     class ToastForm : Form
     {
         readonly System.Windows.Forms.Timer closeTimer;
@@ -456,11 +475,19 @@ class TrayApp
             Font bodyFont = new Font("Microsoft YaHei UI", 9f);
             Font metaFont = new Font("Microsoft YaHei UI", 8f);
 
+            // 跟随管理页面的外观主题(浅色 / 深色 / 跟随系统在页面侧已解析成具体值)
+            bool dark = toastDarkTheme;
+            Color background = dark ? Color.FromArgb(32, 33, 38) : Color.FromArgb(252, 252, 253);
+            Color titleColor = dark ? Color.White : Color.FromArgb(26, 28, 33);
+            Color bodyColor = dark ? Color.FromArgb(198, 200, 208) : Color.FromArgb(78, 82, 90);
+            Color metaColor = dark ? Color.FromArgb(150, 152, 160) : Color.FromArgb(128, 132, 140);
+            Color borderColor = dark ? Color.FromArgb(58, 60, 66) : Color.FromArgb(219, 222, 228);
+
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             TopMost = true;
             StartPosition = FormStartPosition.Manual;
-            BackColor = Color.FromArgb(32, 33, 38);
+            BackColor = background;
             Padding = new Padding(0);
 
             Size bodySize = TextRenderer.MeasureText(body, bodyFont,
@@ -468,11 +495,20 @@ class TrayApp
             Width = 386;
             Height = 34 + 24 + bodySize.Height + 16;
 
-            Color accent = warning ? Color.FromArgb(240, 190, 70) : Color.FromArgb(96, 170, 245);
+            Color accent = warning
+                ? (dark ? Color.FromArgb(240, 190, 70) : Color.FromArgb(198, 138, 18))
+                : (dark ? Color.FromArgb(96, 170, 245) : Color.FromArgb(38, 118, 210));
+
+            // 无边框窗口在浅色背景上需要一圈描边才立得住
+            Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (var pen = new Pen(borderColor))
+                    e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            };
 
             var appName = new Label();
             appName.Text = AppTitle;
-            appName.ForeColor = Color.FromArgb(150, 152, 160);
+            appName.ForeColor = metaColor;
             appName.Font = metaFont;
             appName.AutoSize = false;
             appName.Location = new Point(16, 8);
@@ -480,7 +516,7 @@ class TrayApp
 
             var close = new Label();
             close.Text = "✕";
-            close.ForeColor = Color.FromArgb(150, 152, 160);
+            close.ForeColor = metaColor;
             close.Font = metaFont;
             close.AutoSize = false;
             close.TextAlign = ContentAlignment.MiddleCenter;
@@ -500,7 +536,7 @@ class TrayApp
 
             var titleLabel = new Label();
             titleLabel.Text = title;
-            titleLabel.ForeColor = Color.White;
+            titleLabel.ForeColor = titleColor;
             titleLabel.Font = titleFont;
             titleLabel.AutoSize = false;
             titleLabel.Location = new Point(50, 38);
@@ -508,7 +544,7 @@ class TrayApp
 
             var bodyLabel = new Label();
             bodyLabel.Text = body;
-            bodyLabel.ForeColor = Color.FromArgb(198, 200, 208);
+            bodyLabel.ForeColor = bodyColor;
             bodyLabel.Font = bodyFont;
             bodyLabel.AutoSize = false;
             bodyLabel.Location = new Point(50, 62);
@@ -886,8 +922,9 @@ class ManagerForm : Form
                 try
                 {
                     string message = args.TryGetWebMessageAsString();
-                    if (message == "theme:dark") ApplyTitleBarTheme(true);
-                    else if (message == "theme:light") ApplyTitleBarTheme(false);
+                    // 页面在“跟随系统”时也会解析成 light/dark 再发过来,这里直接采用即可
+                    if (message == "theme:dark") { TrayApp.toastDarkTheme = true; ApplyTitleBarTheme(true); }
+                    else if (message == "theme:light") { TrayApp.toastDarkTheme = false; ApplyTitleBarTheme(false); }
                     else if (message == "toolkit-update:quit") TrayApp.ExitForToolkitUpdate();
                 }
                 catch { }
