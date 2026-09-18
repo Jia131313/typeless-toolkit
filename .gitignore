@@ -38,4 +38,8 @@ tray-icon.ico
 
 # 备份与日志
 backups/
+logs/
 *.log
+
+# 运行时状态(额度监控等,勿提交)
+quota-monitor.json
