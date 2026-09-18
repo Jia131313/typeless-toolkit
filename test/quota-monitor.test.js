@@ -27,6 +27,16 @@ test('quota config is opt-in and unknown or unlimited quota is never guessed', (
   assert.deepEqual(parseQuota({ week_word_usage_value: 2100, week_word_usage_limit: 2000 }), { used: 2100, limit: 2000, remaining: 0 });
 });
 
+test('Typeless 未运行时用短间隔重试,不会卡在暂停态两分钟', async () => {
+  const h = harness();
+  h.monitor.start(); // 只有已启动的监控才会安排下一次检查
+  h.setRunning(false);
+  const state = await h.monitor.run();
+  assert.equal(state.state, 'paused');
+  const last = h.timers[h.timers.length - 1];
+  assert.equal(last.ms, 10000, '暂停态应以 10 秒重试,而不是默认的 120 秒');
+});
+
 test('fetcher performs only the usage request and rejects failures without exposing raw credentials', async () => {
   const requests = [];
   const fetch = createQuotaFetcher({ ensureAccessToken: async () => 'secret', request: async (...args) => {
