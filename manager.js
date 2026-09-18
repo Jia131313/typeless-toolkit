@@ -9,6 +9,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { createQuotaFetcher, createQuotaMonitor, normalizeQuotaConfig } = require('./lib/quota-monitor');
 const { runtimeOptions, tauriHost } = require('./lib/tauri-host');
 
 const C = require('./lib/common');
@@ -654,6 +655,16 @@ const paywallMaintenance = createPaywallMaintenanceController(
 );
 
 const TOOLKIT_VERSION = require('./package.json').version;
+const quotaConfigFile = path.join(ROOT, 'quota-monitor.json');
+let quotaConfig;
+try { quotaConfig = normalizeQuotaConfig(readPrivateJson(quotaConfigFile, {})); }
+catch { quotaConfig = normalizeQuotaConfig(); }
+const quotaMonitor = createQuotaMonitor({
+  readAccounts, readCurrent: detectCurrentAccountFromFile, isRunning: isTypelessRunning,
+  inspectSnapshot, config: quotaConfig,
+  fetchQuota: createQuotaFetcher({ ensureAccessToken: ensureAccountAccessToken, request: curlApi }),
+});
+let accountSwitchInFlight = false;
 const toolkitBackendOwned = tauriHost.available || (
   process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
   path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..')
@@ -725,6 +736,27 @@ const server = http.createServer(async (req, res) => {
       const html = fs.readFileSync(path.join(C.CODE_DIR, 'manager.html'), 'utf8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(html);
+    }
+    if (m === 'GET' && p === '/api/quota-monitor/status') {
+      return send(res, 200, { status: 'OK', data: quotaMonitor.status() });
+    }
+    // 原生托盘只读提醒标识；不传账号名或凭证，不执行切换。
+    if (m === 'GET' && p === '/api/quota-monitor/notification') {
+      const state = quotaMonitor.status();
+      const active = state.state === 'low' && isTypelessRunning() &&
+        detectCurrentAccountFromFile().user_id === state.current?.user_id;
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(active ? state.alert_id : '');
+    }
+    if (m === 'POST' && p === '/api/quota-monitor/config') {
+      try {
+        const settings = normalizeQuotaConfig(await readBody(req));
+        writePrivateJson(quotaConfigFile, settings);
+        return send(res, 200, { status: 'OK', data: quotaMonitor.configure(settings) });
+      } catch (error) { return send(res, 400, { status: 'FAIL', msg: error.message }); }
+    }
+    if (m === 'POST' && p === '/api/quota-monitor/check') {
+      return send(res, 200, { status: 'OK', data: quotaMonitor.check() });
     }
     // 跨设备账号同步：配置读取始终脱敏，远端仅保存加密后的 refresh 凭证。
     if (m === 'GET' && p === '/api/account-sync/config') {
@@ -883,6 +915,17 @@ const server = http.createServer(async (req, res) => {
     // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/switch')) {
       const id = decodeURIComponent(p.split('/')[3]);
+      if (accountSwitchInFlight) return send(res, 409, { status: 'FAIL', msg: '正在切换账号，请等待完成' });
+      accountSwitchInFlight = true;
+      try {
+      const body = await readBody(req);
+      if (body.quota_guard) {
+        try { await quotaMonitor.validateSwitch(id, body.quota_guard); }
+        catch (error) {
+          quotaMonitor.invalidate();
+          return send(res, 409, { status: 'FAIL', msg: error.message });
+        }
+      }
       {
         // 先校验目标快照身份,避免「点 A 却还原成 B」
         const snap = inspectSnapshot(id);
@@ -924,6 +967,10 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (e) {
         return send(res, 500, { status: 'FAIL', msg: e.message || '切换失败' });
+      }
+      } finally {
+        accountSwitchInFlight = false;
+        quotaMonitor.invalidate();
       }
     }
     // 解除设备限制(重置设备 ID,准备注册新账号)
@@ -1386,6 +1433,7 @@ function startServer() {
       server.off('error', onError);
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
+      quotaMonitor.start();
       paywallMaintenance.start();
       scheduleAccountSync('startup', 1500);
       accountSyncInterval = setInterval(() => scheduleAccountSync('periodic'), AUTO_SYNC_INTERVAL_MS);
@@ -1400,6 +1448,7 @@ function startServer() {
 
 server.on('close', () => {
   dictionarySync.stop();
+  quotaMonitor.stop();
   paywallMaintenance.stop();
   if (accountSyncTimer) clearTimeout(accountSyncTimer);
   accountSyncTimer = null;
@@ -1417,6 +1466,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  quotaMonitor,
   server, startServer, PORT,
   isTrustedLocalOrigin, isTrustedLocalHost,
   accountForClient, accountDeleteId, shouldReconnectCurrent,

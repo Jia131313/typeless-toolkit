@@ -4,6 +4,7 @@ profiles/
 dictionary-sync-meta.json
 account-sync.json
 account-sync-tombstones.json
+quota-monitor.json
 *.csv
 *.bak
 

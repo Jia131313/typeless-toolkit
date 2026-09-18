@@ -55,6 +55,9 @@ class TrayApp
     static bool backendReused;
     static string updateReadyPath;
     static string updateTargetVersion;
+    static System.Windows.Forms.Timer quotaTimer;
+    static bool quotaPollBusy;
+    static string lastQuotaAlert;
 
     [STAThread]
     static void Main(string[] args)
@@ -100,6 +103,7 @@ class TrayApp
         string pageUrl = baseUrl + (backendReused ? "/?toolkit_backend=shared" : "/");
         managerForm = new ManagerForm(pageUrl, exeDir, LoadAppIcon());
         managerForm.FormClosing += OnManagerFormClosing;
+        StartQuotaNotifications();
         Application.Run(managerForm);
         Cleanup();
     }
@@ -431,6 +435,41 @@ class TrayApp
         menu.MenuItems.Add("退出", delegate { ExitApplication(); });
         trayIcon.ContextMenu = menu;
         trayIcon.DoubleClick += delegate { OpenManager(); };
+        trayIcon.BalloonTipClicked += delegate { OpenManager(); };
+    }
+
+    static void StartQuotaNotifications()
+    {
+        quotaTimer = new System.Windows.Forms.Timer();
+        quotaTimer.Interval = 10000;
+        quotaTimer.Tick += async delegate
+        {
+            if (quotaPollBusy || exiting) return;
+            quotaPollBusy = true;
+            try
+            {
+                // 原生计时器独立于隐藏 WebView 的页面计时器，只读后端缓存。
+                string alert = await Task.Run(() =>
+                {
+                    var request = (HttpWebRequest)WebRequest.Create(baseUrl + "/api/quota-monitor/notification");
+                    request.Timeout = 3000;
+                    request.ReadWriteTimeout = 3000;
+                    request.Proxy = null;
+                    using (var response = request.GetResponse())
+                    using (var reader = new StreamReader(response.GetResponseStream()))
+                        return reader.ReadToEnd().Trim();
+                });
+                if (exiting || trayIcon == null || string.IsNullOrEmpty(alert) || alert == lastQuotaAlert) return;
+                if (!Regex.IsMatch(alert, @"^\d+-\d+$")) return;
+                lastQuotaAlert = alert;
+                trayIcon.ShowBalloonTip(8000, "Typeless 额度提醒",
+                    "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", ToolTipIcon.Info);
+            }
+            catch (WebException) { /* 后端重启或暂不可用时，下次轮询重试。 */ }
+            catch (Exception error) { AppendLauncherLog("额度提醒失败：" + error.Message); }
+            finally { quotaPollBusy = false; }
+        };
+        quotaTimer.Start();
     }
 
     static void OpenManager()
@@ -466,6 +505,7 @@ class TrayApp
 
     static void Cleanup()
     {
+        if (quotaTimer != null) { quotaTimer.Stop(); quotaTimer.Dispose(); }
         if (trayIcon != null)
         {
             trayIcon.Visible = false;
