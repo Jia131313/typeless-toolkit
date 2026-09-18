@@ -28,6 +28,12 @@
   .quota-controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:14px; }
   .quota-controls label { display:flex; align-items:center; gap:8px; }
   .quota-controls input[type="number"] { width:110px; margin:0; }
+  .quota-order { display:flex; flex-direction:column; gap:6px; margin:8px 0 4px; max-width:520px; }
+  .quota-order-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg2); font-size:12.5px; }
+  .quota-order-item .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .quota-order-item .btn { padding:2px 9px; }
+  .auto-countdown { margin-top:14px; font-size:13px; color:var(--sub); text-align:center; }
+  .auto-countdown b { font-size:24px; color:var(--warn); font-variant-numeric:tabular-nums; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; }
   button,input,select,textarea { font:inherit; }
   button:focus-visible,a:focus-visible,[tabindex]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
@@ -439,6 +445,21 @@
         <button class="btn primary" id="quotaSaveBtn" onclick="saveQuotaSettings()" disabled>保存</button>
         <button class="btn" id="quotaCheckBtn" onclick="checkQuotaNow()" disabled>立即检查</button>
       </div>
+      <div class="quota-controls">
+        <label><input type="checkbox" id="quotaAutoSwitch" onchange="syncQuotaAutoControls()" disabled>额度不足时自动切换账号</label>
+        <label for="quotaStrategy">切换策略
+          <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
+            <option value="quota">剩余额度最多</option>
+            <option value="personalized">个性化程度最高</option>
+            <option value="custom">按自定义顺序</option>
+          </select>
+        </label>
+      </div>
+      <p id="quotaAutoHint" role="status"></p>
+      <div id="quotaOrderWrap" hidden>
+        <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
+        <div class="quota-order" id="quotaOrderList"></div>
+      </div>
       <p id="quotaMonitorStatus" role="status">正在读取提醒设置…</p>
       <p>通常每 2 分钟检查，接近阈值时每 30 秒检查。Windows 桌面版支持托盘提醒；其他运行方式请留意首页提示。额度统计可能延迟，一次长听写也可能跨过阈值。</p>
     </section>
@@ -513,6 +534,20 @@
 </section>
 
 <!-- 账号详情 -->
+<!-- 自动切号倒计时:仅在开启自动切号且额度达到阈值后出现,可直接取消 -->
+<div class="mask" id="autoSwitchMask" onclick="if(event.target===this)cancelAutoSwitch()">
+  <div class="modal" style="width:min(420px,96vw)">
+    <div class="hd"><h3>即将自动切换账号</h3></div>
+    <div class="bd">
+      <div class="app-prompt-msg" id="autoSwitchMsg"></div>
+      <div class="auto-countdown"><b id="autoCountdown">15</b> 秒后自动切换</div>
+      <div class="row-btns" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn" onclick="cancelAutoSwitch()">取消本次自动切换</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 通用确认框(替代原生 confirm/alert,见 appPrompt) -->
 <div class="mask" id="appPromptMask" onclick="if(event.target===this)appPromptClose(false)">
   <div class="modal" style="width:min(440px,96vw)">
@@ -781,6 +816,8 @@ let OFFICIAL_UPDATE = null, OFFICIAL_UPDATE_BUSY = false, OFFICIAL_UPDATE_CHECKE
 let SETTINGS_TAB = 'general', HOME_SCROLL = 0, ACCOUNT_SYNC_LOADED = false, ACCOUNT_SYNC_LOADING = null;
 let ACCOUNT_SYNC_ENABLED = false;
 let QUOTA_STATE = null, QUOTA_LOADED = false, QUOTA_LOADING = false, QUOTA_SWITCH_BUSY = false;
+// 自定义切号顺序:QUOTA_ORDER 是待保存的配置,QUOTA_ORDER_VIEW 是当前渲染出来的次序
+let QUOTA_ORDER = [], QUOTA_ORDER_VIEW = [], AUTO_COUNTDOWN_TIMER = null;
 const TOOLKIT_UPDATE_SHARED_BACKEND = new URLSearchParams(window.location.search).get('toolkit_backend') === 'shared';
 let SC_STATE = { features: [], bindings: {}, max_parts: 2, recordingId: null, draft: {} };
 const SC_CODE_MAP = {
@@ -802,25 +839,108 @@ const SC_CODE_MAP = {
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function renderQuotaMonitor(state){
   QUOTA_STATE=state;
+  const available=state.auto_switch_available!==false;
+  const autoBox=document.getElementById('quotaAutoSwitch');
+  const strategySel=document.getElementById('quotaStrategy');
   if(!QUOTA_LOADED){
     document.getElementById('quotaEnabled').checked=state.config.enabled;
     document.getElementById('quotaRemaining').value=state.config.remaining;
+    autoBox.checked=state.config.auto_switch;
+    strategySel.value=state.config.strategy;
+    QUOTA_ORDER=(state.config.order||[]).slice();
     document.getElementById('quotaEnabled').disabled=false;
     document.getElementById('quotaRemaining').disabled=false;
     document.getElementById('quotaSaveBtn').disabled=false;
     QUOTA_LOADED=true;
   }
+  // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
+  autoBox.disabled=!available;
+  document.getElementById('quotaAutoHint').textContent=available?''
+    :'当前运行环境无法读取听写状态（需要 Node 23.4+ 内置 sqlite），因此不能开启自动切号。';
+  strategySel.disabled=!available||!autoBox.checked;
+  renderQuotaOrder();
   document.getElementById('quotaCheckBtn').disabled=!state.config.enabled||state.state==='checking';
   document.getElementById('quotaMonitorStatus').textContent=state.message+(state.checked_at?' · 最近成功查询 '+new Date(state.checked_at).toLocaleTimeString():'');
-  const show=state.config.enabled&&['low','error'].includes(state.state);
+  renderAutoSwitch(state);
+  const show=state.config.enabled&&['low','error','auto_pending','auto_countdown','auto_switching','auto_done'].includes(state.state);
   document.getElementById('quotaNotice').hidden=!show;
   document.getElementById('quotaNoticeTitle').textContent=state.message;
-  document.getElementById('quotaNoticeDetail').textContent=state.candidate
-    ? '推荐「'+state.candidate.name+'」，最近查询剩余 '+nfmt(state.candidate.remaining)+' 字。请在听写完成后切换。'
-    : state.state==='error'?'查询失败不会触发切号；可在提醒设置中重试。':'请检查其他账号的额度、登录凭证与本机快照。';
+  document.getElementById('quotaNoticeDetail').textContent=quotaNoticeDetail(state);
   const btn=document.getElementById('quotaSwitchBtn');
+  // 自动流程已在推进时不再提供手动入口,避免两条路径同时重启 Typeless
   btn.hidden=state.state!=='low'||!state.candidate;
   btn.disabled=QUOTA_SWITCH_BUSY;
+}
+function quotaNoticeDetail(state){
+  if(state.state==='auto_switching'||state.state==='auto_done') return '自动切号已开启，切换过程会重启 Typeless。';
+  if(state.state==='auto_pending'||state.state==='auto_countdown') return '自动切号会在你停止听写后执行，无需手动操作。';
+  if(state.candidate) return '推荐「'+state.candidate.name+'」，最近查询剩余 '+nfmt(state.candidate.remaining)+' 字。请在听写完成后切换。';
+  return state.state==='error'?'查询失败不会触发切号；可在提醒设置中重试。':'请检查其他账号的额度、登录凭证与本机快照。';
+}
+// 自定义顺序:↑↓ 调整,未列入的账号自动追加在末尾
+function renderQuotaOrder(){
+  const strategySel=document.getElementById('quotaStrategy');
+  const show=strategySel.value==='custom'&&!strategySel.disabled;
+  document.getElementById('quotaOrderWrap').hidden=!show;
+  if(!show) return;
+  const currentId=QUOTA_STATE?.current?.user_id;
+  const accounts=(typeof ACCOUNTS!=='undefined'&&ACCOUNTS?ACCOUNTS:[]).filter(a=>a.user_id!==currentId);
+  const ordered=[...QUOTA_ORDER.map(id=>accounts.find(a=>a.user_id===id)).filter(Boolean),
+    ...accounts.filter(a=>!QUOTA_ORDER.includes(a.user_id))];
+  QUOTA_ORDER_VIEW=ordered.map(a=>a.user_id);
+  const list=document.getElementById('quotaOrderList');
+  list.textContent='';
+  ordered.forEach((a,i)=>{
+    const row=document.createElement('div'); row.className='quota-order-item';
+    const name=document.createElement('span'); name.className='name';
+    name.textContent=(i+1)+'. '+(a.nickname||a.email||a.user_id);
+    const up=document.createElement('button'); up.className='btn small'; up.type='button';
+    up.textContent='↑'; up.disabled=i===0; up.onclick=()=>moveQuotaOrder(a.user_id,-1);
+    const down=document.createElement('button'); down.className='btn small'; down.type='button';
+    down.textContent='↓'; down.disabled=i===ordered.length-1; down.onclick=()=>moveQuotaOrder(a.user_id,1);
+    row.append(name,up,down); list.appendChild(row);
+  });
+}
+function syncQuotaAutoControls(){
+  const available=QUOTA_STATE?.auto_switch_available!==false;
+  document.getElementById('quotaStrategy').disabled=!available||!document.getElementById('quotaAutoSwitch').checked;
+  renderQuotaOrder();
+}
+function moveQuotaOrder(userId,delta){
+  const idx=QUOTA_ORDER_VIEW.indexOf(userId);
+  const to=idx+delta;
+  if(idx<0||to<0||to>=QUOTA_ORDER_VIEW.length) return;
+  const next=QUOTA_ORDER_VIEW.slice();
+  [next[idx],next[to]]=[next[to],next[idx]];
+  QUOTA_ORDER=next;
+  renderQuotaOrder();
+}
+// 倒计时弹窗:只在 auto_countdown 期间出现,关闭即视为取消
+function renderAutoSwitch(state){
+  const mask=document.getElementById('autoSwitchMask');
+  if(state.state==='auto_countdown'){
+    document.getElementById('autoSwitchMsg').textContent=state.message;
+    if(!mask.classList.contains('on')) openModal('autoSwitchMask');
+    if(!AUTO_COUNTDOWN_TIMER){
+      const end=state.countdown_end?new Date(state.countdown_end).getTime():0;
+      const tick=()=>{
+        const left=Math.max(0,Math.ceil((end-Date.now())/1000));
+        document.getElementById('autoCountdown').textContent=left;
+        if(left<=0){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
+      };
+      tick();
+      AUTO_COUNTDOWN_TIMER=setInterval(tick,500);
+    }
+    return;
+  }
+  if(AUTO_COUNTDOWN_TIMER){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
+  if(mask.classList.contains('on')) closeModal('autoSwitchMask');
+}
+async function cancelAutoSwitch(){
+  if(AUTO_COUNTDOWN_TIMER){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
+  closeModal('autoSwitchMask');
+  try{ await apiTimed('/api/quota-monitor/cancel-auto',{method:'POST'}); }catch(e){}
+  await refreshQuotaMonitor();
 }
 async function refreshQuotaMonitor(){
   if(QUOTA_LOADING) return;
@@ -840,10 +960,19 @@ async function refreshQuotaMonitor(){
 async function saveQuotaSettings(){
   const remaining=Number(document.getElementById('quotaRemaining').value);
   if(!Number.isSafeInteger(remaining)||remaining<1){ toast('请输入正整数剩余额度','err'); return; }
+  const autoSwitch=document.getElementById('quotaAutoSwitch').checked;
+  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
   const btn=document.getElementById('quotaSaveBtn'); btn.disabled=true;
   try{
-    const r=await apiTimed('/api/quota-monitor/config',{method:'POST',body:JSON.stringify({enabled:document.getElementById('quotaEnabled').checked,remaining})});
+    const r=await apiTimed('/api/quota-monitor/config',{method:'POST',body:JSON.stringify({
+      enabled:document.getElementById('quotaEnabled').checked,
+      remaining,
+      auto_switch:autoSwitch,
+      strategy:document.getElementById('quotaStrategy').value,
+      order:QUOTA_ORDER,
+    })});
     if(r.status!=='OK') throw new Error(r.msg||'保存失败');
+    QUOTA_ORDER=(r.data.config.order||[]).slice();
     renderQuotaMonitor(r.data); toast('额度提醒设置已保存','ok');
   }catch(e){ toast(e.message||'保存失败','err'); }
   finally{ btn.disabled=false; }

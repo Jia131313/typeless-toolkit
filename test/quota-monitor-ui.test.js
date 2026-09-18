@@ -12,7 +12,16 @@ function harness() {
     candidate: { user_id: 'b', name: '<img src=x onerror=alert(1)>', remaining: 1900 }, alert_id: '1000-1', message: '剩余 100 字' };
   const context = vm.createContext({
     QUOTA_STATE: null, QUOTA_LOADED: false, QUOTA_LOADING: false, QUOTA_SWITCH_BUSY: false,
-    document: { getElementById(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } },
+    // 自动切号引入的模块级变量(真实页面里声明在提取的代码段之外)
+    QUOTA_ORDER: [], QUOTA_ORDER_VIEW: [], AUTO_COUNTDOWN_TIMER: null,
+    document: {
+      getElementById(id) {
+        if (!elements.has(id)) {
+          elements.set(id, { classList: { contains: () => false, add() {}, remove() {} } });
+        }
+        return elements.get(id);
+      },
+    },
     nfmt: String, confirm: () => false, toast: (...args) => messages.push(args), setTimeout: () => {},
     apiTimed: async () => ({ status: 'OK', data: state }),
     api: async (p, options) => { posts.push({ p, options }); return { status: 'OK' }; },

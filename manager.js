@@ -10,6 +10,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { createQuotaFetcher, createQuotaMonitor, normalizeQuotaConfig } = require('./lib/quota-monitor');
+// 听写状态:自动切号必须等到用户没在听写时才执行
+const { createDictationWatcher, dictationDbPath, sqliteAvailable } = require('./lib/dictation-state');
 const { runtimeOptions, tauriHost } = require('./lib/tauri-host');
 
 const C = require('./lib/common');
@@ -659,12 +661,91 @@ const quotaConfigFile = path.join(ROOT, 'quota-monitor.json');
 let quotaConfig;
 try { quotaConfig = normalizeQuotaConfig(readPrivateJson(quotaConfigFile, {})); }
 catch { quotaConfig = normalizeQuotaConfig(); }
+// 听写状态只能通过只读轮询本地历史库获得;运行时不可用时自动切号保持关闭。
+const dictationWatcher = createDictationWatcher({ dbPath: dictationDbPath(C.USERDATA_DIR) });
+
+/**
+ * 执行账号切换:校验目标快照 → 保存当前号 → 重启到目标快照。
+ * 手动切号路由与自动切号共用同一条路径,避免两套行为分叉。
+ */
+async function performAccountSwitch(id) {
+  // 手动路由与自动切号共用此入口;同一把锁避免两条路径同时重启 Typeless
+  if (accountSwitchInFlight) {
+    const busy = new Error('正在切换账号，请等待完成');
+    busy.status = 409;
+    throw busy;
+  }
+  accountSwitchInFlight = true;
+  try {
+    return await switchToAccountSnapshot(id);
+  } finally {
+    accountSwitchInFlight = false;
+  }
+}
+
+/** 真正的切换流程(调用方需已持有 accountSwitchInFlight) */
+async function switchToAccountSnapshot(id) {
+  const snap = inspectSnapshot(id);
+  if (!snap.has_snapshot) {
+    const error = new Error('该账号无快照,请先在 Typeless 登录该号后点「更新快照」');
+    error.status = 400;
+    throw error;
+  }
+  if (snap.snapshot_mismatch) {
+    const who = snap.snapshot_email || snap.snapshot_user_id;
+    const error = new Error(`该账号快照已串号(内容实际是 ${who})。请先在 Typeless 登录正确账号,再点「更新快照」覆盖。`);
+    error.status = 400;
+    throw error;
+  }
+  if (!snap.snapshot_ok) {
+    const error = new Error('该账号快照无效,请重新登录该号后更新快照');
+    error.status = 400;
+    throw error;
+  }
+  // 切换前:若当前号在跑,先把当前状态存回(尽量不丢);身份不匹配时跳过,绝不串写
+  try {
+    const cur = detectCurrentAccountFromFile();
+    if (cur.found && cur.user_id && cur.user_id !== id) {
+      try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
+      try { saveSnapshot(cur.user_id); }
+      catch (e) { log('[switch] 保存当前号快照跳过:', e.message); }
+    }
+  } catch (e) {}
+  killTypeless(); await sleep(1500);
+  restoreSnapshot(id);
+  const heal = healOnboardingAfterRestore(id);
+  await launchTypeless();
+  paywallMaintenance.schedule('account-switch', 1200);
+  return heal;
+}
+
+/** 官方 personal_stats 的学习率,用作「个性化程度最高」策略的排序依据 */
+async function fetchAccountLearningRatio(userId) {
+  const account = readAccounts().find(item => item.user_id === userId);
+  if (!account) throw new Error('账号不存在');
+  const token = await ensureAccountAccessToken(account);
+  const response = await curlApi('POST', '/user/personal_stats', token, {});
+  const ratio = response?.data?.total_learning_ratio;
+  return typeof ratio === 'number' && Number.isFinite(ratio) ? ratio : 0;
+}
+
 const quotaMonitor = createQuotaMonitor({
   readAccounts, readCurrent: detectCurrentAccountFromFile, isRunning: isTypelessRunning,
   inspectSnapshot, config: quotaConfig,
   fetchQuota: createQuotaFetcher({ ensureAccessToken: ensureAccountAccessToken, request: curlApi }),
+  // 读不到听写状态时传 null,自动切号会被安全地保持关闭
+  dictation: sqliteAvailable() ? dictationWatcher : null,
+  switchAccount: performAccountSwitch,
+  fetchPersonalStats: fetchAccountLearningRatio,
 });
 let accountSwitchInFlight = false;
+
+/** 只有额度提醒与自动切号都开启、且运行时支持时才轮询听写状态,避免无谓的后台查库 */
+function syncDictationWatcher() {
+  const { enabled, auto_switch } = quotaMonitor.status().config;
+  if (enabled && auto_switch && sqliteAvailable()) dictationWatcher.start();
+  else dictationWatcher.stop();
+}
 const toolkitBackendOwned = tauriHost.available || (
   process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
   path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..')
@@ -738,7 +819,9 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
     if (m === 'GET' && p === '/api/quota-monitor/status') {
-      return send(res, 200, { status: 'OK', data: quotaMonitor.status() });
+      // auto_switch_available 供界面判断能否开启自动切号(取决于运行时能否读取听写状态)
+      return send(res, 200, { status: 'OK',
+        data: { ...quotaMonitor.status(), auto_switch_available: sqliteAvailable() } });
     }
     // 原生托盘只读提醒标识；不传账号名或凭证，不执行切换。
     if (m === 'GET' && p === '/api/quota-monitor/notification') {
@@ -752,11 +835,17 @@ const server = http.createServer(async (req, res) => {
       try {
         const settings = normalizeQuotaConfig(await readBody(req));
         writePrivateJson(quotaConfigFile, settings);
-        return send(res, 200, { status: 'OK', data: quotaMonitor.configure(settings) });
+        const data = quotaMonitor.configure(settings);
+        syncDictationWatcher();
+        return send(res, 200, { status: 'OK', data });
       } catch (error) { return send(res, 400, { status: 'FAIL', msg: error.message }); }
     }
     if (m === 'POST' && p === '/api/quota-monitor/check') {
       return send(res, 200, { status: 'OK', data: quotaMonitor.check() });
+    }
+    // 用户在倒计时里点了取消:本次低额度周期内不再自动切换
+    if (m === 'POST' && p === '/api/quota-monitor/cancel-auto') {
+      return send(res, 200, { status: 'OK', data: quotaMonitor.cancelAutoSwitch() });
     }
     // 跨设备账号同步：配置读取始终脱敏，远端仅保存加密后的 refresh 凭证。
     if (m === 'GET' && p === '/api/account-sync/config') {
@@ -915,49 +1004,16 @@ const server = http.createServer(async (req, res) => {
     // 切换到此账号(还原快照 + 若教程未完成则现场治愈 + 重启)
     if (m === 'POST' && p.startsWith('/api/accounts/') && p.endsWith('/switch')) {
       const id = decodeURIComponent(p.split('/')[3]);
-      if (accountSwitchInFlight) return send(res, 409, { status: 'FAIL', msg: '正在切换账号，请等待完成' });
-      accountSwitchInFlight = true;
       try {
-      const body = await readBody(req);
-      if (body.quota_guard) {
-        try { await quotaMonitor.validateSwitch(id, body.quota_guard); }
-        catch (error) {
-          quotaMonitor.invalidate();
-          return send(res, 409, { status: 'FAIL', msg: error.message });
+        const body = await readBody(req);
+        if (body.quota_guard) {
+          try { await quotaMonitor.validateSwitch(id, body.quota_guard); }
+          catch (error) {
+            quotaMonitor.invalidate();
+            return send(res, 409, { status: 'FAIL', msg: error.message });
+          }
         }
-      }
-      {
-        // 先校验目标快照身份,避免「点 A 却还原成 B」
-        const snap = inspectSnapshot(id);
-        if (!snap.has_snapshot) {
-          return send(res, 400, { status: 'FAIL', msg: '该账号无快照,请先在 Typeless 登录该号后点「更新快照」' });
-        }
-        if (snap.snapshot_mismatch) {
-          const who = snap.snapshot_email || snap.snapshot_user_id;
-          return send(res, 400, {
-            status: 'FAIL',
-            msg: `该账号快照已串号(内容实际是 ${who})。请先在 Typeless 登录正确账号,再点「更新快照」覆盖。`,
-          });
-        }
-        if (!snap.snapshot_ok) {
-          return send(res, 400, { status: 'FAIL', msg: '该账号快照无效,请重新登录该号后更新快照' });
-        }
-      }
-      // 切换前:若当前号在跑,先把当前状态存回(尽量不丢);身份不匹配时跳过,绝不串写
-      try {
-        const cur = detectCurrentAccountFromFile();
-        if (cur.found && cur.user_id && cur.user_id !== id) {
-          try { applyOnboardingCompleteToLiveFiles(); } catch (e) {}
-          try { saveSnapshot(cur.user_id); }
-          catch (e) { log('[switch] 保存当前号快照跳过:', e.message); }
-        }
-      } catch (e) {}
-      killTypeless(); await sleep(1500);
-      try {
-        restoreSnapshot(id);
-        const heal = healOnboardingAfterRestore(id);
-        await launchTypeless();
-        paywallMaintenance.schedule('account-switch', 1200);
+        const heal = await performAccountSwitch(id);
         return send(res, 200, {
           status: 'OK',
           msg: heal.healed
@@ -966,10 +1022,8 @@ const server = http.createServer(async (req, res) => {
           data: heal,
         });
       } catch (e) {
-        return send(res, 500, { status: 'FAIL', msg: e.message || '切换失败' });
-      }
+        return send(res, e.status || 500, { status: 'FAIL', msg: e.message || '切换失败' });
       } finally {
-        accountSwitchInFlight = false;
         quotaMonitor.invalidate();
       }
     }
@@ -1434,6 +1488,7 @@ function startServer() {
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
       quotaMonitor.start();
+      syncDictationWatcher();
       paywallMaintenance.start();
       scheduleAccountSync('startup', 1500);
       accountSyncInterval = setInterval(() => scheduleAccountSync('periodic'), AUTO_SYNC_INTERVAL_MS);
@@ -1449,6 +1504,7 @@ function startServer() {
 server.on('close', () => {
   dictionarySync.stop();
   quotaMonitor.stop();
+  dictationWatcher.stop();
   paywallMaintenance.stop();
   if (accountSyncTimer) clearTimeout(accountSyncTimer);
   accountSyncTimer = null;
