@@ -75,6 +75,7 @@ class TrayApp
         }
 
         SetCurrentProcessExplicitAppUserModelID(AppId);
+        EnsureAppUserModelId();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -295,6 +296,27 @@ class TrayApp
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// 注册本进程的通知标识。Windows 把托盘气泡转成系统通知时，要从
+    /// AppUserModelId 解析“应用名”；未注册时该字段会显示成乱码。
+    /// 只写当前用户(HKCU)，不需要管理员权限。
+    /// </summary>
+    static void EnsureAppUserModelId()
+    {
+        try
+        {
+            using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
+                @"SOFTWARE\Classes\AppUserModelId\" + AppId))
+            {
+                if (key == null) return;
+                key.SetValue("DisplayName", AppTitle, Microsoft.Win32.RegistryValueKind.String);
+                key.SetValue("IconUri", Application.ExecutablePath, Microsoft.Win32.RegistryValueKind.String);
+                key.SetValue("IconBackgroundColor", "0", Microsoft.Win32.RegistryValueKind.String);
+            }
+        }
+        catch (Exception error) { AppendLauncherLog("注册通知标识失败：" + error.Message); }
     }
 
     static void AppendLauncherLog(string message)
