@@ -63,6 +63,20 @@ function fakeAsar(over) {
   return buildAsar({ '/dist/main/index.js': fakeMainBundle(over) });
 }
 
+/** API host / prod 内联,官网地址和平台前缀位于可旋转的字符串池中 */
+function fakeInlineAsar({ version = '2.7.0', prefix = 'mac_', rotation = 0, base = 0x100, vn = FAKE_VN, eu = FAKE_EU } = {}) {
+  const pool = [version, vn, eu, 'prod', prefix, 'https://www.typeless.com', 'unused'];
+  const rotated = pool.slice(rotation).concat(pool.slice(0, rotation));
+  const literal = '[' + rotated.map(v => `'${v}'`).join(',') + ']';
+  const index = i => '0x' + (base + i).toString(16);
+  const src = [
+    `const pool=${literal};`,
+    `const host='${API_HOST}',site=decode(${index(5)}),release=decode(${index(0)}),name='Typeless',secretA=decode(${index(1)}),secretB=decode(${index(2)}),environment='prod',dev=environment!==decode(${index(3)});`,
+    `const platform=lookup(${index(4)});const appVersion=platform+release['split']('-')[0];`,
+  ].join('\n');
+  return buildAsar({ '/dist/main/index.js': src });
+}
+
 /** 用测试口令解开 X-Authorization,核对官方载荷字段 */
 function decryptPayload(xAuth) {
   const raw = Buffer.from(xAuth, 'base64');
@@ -107,6 +121,34 @@ test('macOS 前缀同样可还原', () => {
   const keys = extractSignatureKeys(fakeAsar({ prefix: 'mac_' }));
   assert.equal(keys.platformPrefix, 'mac_');
   assert.equal(keys.appVersion, '2.7.0');
+});
+
+test('内联配置不依赖具体版本、平台或字符串池偏移', () => {
+  for (const version of ['2.7.0', '2.8.12-beta.1']) {
+    for (const prefix of ['mac_', 'win_']) {
+      for (const rotation of [0, 3, 5]) {
+        for (const base of [0, 0x100]) {
+          const keys = extractSignatureKeys(fakeInlineAsar({ version, prefix, rotation, base }));
+          assert.equal(keys.aesPassphrase, FAKE_VN);
+          assert.equal(keys.hmacSecret, FAKE_EU);
+          assert.equal(keys.appVersion, version);
+          assert.equal(keys.platformPrefix, prefix);
+          assert.equal(keys.xEnv, 'prod');
+          const headers = buildSignatureHeaders({ url: API_HOST + '/user/get_user_info', userId: 'u-1', keys });
+          assert.equal(headers['X-App-Version'], prefix + version.split('-')[0]);
+          assert.equal(decryptPayload(headers['X-Authorization'])['X-Env'], 'prod');
+        }
+      }
+    }
+  }
+});
+
+test('内联配置的密钥、平台和版本仍需通过校验', () => {
+  for (const over of [{ vn: 'invalid' }, { eu: 'invalid' }]) {
+    assert.throws(() => extractSignatureKeys(fakeInlineAsar(over)), /不合法/);
+  }
+  assert.throws(() => extractSignatureKeys(fakeInlineAsar({ prefix: 'linux_' })), /平台前缀/);
+  assert.throws(() => extractSignatureKeys(fakeInlineAsar({ version: 'unknown' })), /版本号/);
 });
 
 test('X-Env 自校验不通过时拒绝返回密钥', () => {
