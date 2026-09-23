@@ -27,8 +27,9 @@ macOS 使用 Tauri + 系统 WKWebView 提供轻量原生客户端。源码同时
   `Typeless.deviceIdentifier` 凭据 + `%APPDATA%\Typeless\Cache\device.cache` 绑定设备。
   删掉这两处(外加清登录态)即可重置成「新设备」。
 - **去弹窗 = 自动定位 + 完整性同步**:工具会自动扫描 asar 中包含 `paywall` 的渲染文件，识别
-  混淆后的函数调用并做等长替换，同时更新 per-file SHA256。程序会优先关闭 Electron 的内嵌
-  asar 完整性校验，无法关闭时再同步可执行文件中的整头 SHA256；失败会从备份自动还原。
+  混淆后的函数调用并做等长替换，同时更新 per-file SHA256。macOS 会优先保留并同步
+  `Info.plist/ElectronAsarIntegrity`；旧格式再按实际能力处理 fuse 或可执行文件内嵌 hash。
+  未知结构会明确提示不兼容，失败会从备份自动还原。
 
 ## 下载选择与运行要求
 
@@ -95,8 +96,8 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 `build-release.bat` 用于更新本机自用包，会保留已有账号和快照。准备公开附件时必须运行
 `build-public-release.bat`，它会生成：
 
-- `TypelessToolkit-v1.8.1-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
-- `TypelessToolkit-v1.8.1-win-x64-lite.zip`：使用系统 Node.js 22.12+
+- `TypelessToolkit-v1.8.2-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
+- `TypelessToolkit-v1.8.2-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
 两个公开包都会强制使用空账号列表和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
@@ -139,7 +140,7 @@ Release 用户修改 `data/config.json`，源码模式修改根目录 `config.js
 - `paywall` 内部默认值无需用户维护。Typeless 更新后，管理器会自动扫描 asar、定位目标文件，
   并识别需要替换的调用，无需手动拆包或打开 DevTools。
 - 自动检测会验证 `onImportantNotification` / `onSessionInterrupt` 语义，不会把 onboarding
-  的 `paywall` 埋点误判为弹窗处理文件；已适配 Typeless 2.0.1。
+  的 `paywall` 埋点误判为弹窗处理文件；当前已实测适配 Typeless 2.8.0。
 - 本地私有覆盖可写在 `config.local.json`(已 `.gitignore`,不会进 git)。
 
 ## 常见问题
@@ -219,8 +220,10 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   `backups/typeless-app/paywall-patch-时间戳/`，备份位于 `.app` 外，不会污染代码签名。
   备份 Bundle 使用 `.app.backup` 后缀并放在 `.noindex` 目录，且备份根目录带 Spotlight 排除标记，避免系统快速搜索
   把备份误显示成第二个可启动的 Typeless。
-  `@electron/fuses` 会同时改动主程序和 `Electron Framework.framework`，因此修改后只对该 Framework
-  与 App 根 Bundle 做定向 ad-hoc 重签名；根程序保留原 Bundle ID、JIT、麦克风、网络与 Hardened Runtime，
+  Typeless 提供 `Info.plist/ElectronAsarIntegrity` 时，工具集会保留该校验并同步更新 ASAR header hash；
+  只有实际检测到旧格式时才尝试 `@electron/fuses` 或主程序内嵌 hash。若 fuse 路径改动了
+  `Electron Framework.framework`，只对该 Framework 与 App 根 Bundle 做定向 ad-hoc 重签名；
+  根程序保留原 Bundle ID、JIT、麦克风、网络与 Hardened Runtime，
   并增加加载定向改签 Framework 所需的 Library Validation 例外。Renderer/GPU/Plugin 等其他 Helper
   继续保留官方签名。随后仅清除该 App 的下载隔离标记，并立即执行严格验证及启动检查。不要手工使用
   `codesign --deep --sign -`，它会递归改签内部组件并可能丢失 JIT、麦克风等权限。任一步失败都会

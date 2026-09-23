@@ -374,16 +374,19 @@ function createPaywallMaintenanceController(statusFn, repairFn, runningFn, opts 
         return { ok: true, result, status: snapshot() };
       } catch (error) {
         const permissionRequired = error.code === 'APP_MANAGEMENT_REQUIRED';
+        const unsupported = error.code === 'PAYWALL_UNSUPPORTED';
         state = {
           ...state,
-          state: permissionRequired ? 'permission-required' : 'error',
+          state: permissionRequired ? 'permission-required' : (unsupported ? 'unsupported' : 'error'),
           running: false,
           last_finished_at: iso(now()),
           error: error.message || String(error),
           permission: error.permission || null,
           msg: permissionRequired
             ? '需要开启 Typeless 工具集的“App 管理”权限，允许后会自动继续'
-            : '自动解除弹窗失败，可点击状态按钮重试',
+            : (unsupported
+              ? '当前 Typeless 版本暂时无法自动解除弹窗'
+              : '自动解除弹窗失败，可点击状态按钮重试'),
         };
         return {
           ok: false,
@@ -1125,6 +1128,8 @@ const server = http.createServer(async (req, res) => {
         result.msg += '；弹窗补丁已自动重新应用';
       } else if (!maintenance.ok && maintenance.code === 'APP_MANAGEMENT_REQUIRED') {
         result.msg += '；请开启工具集的 App 管理权限，允许后会自动继续解除弹窗';
+      } else if (!maintenance.ok && maintenance.code === 'PAYWALL_UNSUPPORTED') {
+        result.msg += '；当前 Typeless 版本暂不支持自动解除弹窗，请更新工具集';
       } else if (!maintenance.ok) {
         result.msg += '；自动解除弹窗失败，可在工具栏状态入口重试';
       }
