@@ -37,6 +37,9 @@ icon.png
 icon-rounded.png
 tray-icon.ico
 
+# 逆向探测脚本(仅本机使用,含密钥线索,勿提交)
+tools/
+
 # 备份与日志
 backups/
 logs/
