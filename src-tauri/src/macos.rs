@@ -280,7 +280,10 @@ pub fn swap_typeless_app(params: &Value, data_dir: &Path) -> Result<Value, HostE
     if let Err(error) = install_result {
         let restoration = restore_backup(&backup_app, &target);
         let message = match restoration {
-            Ok(()) => format!("{}；已恢复原 Typeless.app", error.message),
+            Ok(()) => {
+                let _ = fs::remove_dir_all(&backup_dir);
+                format!("{}；已恢复原 Typeless.app", error.message)
+            }
             Err(restore_error) => format!("{}；恢复原 App 失败: {restore_error}", error.message),
         };
         return Err(HostError::new(&error.code, message, error.phase.as_deref()));
@@ -387,10 +390,14 @@ pub fn restore_typeless_backup(params: &Value, data_dir: &Path) -> Result<Value,
         None
     };
     mark_app_management_authorized(data_dir)?;
+    let backup_discarded = backup
+        .parent()
+        .map(|directory| fs::remove_dir_all(directory).is_ok())
+        .unwrap_or(false);
     Ok(json!({
         "installed_app": target,
         "target_app": target,
-        "backup": backup,
+        "backup_discarded": backup_discarded,
         "previous_requirement": previous_requirement,
         "current_requirement": current_requirement,
         "identity_changed": identity_changed,

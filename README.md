@@ -27,8 +27,9 @@ macOS 使用 Tauri + 系统 WKWebView 提供轻量原生客户端。源码同时
   `Typeless.deviceIdentifier` 凭据 + `%APPDATA%\Typeless\Cache\device.cache` 绑定设备。
   删掉这两处(外加清登录态)即可重置成「新设备」。
 - **去弹窗 = 自动定位 + 完整性同步**:工具会自动扫描 asar 中包含 `paywall` 的渲染文件，识别
-  混淆后的函数调用并做等长替换，同时更新 per-file SHA256。程序会优先关闭 Electron 的内嵌
-  asar 完整性校验，无法关闭时再同步可执行文件中的整头 SHA256；失败会从备份自动还原。
+  混淆后的函数调用并做等长替换，同时更新 per-file SHA256。macOS 会优先保留并同步
+  `Info.plist/ElectronAsarIntegrity`；旧格式再按实际能力处理 fuse 或可执行文件内嵌 hash。
+  未知结构会明确提示不兼容，失败会从备份自动还原。
 
 ## 下载选择与运行要求
 
@@ -72,7 +73,7 @@ macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架�
 4. **词库自动对齐**:添加账号、编辑词库或启动工具集后会自动检查，各账号词库无需手动导入；顶部状态入口可查看结果或立即重试。
 5. **切换账号**:账号卡片点「切换到此号」(从快照还原 + 重启 Typeless)。
 6. **跨设备同步**(可选):打开「设置 → 同步与数据」，选择坚果云或其他 WebDAV，填写应用密码和一条各设备相同的同步密码；账号和主词库可分别选择或同时同步，保存后会记住配置。
-7. **自动解除弹窗**:工具集启动、账号变更或安装官方更新后会检查并自动修复；顶部状态按钮保留为立即检查/失败重试入口。Windows 保留文件级 `.bak`，macOS 会先在工具集数据目录外置备份完整 `Typeless.app`，失败自动还原。
+7. **自动解除弹窗**:工具集启动、账号变更或安装官方更新后会检查并自动修复；顶部状态按钮保留为立即检查/失败重试入口。Windows 保留文件级 `.bak`，macOS 会在事务期间临时备份完整 `Typeless.app`，失败自动还原，成功验证并启动后立即清理临时副本。
 
 首页保留启动 Typeless、刷新、主词库、注册账号和添加当前账号五个常用操作。主题和快捷键位于
 「设置 → 通用」；WebDAV 与本地备份位于「同步与数据」；弹窗维护和 macOS 权限说明位于
@@ -95,8 +96,8 @@ release 版只有一个入口：`TypelessToolkit.exe`。
 `build-release.bat` 用于更新本机自用包，会保留已有账号和快照。准备公开附件时必须运行
 `build-public-release.bat`，它会生成：
 
-- `TypelessToolkit-v1.8.1-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
-- `TypelessToolkit-v1.8.1-win-x64-lite.zip`：使用系统 Node.js 22.12+
+- `TypelessToolkit-v1.8.2-win-x64-portable.zip`：内置经过 SHA256 校验的 Node.js 24.15.0
+- `TypelessToolkit-v1.8.2-win-x64-lite.zip`：使用系统 Node.js 22.12+
 
 两个公开包都会强制使用空账号列表和空 `profiles/`，并分别输出 SHA256 文件。绝不能直接上传
 本机自用 release 目录。
@@ -139,7 +140,7 @@ Release 用户修改 `data/config.json`，源码模式修改根目录 `config.js
 - `paywall` 内部默认值无需用户维护。Typeless 更新后，管理器会自动扫描 asar、定位目标文件，
   并识别需要替换的调用，无需手动拆包或打开 DevTools。
 - 自动检测会验证 `onImportantNotification` / `onSessionInterrupt` 语义，不会把 onboarding
-  的 `paywall` 埋点误判为弹窗处理文件；已适配 Typeless 2.0.1。
+  的 `paywall` 埋点误判为弹窗处理文件；当前已实测适配 Typeless 2.8.0。
 - 本地私有覆盖可写在 `config.local.json`(已 `.gitignore`,不会进 git)。
 
 ## 常见问题
@@ -215,12 +216,15 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   | 设备缓存 | `~/Library/Application Support/now.typeless.desktop` | `device_cache_dir` |
   | 设备 ID 凭据 | Keychain 通用密码 `now.typeless.desktop.deviceIdentifier` | `credential_target` |
 
-- **去弹窗补丁(实验性)**:修改前会把完整 `Typeless.app` 备份到工具集数据目录下的
+- **去弹窗补丁(实验性)**:修改前会把完整 `Typeless.app` 临时备份到工具集数据目录下的
   `backups/typeless-app/paywall-patch-时间戳/`，备份位于 `.app` 外，不会污染代码签名。
   备份 Bundle 使用 `.app.backup` 后缀并放在 `.noindex` 目录，且备份根目录带 Spotlight 排除标记，避免系统快速搜索
-  把备份误显示成第二个可启动的 Typeless。
-  `@electron/fuses` 会同时改动主程序和 `Electron Framework.framework`，因此修改后只对该 Framework
-  与 App 根 Bundle 做定向 ad-hoc 重签名；根程序保留原 Bundle ID、JIT、麦克风、网络与 Hardened Runtime，
+  把备份误显示成第二个可启动的 Typeless。补丁通过严格签名校验并确认 Typeless 正常启动后，
+  本次事务备份会立即删除；只有恢复失败时才保留可用于人工恢复的副本，不会随每次更新长期堆积。
+  Typeless 提供 `Info.plist/ElectronAsarIntegrity` 时，工具集会保留该校验并同步更新 ASAR header hash；
+  只有实际检测到旧格式时才尝试 `@electron/fuses` 或主程序内嵌 hash。若 fuse 路径改动了
+  `Electron Framework.framework`，只对该 Framework 与 App 根 Bundle 做定向 ad-hoc 重签名；
+  根程序保留原 Bundle ID、JIT、麦克风、网络与 Hardened Runtime，
   并增加加载定向改签 Framework 所需的 Library Validation 例外。Renderer/GPU/Plugin 等其他 Helper
   继续保留官方签名。随后仅清除该 App 的下载隔离标记，并立即执行严格验证及启动检查。不要手工使用
   `codesign --deep --sign -`，它会递归改签内部组件并可能丢失 JIT、麦克风等权限。任一步失败都会

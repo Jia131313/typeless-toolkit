@@ -156,6 +156,7 @@
   .badge.free { background:var(--warn-soft); color:var(--warn); }
   .badge.current { background:var(--accent-soft); color:var(--accent2); }
   .badge.pro,.badge.premium { background:var(--ok-soft); color:var(--ok); }
+  .badge.warn { background:var(--warn-soft); color:var(--warn); }
   .badge.invalid { background:var(--err-soft); color:var(--err); }
 
   .quota { margin:0 0 12px; min-width:0; }
@@ -475,7 +476,7 @@
   </div>
 
   <div class="settings-panel settings-stack" id="settings-maintenance" role="tabpanel" aria-labelledby="settingsTabMaintenance" hidden>
-    <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-shield"/></svg>弹窗自动维护</h3><p>启动、账号变更及官方更新后自动检查。平时无需手动操作，首页会持续显示状态。</p><p id="maintenanceState" role="status">正在读取维护状态…</p></div><button class="btn" onclick="patchPaywall()">立即检查</button></section>
+    <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-shield"/></svg>弹窗自动维护</h3><p>启动、账号变更及官方更新后自动检查。平时无需手动操作，首页会持续显示状态。</p><p id="maintenanceState" role="status">正在读取维护状态…</p></div><button class="btn" id="maintenanceCheckBtn" onclick="patchPaywall()">立即检查</button></section>
     <section class="settings-card settings-row"><div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-refresh"/></svg>设备标识重置</h3><p>遇到设备登录数量受限等问题时可手动尝试；普通切号不会自动重置。</p><p id="resetDeviceDescription">会清除 Typeless 当前登录状态并重启到登录页；保留工具集已保存的账号、快照和词库。可登录已有账号，不需要注册新账号。</p></div><button class="btn danger" id="resetDeviceBtn" onclick="resetDeviceOnly()" aria-describedby="resetDeviceDescription">重置设备</button></section>
     <section class="settings-card settings-row" id="macPermissionCard" hidden><div><h3>macOS 权限</h3><p>区分工具集的 App 管理权限与 Typeless 本体的辅助功能、麦克风权限。</p><p>需要授权时仍会主动提示；这里保留说明和旧权限修复入口。</p></div><button class="btn" id="macPermissionBtn" style="display:none" onclick="openMacPermissionGuide()">查看权限与修复</button></section>
     <p class="settings-platform-note" id="windowsPermissionNote" hidden>Windows 无需配置 macOS 的 App 管理、辅助功能和麦克风授权。</p>
@@ -973,7 +974,8 @@ function render(){
     const ok=u.week_word_usage_value!=null;
     const used=ok?u.week_word_usage_value:0, lim=u.week_word_usage_limit||8000;
     const p=pct(used,lim), pcls=p>85?'err':p>65?'warn':'';
-    const valid=live.token_valid!==false;
+    const serviceError=live.credential_state==='api_error';
+    const valid=live.token_valid!==false && !['expired','refresh_error'].includes(live.credential_state);
     const days=live.credential_days_left;
     const credentialNeedsUpdate=live.credential_state==='legacy';
     const daysTxt = credentialNeedsUpdate?'需更新':(days==null?'—':(days<0?'已过期':days+'天'));
@@ -984,13 +986,14 @@ function render(){
       <div class="chead">
         <div class="avatar">${esc(ini)}</div>
         <div class="who"><div class="account-title"><div class="nick" title="${esc(a.nickname||a.email||a.user_id)}">${esc(a.nickname||a.email||a.user_id)}</div>${a.user_id===CUR_ID?'<span class="badge current">当前账号</span>':''}</div>${a.nickname&&a.nickname!==a.email?`<div class="email" title="${esc(a.email||a.user_id)}">${esc(a.email||a.user_id)}</div>`:''}
-          <div class="account-badges"><span class="badge ${valid?(a.role||''):'invalid'}">${valid?(a.role==='free'?'免费版':a.role||'未知'):'失效'}</span>
+          <div class="account-badges"><span class="badge ${serviceError?'warn':(valid?(a.role||''):'invalid')}" title="${live._err?esc(live._err):''}">${serviceError?'数据暂不可用':(valid?(a.role==='free'?'免费版':a.role||'未知'):'失效')}</span>
           </div>
         </div>
       </div>
       <div class="quota">
         <div class="qtop"><span>本周额度</span><b>${ok?nfmt(used):'—'} / ${nfmt(lim)}</b></div>
         <div class="quota-meter"><div class="bar ${pcls}"><i style="width:${p}%"></i></div><span class="quota-percent">${ok?p+'%':'—'}</span></div>
+        ${live._err?`<div class="settings-note" style="margin-top:8px;color:var(--${serviceError?'warn':'err'})">${esc(live._err)}</div>`:''}
       </div>
       <div class="mini">
         <div class="m"><div class="k">词库</div><div class="v">${live.dict_count??'-'}</div></div>
@@ -1019,6 +1022,11 @@ async function openDetail(id){
   renderUsage(a); renderPersonal(a);
   document.getElementById('wordList').innerHTML='<div class="empty" style="padding:20px">加载词库中…</div>';
   const r=await api('/api/accounts/'+encodeURIComponent(id)+'/dictionary');
+  if(r.status!=='OK'){
+    curWords=[];
+    document.getElementById('wordList').innerHTML='<div class="empty" style="padding:20px;color:var(--err)">'+esc(r.msg||'词库读取失败')+'</div>';
+    return;
+  }
   curWords = r.data?.words||[];
   document.getElementById('dictSearch').value=''; renderDict();
 }
@@ -1053,7 +1061,14 @@ function renderPersonal(a){
     <div style="font-size:13px;margin-top:8px">${p.enabled?'✅ 已启用':'⭕ 未启用'} · ${(p.category_stats||[]).length} 个学习类别</div>
   </div>`;
 }
-async function refreshDict(){ const d=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary'); curWords=d.data?.words||[]; renderDict(); }
+async function refreshDict(){
+  const d=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/dictionary');
+  if(d.status!=='OK'){
+    document.getElementById('wordList').innerHTML='<div class="empty" style="padding:20px;color:var(--err)">'+esc(d.msg||'词库读取失败')+'</div>';
+    return;
+  }
+  curWords=d.data?.words||[]; renderDict();
+}
 async function addWord(){
   const t=document.getElementById('wordInput').value.trim(); if(!t||!curDetail) return;
   const r=await api('/api/accounts/'+encodeURIComponent(curDetail.user_id)+'/word',{method:'POST',body:JSON.stringify({term:t})});
@@ -1419,6 +1434,10 @@ async function registerWizardFinish(){
 async function patchPaywall(){
   let st={};
   try{ st=await api('/api/paywall-status'); }catch(e){}
+  if(st.data?.error && !st.data?.patched){
+    await appAlert('当前 Typeless 版本暂不支持自动解除弹窗。\n\n'+st.data.error+'\n\n请先更新工具集；这不是权限问题，重复点击不会改变结果。');
+    return;
+  }
   if(st.data && st.data.patched){ toast('已是无弹窗补丁版,无需重复操作','ok'); return; }
   let msg='立即检查并解除弹窗?\n\n正常情况下工具集会在启动、官方更新和账号变更后自动维护。此按钮用于立即重试。\n程序会创建回滚备份、关闭 Typeless、完成修复并自动重启。';
   if(st.data?.autoDetected) msg+='\n\n🔍 已自动检测到你版本的新函数名,将自动适配并写入配置。';
@@ -1465,8 +1484,11 @@ async function refreshPaywallMaintenanceStatus(){
   try{
     const r=await api('/api/paywall-maintenance'), s=r.data||{};
     PAYWALL_MAINTENANCE=s;
-    const btn=document.getElementById('patchBtn'), label=document.getElementById('patchLabel');
+    const btn=document.getElementById('patchBtn'), settingsBtn=document.getElementById('maintenanceCheckBtn'), label=document.getElementById('patchLabel');
     if(btn) btn.dataset.state=s.state||'waiting';
+    const unsupported=s.state==='unsupported';
+    if(btn) btn.disabled=unsupported;
+    if(settingsBtn) settingsBtn.disabled=unsupported;
     document.getElementById('maintenanceState').textContent=s.msg||({patched:'弹窗已解除',checking:'正在检查',deferred:'等待下次受控重启',idle:'等待自动检查'}[s.state]||'点击立即检查可重试');
     if(s.state==='checking'){
       if(label) label.textContent='自动修复中';
@@ -1486,9 +1508,14 @@ async function refreshPaywallMaintenanceStatus(){
     }else if(s.state==='deferred'){
       if(label) label.textContent='弹窗待自动修复';
       if(btn) btn.title=s.msg||'下次受控重启时自动修复';
-    }else if(s.state==='error'||s.state==='unsupported'){
+    }else if(s.state==='unsupported'){
+      if(label) label.textContent='当前版本暂不支持';
+      if(btn) btn.title=(s.msg||'当前版本暂不支持自动维护')+(s.error?'：'+s.error:'');
+      if(settingsBtn) settingsBtn.title=btn?.title||'当前版本暂不支持自动维护';
+    }else if(s.state==='error'){
       if(label) label.textContent='弹窗维护待重试';
       if(btn) btn.title=(s.msg||'自动维护失败')+(s.error?'：'+s.error:'');
+      if(settingsBtn) settingsBtn.title=btn?.title||'自动维护失败';
     }
   }catch(e){}
 }
@@ -2115,6 +2142,10 @@ async function fetchEnv(){
     if(e.exe_found){
       b.textContent=osName+(e.typeless_running?' · 运行中':'');
       const tips=['平台 '+osName, 'Typeless: '+e.typeless_exe];
+      const signature=e.api_signature;
+      tips.push('API 校验: '+(signature?.ok
+        ? (signature.app_version+' ✓')
+        : ('不可用'+(signature?.error?' · '+signature.error:''))));
       if(e.platform==='macos'){
         tips.push('用户数据: '+e.userdata_dir+(e.userdata_exists?' ✓':' ✗'));
         tips.push('设备缓存: '+e.device_cache_dir+(e.device_cache_exists?' ✓':' ✗'));
@@ -2124,7 +2155,7 @@ async function fetchEnv(){
       } else {
         tips[0]='平台 '+osName+' · Typeless: '+e.typeless_exe;
       }
-      b.title=e.platform==='macos'?tips.join('\n'):('平台 '+osName+' · Typeless: '+e.typeless_exe);
+      b.title=tips.join('\n');
     }
     else { b.textContent=osName+' ⚠ 未找到 Typeless'; b.className='badge invalid'; b.title='未探测到 Typeless 可执行文件,请在 config.json 里配置 typeless_exe。当前探测:'+(e.typeless_exe||'无'); }
   }catch(err){}
