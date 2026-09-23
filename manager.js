@@ -25,7 +25,8 @@ const {
   readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
   killTypeless, launchTypeless, isTypelessRunning, resetDevice,
-  createTypelessAppBackup, createTypelessAppStaging, restoreTypelessAppBackup, verifyTypelessAppSignature,
+  createTypelessAppBackup, createTypelessAppStaging, restoreTypelessAppBackup,
+  discardTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
   readMaster, writeMaster, replaceMasterTerms,
   readDictionarySyncMeta, writeDictionarySyncMeta,
@@ -570,10 +571,11 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       try {
         killTypeless(); await sleep(500);
         if (IS_MAC && tauriHost.available && hostSwapCompleted && appBackup?.app) {
-          await tauriHost.request('restore_typeless_backup', {
+          const restored = await tauriHost.request('restore_typeless_backup', {
             backup: appBackup.app,
             target_app: TYPELESS_APP,
           });
+          if (restored.backup_discarded) appBackup = null;
         } else if (IS_MAC && !tauriHost.available) {
           if (appBackup) restoreTypelessAppBackup(appBackup);
         } else if (!IS_MAC) {
@@ -597,6 +599,23 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       }
       if (appStaging?.staging_dir) {
         try { fs.rmSync(appStaging.staging_dir, { recursive: true, force: true }); } catch (error) {}
+      }
+    }
+
+    if (appBackup?.app && (!operationError || (!rollbackError && !restartError))) {
+      try {
+        discardTypelessAppBackup(appBackup);
+        appBackup = null;
+        if (result) {
+          result.rollback_backup_discarded = true;
+          if (result.host_swap) {
+            delete result.host_swap.backup;
+            result.host_swap.backup_discarded = true;
+          }
+        }
+      } catch (cleanupError) {
+        if (result) result.rollback_backup_cleanup_error = cleanupError.message;
+        log('[paywall-patch] 无法清理事务备份:', cleanupError.message);
       }
     }
 
@@ -629,7 +648,6 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       error.data = { phase: operationPhase, diagnostic_log: diagnosticLog };
       throw error;
     }
-    if (appBackup && appBackup.app) result.backup = appBackup.app;
     if (IS_MAC && !tauriHost.available) markToolkitAppManagementAuthorized();
     return result;
   })();
@@ -1132,6 +1150,20 @@ const server = http.createServer(async (req, res) => {
         result.msg += '；当前 Typeless 版本暂不支持自动解除弹窗，请更新工具集';
       } else if (!maintenance.ok) {
         result.msg += '；自动解除弹窗失败，可在工具栏状态入口重试';
+      }
+      if (!isTypelessRunning()) {
+        await launchTypeless();
+        if (!(await waitForTypelessRunning())) throw new Error('Typeless 更新后未能正常启动');
+      }
+      if (result.backup) {
+        try {
+          discardTypelessAppBackup(result.backup);
+          delete result.backup;
+          result.rollback_backup_discarded = true;
+        } catch (cleanupError) {
+          result.rollback_backup_cleanup_error = cleanupError.message;
+          log('[official-update] 无法清理事务备份:', cleanupError.message);
+        }
       }
       return send(res, 200, { status: 'OK', data: result, msg: result.msg });
     }

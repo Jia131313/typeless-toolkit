@@ -73,7 +73,7 @@ macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架�
 4. **词库自动对齐**:添加账号、编辑词库或启动工具集后会自动检查，各账号词库无需手动导入；顶部状态入口可查看结果或立即重试。
 5. **切换账号**:账号卡片点「切换到此号」(从快照还原 + 重启 Typeless)。
 6. **跨设备同步**(可选):打开「设置 → 同步与数据」，选择坚果云或其他 WebDAV，填写应用密码和一条各设备相同的同步密码；账号和主词库可分别选择或同时同步，保存后会记住配置。
-7. **自动解除弹窗**:工具集启动、账号变更或安装官方更新后会检查并自动修复；顶部状态按钮保留为立即检查/失败重试入口。Windows 保留文件级 `.bak`，macOS 会先在工具集数据目录外置备份完整 `Typeless.app`，失败自动还原。
+7. **自动解除弹窗**:工具集启动、账号变更或安装官方更新后会检查并自动修复；顶部状态按钮保留为立即检查/失败重试入口。Windows 保留文件级 `.bak`，macOS 会在事务期间临时备份完整 `Typeless.app`，失败自动还原，成功验证并启动后立即清理临时副本。
 
 首页保留启动 Typeless、刷新、主词库、注册账号和添加当前账号五个常用操作。主题和快捷键位于
 「设置 → 通用」；WebDAV 与本地备份位于「同步与数据」；弹窗维护和 macOS 权限说明位于
@@ -216,10 +216,11 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   | 设备缓存 | `~/Library/Application Support/now.typeless.desktop` | `device_cache_dir` |
   | 设备 ID 凭据 | Keychain 通用密码 `now.typeless.desktop.deviceIdentifier` | `credential_target` |
 
-- **去弹窗补丁(实验性)**:修改前会把完整 `Typeless.app` 备份到工具集数据目录下的
+- **去弹窗补丁(实验性)**:修改前会把完整 `Typeless.app` 临时备份到工具集数据目录下的
   `backups/typeless-app/paywall-patch-时间戳/`，备份位于 `.app` 外，不会污染代码签名。
   备份 Bundle 使用 `.app.backup` 后缀并放在 `.noindex` 目录，且备份根目录带 Spotlight 排除标记，避免系统快速搜索
-  把备份误显示成第二个可启动的 Typeless。
+  把备份误显示成第二个可启动的 Typeless。补丁通过严格签名校验并确认 Typeless 正常启动后，
+  本次事务备份会立即删除；只有恢复失败时才保留可用于人工恢复的副本，不会随每次更新长期堆积。
   Typeless 提供 `Info.plist/ElectronAsarIntegrity` 时，工具集会保留该校验并同步更新 ASAR header hash；
   只有实际检测到旧格式时才尝试 `@electron/fuses` 或主程序内嵌 hash。若 fuse 路径改动了
   `Electron Framework.framework`，只对该 Framework 与 App 根 Bundle 做定向 ad-hoc 重签名；
