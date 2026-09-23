@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,6 +56,9 @@ class TrayApp
     static bool backendReused;
     static string updateReadyPath;
     static string updateTargetVersion;
+    static System.Windows.Forms.Timer quotaTimer;
+    static bool quotaPollBusy;
+    static string lastQuotaAlert;
 
     [STAThread]
     static void Main(string[] args)
@@ -72,6 +76,8 @@ class TrayApp
         }
 
         SetCurrentProcessExplicitAppUserModelID(AppId);
+        EnsureAppUserModelId();
+        EnsureStartMenuShortcut();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -100,6 +106,7 @@ class TrayApp
         string pageUrl = baseUrl + (backendReused ? "/?toolkit_backend=shared" : "/");
         managerForm = new ManagerForm(pageUrl, exeDir, LoadAppIcon());
         managerForm.FormClosing += OnManagerFormClosing;
+        StartQuotaNotifications();
         Application.Run(managerForm);
         Cleanup();
     }
@@ -293,6 +300,304 @@ class TrayApp
         return false;
     }
 
+    /// <summary>
+    /// 注册本进程的通知标识。Windows 把托盘气泡转成系统通知时，要从
+    /// AppUserModelId 解析“应用名”；未注册时该字段会显示成乱码。
+    /// 只写当前用户(HKCU)，不需要管理员权限。
+    /// </summary>
+    static void EnsureAppUserModelId()
+    {
+        try
+        {
+            using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
+                @"SOFTWARE\Classes\AppUserModelId\" + AppId))
+            {
+                if (key == null) return;
+                key.SetValue("DisplayName", AppTitle, Microsoft.Win32.RegistryValueKind.String);
+                key.SetValue("IconUri", Application.ExecutablePath, Microsoft.Win32.RegistryValueKind.String);
+                key.SetValue("IconBackgroundColor", "0", Microsoft.Win32.RegistryValueKind.String);
+            }
+        }
+        catch (Exception error) { AppendLauncherLog("注册通知标识失败：" + error.Message); }
+    }
+
+    // ---------- 开始菜单快捷方式 ----------
+    // Win32 应用要在系统通知里正确显示“应用名”，除了注册 AppUserModelId 注册表项，
+    // 还必须在开始菜单有一个携带同一 AppUserModelID 的快捷方式。
+    // 便携版没有安装程序，只能首次启动时自己补一个。
+
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    internal class ShellLinkCoClass { }
+
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cch, IntPtr pfd, int fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out short pwHotkey);
+        void SetHotkey(short wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cch, out int piIcon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, int dwReserved);
+        void Resolve(IntPtr hwnd, int fFlags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    [ComImport, Guid("0000010b-0000-0000-C000-000000000046"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPersistFile
+    {
+        void GetClassID(out Guid pClassID);
+        [PreserveSig] int IsDirty();
+        void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, int dwMode);
+        void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, [MarshalAs(UnmanagedType.Bool)] bool fRemember);
+        void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+        void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    internal struct PropertyKey
+    {
+        public Guid fmtid;
+        public int pid;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct PropVariant
+    {
+        [FieldOffset(0)] public short vt;
+        [FieldOffset(8)] public IntPtr pointerValue;
+    }
+
+    [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPropertyStore
+    {
+        void GetCount(out int cProps);
+        void GetAt(int iProp, out PropertyKey pkey);
+        void GetValue(ref PropertyKey key, out PropVariant pv);
+        void SetValue(ref PropertyKey key, ref PropVariant pv);
+        void Commit();
+    }
+
+    static void EnsureStartMenuShortcut()
+    {
+        try
+        {
+            string exe = Application.ExecutablePath;
+            string linkPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppTitle + ".lnk");
+            // 已存在就直接沿用,不反复重建(避免覆盖用户自己调整过的快捷方式)
+            if (File.Exists(linkPath)) return;
+
+            var link = (IShellLinkW)(object)new ShellLinkCoClass();
+            link.SetPath(exe);
+            link.SetWorkingDirectory(Path.GetDirectoryName(exe));
+            link.SetIconLocation(exe, 0);
+            link.SetDescription(AppTitle);
+
+            var key = new PropertyKey();
+            key.fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"); // PKEY_AppUserModel_ID
+            key.pid = 5;
+            var value = new PropVariant();
+            value.vt = 31; // VT_LPWSTR
+            value.pointerValue = Marshal.StringToCoTaskMemUni(AppId);
+            try
+            {
+                var store = (IPropertyStore)link;
+                store.SetValue(ref key, ref value);
+                store.Commit();
+            }
+            finally { Marshal.FreeCoTaskMem(value.pointerValue); }
+
+            ((IPersistFile)link).Save(linkPath, true);
+            Marshal.FinalReleaseComObject(link);
+        }
+        catch (Exception error) { AppendLauncherLog("创建开始菜单快捷方式失败：" + error.Message); }
+    }
+
+    // ---------- 自绘提示窗口 ----------
+    // 系统通知(ShowBalloonTip)在未注册 AppUserModelID 的便携应用上，会把“应用名”
+    // 显示成乱码，且注册表项、开始菜单快捷方式、重启 explorer 都无法消除。
+    // 因此改用自绘窗口：外观可控，也不依赖系统通知平台。
+
+    // 提示窗口跟随管理页面的外观主题;页面还没加载过时先按系统主题取值。
+    // ManagerForm 在另一个类里,所以这里用 internal 以便跨类同步。
+    internal static bool toastDarkTheme = SystemUsesDarkTheme();
+
+    static bool SystemUsesDarkTheme()
+    {
+        try
+        {
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+            {
+                object value = key == null ? null : key.GetValue("AppsUseLightTheme");
+                if (value is int) return (int)value == 0;
+            }
+        }
+        catch (Exception) { }
+        return true; // 取不到时按深色,与工具集默认观感一致
+    }
+
+    class ToastForm : Form
+    {
+        readonly System.Windows.Forms.Timer closeTimer;
+        int remaining;
+
+        // 不抢焦点:用户正在听写或打字时弹提示，绝不能把键盘输入抢走
+        protected override bool ShowWithoutActivation { get { return true; } }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW:不出现在 Alt+Tab
+                return cp;
+            }
+        }
+
+        public ToastForm(string title, string body, bool warning)
+        {
+            Font titleFont = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Bold);
+            Font bodyFont = new Font("Microsoft YaHei UI", 9f);
+            Font metaFont = new Font("Microsoft YaHei UI", 8f);
+
+            // 跟随管理页面的外观主题(浅色 / 深色 / 跟随系统在页面侧已解析成具体值)
+            bool dark = toastDarkTheme;
+            Color background = dark ? Color.FromArgb(32, 33, 38) : Color.FromArgb(252, 252, 253);
+            Color titleColor = dark ? Color.White : Color.FromArgb(26, 28, 33);
+            Color bodyColor = dark ? Color.FromArgb(198, 200, 208) : Color.FromArgb(78, 82, 90);
+            Color metaColor = dark ? Color.FromArgb(150, 152, 160) : Color.FromArgb(128, 132, 140);
+            Color borderColor = dark ? Color.FromArgb(58, 60, 66) : Color.FromArgb(219, 222, 228);
+
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            StartPosition = FormStartPosition.Manual;
+            BackColor = background;
+            Padding = new Padding(0);
+
+            Size bodySize = TextRenderer.MeasureText(body, bodyFont,
+                new Size(326, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+            Width = 386;
+            Height = 34 + 24 + bodySize.Height + 16;
+
+            Color accent = warning
+                ? (dark ? Color.FromArgb(240, 190, 70) : Color.FromArgb(198, 138, 18))
+                : (dark ? Color.FromArgb(96, 170, 245) : Color.FromArgb(38, 118, 210));
+
+            // 无边框窗口在浅色背景上需要一圈描边才立得住
+            Paint += delegate(object s, PaintEventArgs e)
+            {
+                using (var pen = new Pen(borderColor))
+                    e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+            };
+
+            var appName = new Label();
+            appName.Text = AppTitle;
+            appName.ForeColor = metaColor;
+            appName.Font = metaFont;
+            appName.AutoSize = false;
+            appName.Location = new Point(16, 8);
+            appName.Size = new Size(240, 16);
+
+            var close = new Label();
+            close.Text = "✕";
+            close.ForeColor = metaColor;
+            close.Font = metaFont;
+            close.AutoSize = false;
+            close.TextAlign = ContentAlignment.MiddleCenter;
+            close.Location = new Point(Width - 30, 6);
+            close.Size = new Size(20, 18);
+            close.Cursor = Cursors.Hand;
+            close.Click += (s, e) => HideToast();
+
+            var mark = new Label();
+            mark.Text = warning ? "!" : "i";
+            mark.ForeColor = accent;
+            mark.Font = new Font("Segoe UI", 17f, FontStyle.Bold);
+            mark.AutoSize = false;
+            mark.TextAlign = ContentAlignment.MiddleCenter;
+            mark.Location = new Point(16, 34);
+            mark.Size = new Size(26, 30);
+
+            var titleLabel = new Label();
+            titleLabel.Text = title;
+            titleLabel.ForeColor = titleColor;
+            titleLabel.Font = titleFont;
+            titleLabel.AutoSize = false;
+            titleLabel.Location = new Point(50, 38);
+            titleLabel.Size = new Size(312, 22);
+
+            var bodyLabel = new Label();
+            bodyLabel.Text = body;
+            bodyLabel.ForeColor = bodyColor;
+            bodyLabel.Font = bodyFont;
+            bodyLabel.AutoSize = false;
+            bodyLabel.Location = new Point(50, 62);
+            bodyLabel.Size = new Size(326, bodySize.Height);
+
+            Controls.Add(appName);
+            Controls.Add(close);
+            Controls.Add(mark);
+            Controls.Add(titleLabel);
+            Controls.Add(bodyLabel);
+
+            // 点窗体和点正文都打开管理器
+            EventHandler open = (s, e) => { HideToast(); OpenManager(); };
+            Click += open;
+            titleLabel.Click += open;
+            bodyLabel.Click += open;
+            mark.Click += open;
+            appName.Click += open;
+
+            closeTimer = new System.Windows.Forms.Timer();
+            closeTimer.Interval = 1000;
+            closeTimer.Tick += (s, e) => { if (--remaining <= 0) HideToast(); };
+        }
+
+        public void ShowToast(int seconds)
+        {
+            remaining = seconds;
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            Location = new Point(area.Right - Width - 16, area.Bottom - Height - 16);
+            Show();
+            closeTimer.Start();
+        }
+
+        void HideToast()
+        {
+            closeTimer.Stop();
+            Hide();
+        }
+    }
+
+    static ToastForm activeToast;
+
+    static void ShowToast(string title, string body, bool warning)
+    {
+        try
+        {
+            if (activeToast != null && !activeToast.IsDisposed) activeToast.Dispose();
+            activeToast = new ToastForm(title, body, warning);
+            activeToast.ShowToast(8);
+        }
+        catch (Exception error) { AppendLauncherLog("提示窗口失败：" + error.Message); }
+    }
+
     static void AppendLauncherLog(string message)
     {
         try
@@ -431,6 +736,49 @@ class TrayApp
         menu.MenuItems.Add("退出", delegate { ExitApplication(); });
         trayIcon.ContextMenu = menu;
         trayIcon.DoubleClick += delegate { OpenManager(); };
+        trayIcon.BalloonTipClicked += delegate { OpenManager(); };
+    }
+
+    static void StartQuotaNotifications()
+    {
+        quotaTimer = new System.Windows.Forms.Timer();
+        quotaTimer.Interval = 10000;
+        quotaTimer.Tick += async delegate
+        {
+            if (quotaPollBusy || exiting) return;
+            quotaPollBusy = true;
+            try
+            {
+                // 原生计时器独立于隐藏 WebView 的页面计时器，只读后端缓存。
+                string alert = await Task.Run(() =>
+                {
+                    var request = (HttpWebRequest)WebRequest.Create(baseUrl + "/api/quota-monitor/notification");
+                    request.Timeout = 3000;
+                    request.ReadWriteTimeout = 3000;
+                    request.Proxy = null;
+                    using (var response = request.GetResponse())
+                    using (var reader = new StreamReader(response.GetResponseStream()))
+                        return reader.ReadToEnd().Trim();
+                });
+                if (exiting || trayIcon == null || string.IsNullOrEmpty(alert) || alert == lastQuotaAlert) return;
+                // auto: 前缀表示自动切号倒计时已开始，需要与普通额度提醒区分文案
+                bool autoSwitch = alert.StartsWith("auto:", StringComparison.Ordinal);
+                string alertId = autoSwitch ? alert.Substring(5) : alert;
+                if (!Regex.IsMatch(alertId, @"^\d+-\d+$")) return;
+                lastQuotaAlert = alert;
+                // 用自绘提示替代系统气泡:便携应用的系统通知会把“应用名”显示成乱码
+                if (autoSwitch)
+                    ShowToast("Typeless 即将自动切换账号",
+                        "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", true);
+                else
+                    ShowToast("Typeless 额度提醒",
+                        "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", false);
+            }
+            catch (WebException) { /* 后端重启或暂不可用时，下次轮询重试。 */ }
+            catch (Exception error) { AppendLauncherLog("额度提醒失败：" + error.Message); }
+            finally { quotaPollBusy = false; }
+        };
+        quotaTimer.Start();
     }
 
     static void OpenManager()
@@ -466,6 +814,7 @@ class TrayApp
 
     static void Cleanup()
     {
+        if (quotaTimer != null) { quotaTimer.Stop(); quotaTimer.Dispose(); }
         if (trayIcon != null)
         {
             trayIcon.Visible = false;
@@ -573,8 +922,9 @@ class ManagerForm : Form
                 try
                 {
                     string message = args.TryGetWebMessageAsString();
-                    if (message == "theme:dark") ApplyTitleBarTheme(true);
-                    else if (message == "theme:light") ApplyTitleBarTheme(false);
+                    // 页面在“跟随系统”时也会解析成 light/dark 再发过来,这里直接采用即可
+                    if (message == "theme:dark") { TrayApp.toastDarkTheme = true; ApplyTitleBarTheme(true); }
+                    else if (message == "theme:light") { TrayApp.toastDarkTheme = false; ApplyTitleBarTheme(false); }
                     else if (message == "toolkit-update:quit") TrayApp.ExitForToolkitUpdate();
                 }
                 catch { }
