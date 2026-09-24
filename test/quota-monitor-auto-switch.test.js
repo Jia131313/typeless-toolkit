@@ -260,3 +260,18 @@ test('静默模式下切换失败仍给出提示', async () => {
   assert.equal(state.error_code, 'AUTO_SWITCH_FAILED');
   assert.ok(state.alert_id, '失败必须留下提示标识');
 });
+
+test('自动切号开启后,扫描期间也不发「额度不足」提醒(避免中间态误报)', async () => {
+  const dictation = fakeDictation(false);
+  const h = harness({ dictation, config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota' } });
+  const state = await h.monitor.run();
+  // 扫描备用账号前会先发布一次 low 状态,这里必须已经是 null
+  assert.equal(state.alert_id, null, '开启自动切号时不应有额度不足提醒');
+});
+
+test('静默模式下,扫描期间同样不发提醒', async () => {
+  const dictation = fakeDictation(true);
+  const h = harness({ dictation, config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota', silent: true } });
+  const state = await h.monitor.run();
+  assert.equal(state.alert_id, null);
+});
