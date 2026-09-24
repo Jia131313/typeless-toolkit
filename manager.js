@@ -851,8 +851,13 @@ const server = http.createServer(async (req, res) => {
         detectCurrentAccountFromFile().user_id === state.current?.user_id;
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       if (!active || !state.alert_id) return res.end('');
-      // 倒计时期间用 auto: 前缀区分,托盘据此提示“即将自动切换”而不是“额度不足”
+      // auto: 前缀表示自动切号倒计时已开始，托盘据此提示“即将自动切换”而不是“额度不足”。
+      // 静默模式不弹倒计时,因此永远不会走到这个前缀。
       if (state.state === 'auto_countdown') return res.end('auto:' + state.alert_id);
+      // 自动切号失败:静默模式下也要让用户知道没切成
+      if (state.state === 'error' && state.error_code === 'AUTO_SWITCH_FAILED') {
+        return res.end('failed:' + state.alert_id);
+      }
       return res.end(state.state === 'low' ? state.alert_id : '');
     }
     if (m === 'POST' && p === '/api/quota-monitor/config') {
@@ -910,24 +915,32 @@ const server = http.createServer(async (req, res) => {
     // 账号列表(含实时状态)
     if (m === 'GET' && p === '/api/accounts') {
       const accs = readAccounts();
-      // 上游 c5f784f:限制状态查询并发，避免账号多时瞬间启动大量 curl。
-      const live = new Array(accs.length);
-      let cursor = 0;
-      const worker = async () => {
-        while (cursor < accs.length) {
-          const i = cursor++;
-          live[i] = await liveStatus(accs[i]).catch(e => ({ token_valid: false, _err: e.message }));
-        }
-      };
-      await Promise.all(Array.from(
-        { length: Math.min(ACCOUNT_STATUS_CONCURRENCY, accs.length) },
-        () => worker()
-      ));
+      // 首屏优先:?quick=1 只返回本地可得的字段(有效期、快照状态),
+      // 不发任何官方接口,页面先据此把卡片画出来,再补一次完整状态。
+      const quick = u.searchParams.get('quick') === '1';
+      let live;
+      if (quick) {
+        live = await Promise.all(accs.map(acc => liveStatus(acc, { staticOnly: true })));
+      } else {
+        // 上游 c5f784f:限制状态查询并发，避免账号多时瞬间启动大量 curl。
+        live = new Array(accs.length);
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < accs.length) {
+            const i = cursor++;
+            live[i] = await liveStatus(accs[i]).catch(e => ({ token_valid: false, _err: e.message }));
+          }
+        };
+        await Promise.all(Array.from(
+          { length: Math.min(ACCOUNT_STATUS_CONCURRENCY, accs.length) },
+          () => worker()
+        ));
+      }
       const data = accs.map((a, i) => {
         const snap = inspectSnapshot(a.user_id);
         return accountForClient(a, live[i], snap.has_snapshot, snap);
       });
-      return send(res, 200, { status: 'OK', data });
+      return send(res, 200, { status: 'OK', data, quick });
     }
     // 当前账号只读 app-storage.json；页面每 20 秒轮询也绝不能因此重启 Typeless。
     // 仅显式 ?reconnect=1 才允许 macOS 进入 CDP 自愈，日常 UI 不使用该模式。
@@ -1527,7 +1540,8 @@ function startServer() {
       server.off('error', onError);
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
       dictionarySync.start();
-      quotaMonitor.start();
+      // 首轮额度检查推后:它和页面首屏要打同一批官方接口,抢在一起会拖慢首屏
+      quotaMonitor.start({ delayMs: 8000 });
       syncDictationWatcher();
       paywallMaintenance.start();
       scheduleAccountSync('startup', 1500);

@@ -52,7 +52,7 @@ test('quota HTTP settings persist; guarded switch rejects stale suggestions and 
   assert.equal((await call('/api/quota-monitor/config', { enabled: true, remaining: 200 }, { Origin: 'https://example.test' })).code, 403);
   assert.equal((await call('/api/quota-monitor/config', { enabled: true, remaining: 200 })).code, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, 'quota-monitor.json'))),
-    { enabled: true, remaining: 200, auto_switch: false, strategy: 'quota', order: [] });
+    { enabled: true, remaining: 200, auto_switch: false, strategy: 'quota', order: [], silent: false });
   const state = await quotaMonitor.run();
   assert.equal(state.candidate.user_id, 'b'); assert.equal(kills, 0); assert.equal(launches, 0);
   const status = await call('/api/quota-monitor/status'); assert.ok(!JSON.stringify(status).includes('private-'));

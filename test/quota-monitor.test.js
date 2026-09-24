@@ -20,7 +20,7 @@ function harness(overrides = {}) {
 }
 
 test('quota config is opt-in and unknown or unlimited quota is never guessed', () => {
-  assert.deepEqual(normalizeQuotaConfig(), { enabled: false, remaining: 200, auto_switch: false, strategy: 'quota', order: [] });
+  assert.deepEqual(normalizeQuotaConfig(), { enabled: false, remaining: 200, auto_switch: false, strategy: 'quota', order: [], silent: false });
   for (const remaining of [0, -1, 1.5, '200', Infinity]) assert.throws(() => normalizeQuotaConfig({ remaining }));
   for (const usage of [{}, { week_word_usage_value: 0 }, { week_word_usage_value: 5, week_word_usage_limit: -1 },
     { week_word_usage_value: null, week_word_usage_limit: 2000 }]) assert.throws(() => parseQuota(usage));

@@ -207,3 +207,56 @@ test('倒计时结束时若已重新开始听写则退回等待,不执行切换'
   assert.deepEqual(h.switches, []);
   assert.equal(h.monitor.status().state, 'auto_pending');
 });
+
+test('静默模式:不弹倒计时,空闲即切', async () => {
+  const dictation = fakeDictation(true);
+  const h = harness({ dictation, config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota', silent: true } });
+  await h.monitor.run();
+  await tick();
+  // 静默模式不该出现倒计时窗口,也不该安排倒计时定时器
+  assert.equal(h.monitor.status().state, 'auto_done');
+  assert.equal(countdown(h), undefined, '静默模式不应启动倒计时');
+  assert.deepEqual(h.switches, ['b']);
+});
+
+test('静默模式:正在听写时等待,说完直接切', async () => {
+  const dictation = fakeDictation(false);
+  const h = harness({ dictation, config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota', silent: true } });
+  await h.monitor.run();
+  assert.equal(h.monitor.status().state, 'auto_pending');
+  assert.deepEqual(h.switches, []);
+  dictation.setIdle(true);
+  dictation.emit('idle');
+  await tick();
+  assert.equal(h.monitor.status().state, 'auto_done');
+  assert.deepEqual(h.switches, ['b']);
+});
+
+test('开启自动切号时不再单独发额度不足提醒,只保留切换那一刻的提示', async () => {
+  const dictation = fakeDictation(false);
+  const h = harness({ dictation, config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota' } });
+  const state = await h.monitor.run();
+  assert.equal(state.state, 'auto_pending');
+  // 自动流程已接管,alert_id 应为空(不发“额度不足”那条)
+  assert.equal(state.alert_id, null);
+});
+
+test('未开启自动切号时仍按原样发额度不足提醒', async () => {
+  const h = harness({ config: { enabled: true, remaining: 200 } });
+  const state = await h.monitor.run();
+  assert.equal(state.state, 'low');
+  assert.ok(state.alert_id, '未开自动切号时应保留 alert_id');
+});
+
+test('静默模式下切换失败仍给出提示', async () => {
+  const h = harness({
+    config: { enabled: true, remaining: 200, auto_switch: true, strategy: 'quota', silent: true },
+    switchAccount: async () => { throw new Error('快照损坏'); },
+  });
+  await h.monitor.run();
+  await tick();
+  const state = h.monitor.status();
+  assert.equal(state.state, 'error');
+  assert.equal(state.error_code, 'AUTO_SWITCH_FAILED');
+  assert.ok(state.alert_id, '失败必须留下提示标识');
+});

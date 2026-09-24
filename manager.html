@@ -448,6 +448,7 @@
       </div>
       <div class="quota-controls">
         <label><input type="checkbox" id="quotaAutoSwitch" onchange="syncQuotaAutoControls()" disabled>额度不足时自动切换账号</label>
+        <label><input type="checkbox" id="quotaSilent" disabled>完全静默模式（无弹窗提示，后台完成切换）</label>
         <label for="quotaStrategy">切换策略
           <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
             <option value="quota">剩余额度最多</option>
@@ -457,6 +458,7 @@
         </label>
       </div>
       <p id="quotaAutoHint" role="status"></p>
+      <p id="quotaSilentHint" class="hint" hidden>静默模式下不会有任何弹窗，也不会出现 15 秒倒计时：检测到额度不足且你没在听写时直接切号。切换失败仍会提示一次。</p>
       <div id="quotaOrderWrap" hidden>
         <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
         <div class="quota-order" id="quotaOrderList"></div>
@@ -847,6 +849,7 @@ function renderQuotaMonitor(state){
     document.getElementById('quotaEnabled').checked=state.config.enabled;
     document.getElementById('quotaRemaining').value=state.config.remaining;
     autoBox.checked=state.config.auto_switch;
+    document.getElementById('quotaSilent').checked=!!state.config.silent;
     strategySel.value=state.config.strategy;
     QUOTA_ORDER=(state.config.order||[]).slice();
     document.getElementById('quotaEnabled').disabled=false;
@@ -859,6 +862,10 @@ function renderQuotaMonitor(state){
   document.getElementById('quotaAutoHint').textContent=available?''
     :'当前运行环境无法读取听写状态（需要 Node 23.4+ 内置 sqlite），因此不能开启自动切号。';
   strategySel.disabled=!available||!autoBox.checked;
+  const silentBox=document.getElementById('quotaSilent');
+  silentBox.disabled=!available||!autoBox.checked;
+  // 静默模式会替掉倒计时,提示用户它意味着没有反悔窗口
+  document.getElementById('quotaSilentHint').hidden=!(silentBox.checked&&!silentBox.disabled);
   renderQuotaOrder();
   document.getElementById('quotaCheckBtn').disabled=!state.config.enabled||state.state==='checking';
   document.getElementById('quotaMonitorStatus').textContent=state.message+(state.checked_at?' · 最近成功查询 '+new Date(state.checked_at).toLocaleTimeString():'');
@@ -904,7 +911,13 @@ function renderQuotaOrder(){
 }
 function syncQuotaAutoControls(){
   const available=QUOTA_STATE?.auto_switch_available!==false;
-  document.getElementById('quotaStrategy').disabled=!available||!document.getElementById('quotaAutoSwitch').checked;
+  const on=document.getElementById('quotaAutoSwitch').checked;
+  document.getElementById('quotaStrategy').disabled=!available||!on;
+  const silentBox=document.getElementById('quotaSilent');
+  silentBox.disabled=!available||!on;
+  // 关掉自动切号时,静默也一并失效,避免留下看不懂的勾选状态
+  if(!on) silentBox.checked=false;
+  document.getElementById('quotaSilentHint').hidden=!(silentBox.checked&&!silentBox.disabled);
   renderQuotaOrder();
 }
 function moveQuotaOrder(userId,delta){
@@ -919,6 +932,12 @@ function moveQuotaOrder(userId,delta){
 // 倒计时弹窗:只在 auto_countdown 期间出现,关闭即视为取消
 function renderAutoSwitch(state){
   const mask=document.getElementById('autoSwitchMask');
+  // 静默模式没有倒计时,不弹窗
+  if(state.config?.silent){
+    if(AUTO_COUNTDOWN_TIMER){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
+    if(mask.classList.contains('on')) closeModal('autoSwitchMask');
+    return;
+  }
   if(state.state==='auto_countdown'){
     document.getElementById('autoSwitchMsg').textContent=state.message;
     if(!mask.classList.contains('on')) openModal('autoSwitchMask');
@@ -971,6 +990,7 @@ async function saveQuotaSettings(){
       auto_switch:autoSwitch,
       strategy:document.getElementById('quotaStrategy').value,
       order:QUOTA_ORDER,
+      silent:document.getElementById('quotaSilent').checked,
     })});
     if(r.status!=='OK') throw new Error(r.msg||'保存失败');
     QUOTA_ORDER=(r.data.config.order||[]).slice();
@@ -1167,9 +1187,28 @@ function renderStats(){
 }
 
 async function launch(){ toast('启动中…'); const r=await api('/api/launch',{method:'POST'}); toast(r.msg||'已启动','ok'); setTimeout(detectCurrent,3000); }
+/**
+ * 加载账号列表。
+ * 分两趟:先取 quick(纯本地字段)立刻渲染卡片,再取完整状态补齐额度与词库。
+ * 这样首屏不再干等十来个官方接口往返。
+ */
 async function loadAccounts(){
   const g=document.getElementById('grid');
   if(!ACCOUNTS.length) g.innerHTML='<div class="skeleton"></div>'.repeat(3);
+
+  const quick=await api('/api/accounts?quick=1');
+  if(quick.status==='OK'){
+    ACCOUNTS=quick.data||[];
+    render(); renderStats();
+    document.getElementById('filterbar').style.display = ACCOUNTS.length>3?'flex':'none';
+    // 完整状态在后台补;失败时保留已经画好的卡片
+    api('/api/accounts').then(r=>{
+      if(r.status!=='OK') return;
+      ACCOUNTS=r.data||[]; render(); renderStats();
+    }).catch(()=>{});
+    return;
+  }
+
   const r=await api('/api/accounts');
   if(r.status!=='OK'){ g.innerHTML='<div class="empty">'+esc(r.msg||'加载失败')+'</div>'; return; }
   ACCOUNTS=r.data||[];
@@ -1213,18 +1252,18 @@ function render(){
       <div class="chead">
         <div class="avatar">${esc(ini)}</div>
         <div class="who"><div class="account-title"><div class="nick" title="${esc(a.nickname||a.email||a.user_id)}">${esc(a.nickname||a.email||a.user_id)}</div>${a.user_id===CUR_ID?'<span class="badge current">当前账号</span>':''}</div>${a.nickname&&a.nickname!==a.email?`<div class="email" title="${esc(a.email||a.user_id)}">${esc(a.email||a.user_id)}</div>`:''}
-          <div class="account-badges"><span class="badge ${serviceError?'warn':(valid?(a.role||''):'invalid')}" title="${live._err?esc(live._err):''}">${serviceError?'数据暂不可用':(valid?(a.role==='free'?'免费版':a.role||'未知'):'失效')}</span>
+          <div class="account-badges"><span class="badge ${live.loading?'mut':(serviceError?'warn':(valid?(a.role||''):'invalid'))}" title="${live._err?esc(live._err):''}">${live.loading?'读取中':(serviceError?'数据暂不可用':(valid?(a.role==='free'?'免费版':a.role||'未知'):'失效'))}</span>
           </div>
         </div>
       </div>
       <div class="quota">
-        <div class="qtop"><span>本周额度</span><b>${ok?nfmt(used)+' / '+nfmt(lim):'额度未知'}</b></div>
+        <div class="qtop"><span>本周额度</span><b>${live.loading?'读取中…':(ok?nfmt(used)+' / '+nfmt(lim):'额度未知')}</b></div>
         <div class="quota-meter"><div class="bar ${pcls}"><i style="width:${p}%"></i></div><span class="quota-percent">${ok?p+'%':'—'}</span></div>
         ${live._err?`<div class="settings-note" style="margin-top:8px;color:var(--${serviceError?'warn':'err'})">${esc(live._err)}</div>`:''}
       </div>
       <div class="mini">
-        <div class="m"><div class="k">词库</div><div class="v">${live.dict_count??'-'}</div></div>
-        <div class="m"><div class="k">个性化</div><div class="v">${Math.round((live.personal?.total_learning_ratio||0)*100)}%</div></div>
+        <div class="m"><div class="k">词库</div><div class="v">${live.loading?'…':(live.dict_count??'-')}</div></div>
+        <div class="m"><div class="k">个性化</div><div class="v">${live.loading?'…':(Math.round((live.personal?.total_learning_ratio||0)*100)+'%')}</div></div>
         <div class="m"><div class="k">登录有效期</div><div class="v ${daysCls}">${daysTxt}</div></div>
       </div>
       <div class="cfoot">
@@ -2437,11 +2476,12 @@ document.addEventListener('keydown',e=>{
   });
 });
 (async()=>{
-  await fetchEnv();
-  await loadAccounts();
-  await refreshPatchStatus();
-  await refreshPaywallMaintenanceStatus();
+  // 首屏只等「本地数据 + 环境」:这两项都很快。
+  // 其余状态类请求并发发出,不再串行阻塞账号卡片的渲染。
+  await Promise.all([fetchEnv(), loadAccounts()]);
   detectCurrent();
+  refreshPatchStatus();
+  refreshPaywallMaintenanceStatus();
   refreshOfficialUpdate();
   setTimeout(()=>refreshToolkitUpdate(true),1200);
   refreshDictionarySyncStatus();

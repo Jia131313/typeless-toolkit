@@ -761,15 +761,19 @@ class TrayApp
                         return reader.ReadToEnd().Trim();
                 });
                 if (exiting || trayIcon == null || string.IsNullOrEmpty(alert) || alert == lastQuotaAlert) return;
-                // auto: 前缀表示自动切号倒计时已开始，需要与普通额度提醒区分文案
+                // 前缀区分提示类型:auto=即将自动切换,failed=自动切换失败
                 bool autoSwitch = alert.StartsWith("auto:", StringComparison.Ordinal);
-                string alertId = autoSwitch ? alert.Substring(5) : alert;
+                bool autoFailed = alert.StartsWith("failed:", StringComparison.Ordinal);
+                string alertId = autoSwitch ? alert.Substring(5) : (autoFailed ? alert.Substring(7) : alert);
                 if (!Regex.IsMatch(alertId, @"^\d+-\d+$")) return;
                 lastQuotaAlert = alert;
                 // 用自绘提示替代系统气泡:便携应用的系统通知会把“应用名”显示成乱码
                 if (autoSwitch)
                     ShowToast("Typeless 即将自动切换账号",
                         "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", true);
+                else if (autoFailed)
+                    ShowToast("Typeless 自动切换失败",
+                        "没有切换到备用账号，额度仍然不足。请打开管理器查看原因并手动切换。", true);
                 else
                     ShowToast("Typeless 额度提醒",
                         "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", false);
