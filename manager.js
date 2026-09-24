@@ -689,7 +689,11 @@ const dictationWatcher = createDictationWatcher({ dbPath: dictationDbPath(C.USER
  * 执行账号切换:校验目标快照 → 保存当前号 → 重启到目标快照。
  * 手动切号路由与自动切号共用同一条路径,避免两套行为分叉。
  */
-async function performAccountSwitch(id) {
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 静默模式:后台无窗口启动 Typeless
+ */
+async function performAccountSwitch(id, options = {}) {
   // 手动路由与自动切号共用此入口;同一把锁避免两条路径同时重启 Typeless
   if (accountSwitchInFlight) {
     const busy = new Error('正在切换账号，请等待完成');
@@ -698,14 +702,18 @@ async function performAccountSwitch(id) {
   }
   accountSwitchInFlight = true;
   try {
-    return await switchToAccountSnapshot(id);
+    return await switchToAccountSnapshot(id, options);
   } finally {
     accountSwitchInFlight = false;
   }
 }
 
-/** 真正的切换流程(调用方需已持有 accountSwitchInFlight) */
-async function switchToAccountSnapshot(id) {
+/**
+ * 真正的切换流程(调用方需已持有 accountSwitchInFlight)
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 静默模式:Typeless 后台无窗口启动,用户基本无感
+ */
+async function switchToAccountSnapshot(id, options = {}) {
   const snap = inspectSnapshot(id);
   if (!snap.has_snapshot) {
     const error = new Error('该账号无快照,请先在 Typeless 登录该号后点「更新快照」');
@@ -735,7 +743,7 @@ async function switchToAccountSnapshot(id) {
   killTypeless(); await sleep(1500);
   restoreSnapshot(id);
   const heal = healOnboardingAfterRestore(id);
-  await launchTypeless();
+  await launchTypeless({ silent: options.silent });
   paywallMaintenance.schedule('account-switch', 1200);
   return heal;
 }
@@ -756,7 +764,9 @@ const quotaMonitor = createQuotaMonitor({
   fetchQuota: createQuotaFetcher({ ensureAccessToken: ensureAccountAccessToken, request: curlApi }),
   // 读不到听写状态时传 null,自动切号会被安全地保持关闭
   dictation: sqliteAvailable() ? dictationWatcher : null,
-  switchAccount: performAccountSwitch,
+  // 自动切号按「当前生效的配置」决定是否让 Typeless 后台无窗口启动。
+  // 箭头函数延迟执行,因此可以引用稍后才赋值的 quotaMonitor,保证保存后立即生效。
+  switchAccount: targetId => performAccountSwitch(targetId, { silent: quotaMonitor.status().config.silent }),
   fetchPersonalStats: fetchAccountLearningRatio,
 });
 let accountSwitchInFlight = false;
