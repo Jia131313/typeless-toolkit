@@ -27,7 +27,7 @@ const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
-  killTypeless, launchTypeless, isTypelessRunning, resetDevice,
+  killTypeless, launchTypeless, withSilentLaunch, isTypelessRunning, resetDevice,
   createTypelessAppBackup, createTypelessAppStaging, restoreTypelessAppBackup,
   discardTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
@@ -743,7 +743,10 @@ async function switchToAccountSnapshot(id, options = {}) {
   killTypeless(); await sleep(1500);
   restoreSnapshot(id);
   const heal = healOnboardingAfterRestore(id);
-  await launchTypeless({ silent: options.silent });
+  // 静默模式:Typeless 判定静默需要「设置里允许自启 + 带静默参数」同时成立,
+  // 因此借用期间临时把自启开关打开,启动完立刻恢复原值。
+  if (options.silent) await withSilentLaunch(() => launchTypeless({ silent: true }));
+  else await launchTypeless();
   paywallMaintenance.schedule('account-switch', 1200);
   return heal;
 }
