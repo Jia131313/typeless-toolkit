@@ -63,6 +63,31 @@ function fakeAsar(over) {
   return buildAsar({ '/dist/main/index.js': fakeMainBundle(over) });
 }
 
+/** 模拟官方 2.8.0 主进程 bundle 的关键结构(Host 内联 + 混合字面量与解码密钥) */
+function fakeMainBundle280(over = {}) {
+  const pool = [
+    'unused',
+    'TypelessRequestSecurityMiddleware',
+    over.env || 'prod',
+    'now.typeless.desktop',
+    over.version || '2.8.0',
+    over.vn || FAKE_VN,
+  ];
+  const literal = '[' + pool.map(v => `'${v}'`).join(',') + ']';
+  const eu = over.eu || FAKE_EU;
+  return [
+    `const pool=${literal};`,
+    `const Di='https://api.typeless.com',Eu='https://www.typeless.com',is=_0xF(0x4),Ht='Typeless',er=_0xF(0x3),Sn=_0xF(0x5),Cu='${eu}',Fi=_0xF(0x2),tr=Fi!=='prod';`,
+    `const sr='${over.prefix || 'win_'}';`,
+    `function _0xF(i){return pool[i];}`,
+    `function usage(){const h=ts+':'+Cu; const enc=crypto.encrypt(p,Sn);}`,
+  ].join('\n');
+}
+
+function fakeAsar280(over) {
+  return buildAsar({ '/dist/main/index.js': fakeMainBundle280(over) });
+}
+
 /** 用测试口令解开 X-Authorization,核对官方载荷字段 */
 function decryptPayload(xAuth) {
   const raw = Buffer.from(xAuth, 'base64');
@@ -107,6 +132,15 @@ test('macOS 前缀同样可还原', () => {
   const keys = extractSignatureKeys(fakeAsar({ prefix: 'mac_' }));
   assert.equal(keys.platformPrefix, 'mac_');
   assert.equal(keys.appVersion, '2.7.0');
+});
+
+test('从 2.8.0+ 结构(Host与部分密钥内联)的主进程 bundle 还原签名参数', () => {
+  const keys = extractSignatureKeys(fakeAsar280());
+  assert.equal(keys.aesPassphrase, FAKE_VN);
+  assert.equal(keys.hmacSecret, FAKE_EU);
+  assert.equal(keys.appVersion, '2.8.0');
+  assert.equal(keys.platformPrefix, 'win_');
+  assert.equal(keys.xEnv, 'prod');
 });
 
 test('X-Env 自校验不通过时拒绝返回密钥', () => {
