@@ -1496,6 +1496,14 @@ const server = http.createServer(async (req, res) => {
     if (m === 'GET' && p === '/api/master/export') {
       return sendDownload(res, 'Typeless主词库.txt', readMaster().join('\n'));
     }
+    // 桌面宿主和更新程序的轻量就绪探测。这里不调用 envInfo()，
+    // 避免首次请求因解析 Typeless app.asar 而阻塞启动或更新握手。
+    if (m === 'GET' && p === '/api/ready') {
+      return send(res, 200, {
+        status: 'OK',
+        data: { service: 'typeless-toolkit', toolkit_version: TOOLKIT_VERSION },
+      });
+    }
     // 运行环境信息(排错用:平台、探测到的路径、凭据名)
     if (m === 'GET' && p === '/api/env') {
       return send(res, 200, {

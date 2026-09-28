@@ -70,6 +70,10 @@
   .update-badge .ui-icon { width:13px; height:13px; }
   .update-choices { display:grid; gap:12px; }
   .update-choices .btn { justify-content:flex-start; padding:16px; white-space:normal; text-align:left; }
+  .update-state-callout { min-width:0; max-width:100%; margin-top:10px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; white-space:pre-line; overflow-wrap:anywhere; word-break:break-word; }
+  .update-state-callout.ok { color:var(--ok); background:var(--ok-soft); border-color:color-mix(in srgb,var(--ok) 30%,var(--line)); }
+  .update-state-callout.warn { color:color-mix(in srgb,var(--warn) 72%,var(--text)); background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 35%,var(--line)); }
+  .update-state-callout.err { color:var(--err); background:var(--err-soft); border-color:color-mix(in srgb,var(--err) 30%,var(--line)); }
 
   /* 概览统计 */
   .home-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:20px 0 12px; }
@@ -530,7 +534,7 @@
   </div>
 
   <div class="settings-panel settings-stack" id="settings-updates" role="tabpanel" aria-labelledby="settingsTabUpdates" hidden>
-    <section class="settings-card"><div class="settings-row"><div><h3>Typeless 工具集 <span class="badge" id="settingsToolkitVersion">读取版本中</span></h3><p>更新账号管理工具，保留已保存的账号、快照、词库和配置。</p><p id="settingsToolkitStatus">正在检查更新…</p></div><button class="btn" id="toolkitUpdateBtn" onclick="openToolkitUpdate()">检查工具集更新</button></div><div class="settings-note" id="settingsToolkitBoundary">工具集更新与 Typeless 本体更新相互独立。</div></section>
+    <section class="settings-card"><div class="settings-row"><div><h3>Typeless 工具集 <span class="badge" id="settingsToolkitVersion">读取版本中</span></h3><p>更新账号管理工具，保留已保存的账号、快照、词库和配置。</p><p id="settingsToolkitStatus">正在检查更新…</p></div><button class="btn" id="toolkitUpdateBtn" onclick="openToolkitUpdate()">检查工具集更新</button></div><div id="settingsToolkitResult" class="update-state-callout" hidden></div><div class="settings-note" id="settingsToolkitBoundary">工具集更新与 Typeless 本体更新相互独立。</div></section>
     <section class="settings-card" id="officialUpdateCard" hidden><div class="settings-row"><div><h3>Typeless 本体 <span class="badge">官方应用</span></h3><p id="officialUpdateStatus">正在检查本地更新缓存…</p></div><button class="btn" id="officialUpdateBtn" style="display:none" onclick="openOfficialUpdate()">检查本地更新包</button></div><div class="settings-note">仅安装 Typeless updater 已下载的本地缓存包，不检查或更新工具集。</div></section>
     <div class="about-footer"><span>Typeless 工具集 · 开源辅助工具</span><a class="link" href="https://github.com/Jia131313/typeless-toolkit" target="_blank" rel="noopener noreferrer">GitHub 仓库 ↗</a></div>
   </div>
@@ -766,6 +770,7 @@
     <div class="bd">
       <div id="toolkitUpdateSummary" class="permission-intro">正在检查 GitHub Release…</div>
       <div id="toolkitUpdateProgress" class="hint" style="margin-top:10px"></div>
+      <div id="toolkitUpdateResult" class="update-state-callout" hidden></div>
       <pre id="toolkitUpdateNotes" class="hint" style="display:none;max-height:250px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:14px 0 0;padding:12px;border-radius:10px"></pre>
       <div class="row-btns" style="margin-top:14px">
         <button class="btn primary" id="toolkitUpdateActionBtn" onclick="downloadToolkitUpdate()">检查更新</button>
@@ -1901,11 +1906,18 @@ function updateBytes(value){
   return (bytes/1024/1024).toFixed(1)+' MB';
 }
 function renderToolkitUpdate(){
+  const updateResultView=result=>{
+    if(!result?.state) return null;
+    const version=result.version?` v${result.version}`:'';
+    if(result.state==='succeeded') return {tone:'ok',text:`上次更新成功${version}\n${result.message||'新版已完成启动确认。'}`};
+    if(result.state==='rolled-back') return {tone:'warn',text:`上次更新未生效，已自动回滚${version}\n${result.message||'已恢复更新前的版本。'}`};
+    return {tone:'err',text:`上次更新失败${version}\n${result.message||'请根据错误信息重试或手动更新。'}`};
+  };
   const btn=document.getElementById('toolkitUpdateBtn');
   const d=TOOLKIT_UPDATE, u=d?.update;
   document.getElementById('settingsToolkitVersion').textContent=d?.current_version?'v'+d.current_version:'版本暂不可用';
   const checking=!d||d.state==='idle'||d.state==='checking';
-  document.getElementById('settingsToolkitStatus').textContent=d?.error?'更新检查或下载失败：'+d.error:d?.running?'正在处理更新…':d?.available?'发现新版本 v'+d.version:checking?'正在检查更新…':'当前已是最新版本';
+  document.getElementById('settingsToolkitStatus').textContent=d?.error?'更新检查或下载失败：'+d.error:d?.running?'正在处理更新…':d?.state==='downloaded'?`更新包 v${d.version} 已下载，尚未安装`:d?.available?'发现新版本 v'+d.version:checking?'正在检查更新…':'当前已是最新版本';
   document.getElementById('settingsToolkitBoundary').textContent=(d?.platform||ENV_INFO?.platform)==='macos'
     ? 'macOS 会下载并校验 DMG，仍需将 App 拖入“应用程序”完成替换。'
     : 'Windows 会下载并校验更新包，退出后替换程序文件，并保留 data 目录。';
@@ -1914,6 +1926,7 @@ function renderToolkitUpdate(){
     btn.disabled=false;
     btn.classList.toggle('primary',!!d?.available);
     if(d?.running) btn.textContent='查看更新进度';
+    else if(d?.state==='downloaded') btn.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG';
     else if(d?.available) btn.textContent='查看更新';
     else btn.textContent='检查工具集更新';
     btn.title=d?.available
@@ -1926,7 +1939,16 @@ function renderToolkitUpdate(){
   const action=document.getElementById('toolkitUpdateActionBtn');
   const release=document.getElementById('toolkitUpdateReleaseBtn');
   const boundary=document.getElementById('toolkitUpdateBoundary');
+  const resultView=updateResultView(d?.last_result);
+  for(const id of ['settingsToolkitResult','toolkitUpdateResult']){
+    const result=document.getElementById(id);
+    if(!result) continue;
+    result.hidden=!resultView;
+    result.textContent=resultView?.text||'';
+    result.className='update-state-callout '+(resultView?.tone||'');
+  }
   if(!summary||!action) return;
+  progress.className='hint';
   if(checking&&!d?.available&&!d?.error){
     summary.textContent='正在检查 GitHub Release…'; action.textContent='检查更新'; action.disabled=true;
     progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
@@ -1958,7 +1980,10 @@ function renderToolkitUpdate(){
       : `正在下载并校验：${updateBytes(p.downloaded)}`;
     action.textContent='下载中…'; action.disabled=true;
   }else if(d.state==='downloaded'){
-    progress.textContent='更新包 SHA-256 校验通过。';
+    progress.textContent=d.platform==='windows'
+      ? '已下载且 SHA-256 校验通过，但尚未安装。\n下一步：点击“退出并安装更新”，确认后工具集才会退出、替换并重新打开。'
+      : '已下载且 SHA-256 校验通过，但尚未安装。请打开 DMG 并将 App 拖入“应用程序”。';
+    progress.className='update-state-callout warn';
     action.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG'; action.disabled=false;
   }else if(d.state==='installing'){
     progress.textContent='即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
@@ -1968,26 +1993,40 @@ function renderToolkitUpdate(){
     action.textContent=d.state==='error'?'重新下载':'下载更新'; action.disabled=false;
   }
   if(boundary){
-    const result=d.last_result?.message ? `上次更新：${d.last_result.message}` : '';
     boundary.textContent=(d.platform==='macos'
       ? 'macOS 当前采用 ad-hoc 签名：这里只会校验下载并打开 DMG，仍需你将 App 拖入“应用程序”完成替换。'
-      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。')) + (result?`\n${result}`:'');
+      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。'));
   }
 }
 async function refreshToolkitUpdate(announce=false){
   if(TOOLKIT_UPDATE?.running||['downloading','downloaded','installing'].includes(TOOLKIT_UPDATE?.state)){
     renderToolkitUpdate(); return TOOLKIT_UPDATE;
   }
+  let responseData=null;
   try{
     const r=await apiTimed('/api/toolkit-update',{},25000);
+    responseData=r.data||null;
     if(r.status!=='OK') throw new Error(r.msg||'检查失败');
-    TOOLKIT_UPDATE=r.data||null;
+    TOOLKIT_UPDATE=responseData;
     if(announce && TOOLKIT_UPDATE?.available&&!TOOLKIT_UPDATE_NOTIFIED){
       TOOLKIT_UPDATE_NOTIFIED=true;
       toast('发现工具集 v'+TOOLKIT_UPDATE.version+'，可在“设置 → 关于与更新”查看','ok');
     }
   }catch(e){
-    TOOLKIT_UPDATE={state:'error',running:false,error:e.message||'检查更新失败'};
+    const previous=TOOLKIT_UPDATE;
+    const source=responseData||previous||{};
+    TOOLKIT_UPDATE={
+      current_version:source.current_version,
+      platform:source.platform,
+      flavor:source.flavor,
+      arch:source.arch,
+      automatic_install:source.automatic_install,
+      manual_install_reason:source.manual_install_reason,
+      checked_at:source.checked_at||null,
+      state:'error', running:false, error:e.message||'检查更新失败',
+      available:false, version:null, update:null,
+      last_result:responseData?.last_result||previous?.last_result||null,
+    };
   }
   renderToolkitUpdate();
   return TOOLKIT_UPDATE;
