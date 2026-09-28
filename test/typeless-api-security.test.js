@@ -63,6 +63,49 @@ function fakeAsar(over) {
   return buildAsar({ '/dist/main/index.js': fakeMainBundle(over) });
 }
 
+/**
+ * 模拟官方 2.8.0 的「旋转字符串池」结构:
+ *   - 数组工厂返回一个池,开头有 IIFE 反复 shift/push 直到校验和命中
+ *   - 解码器把 hex 索引减去偏移后取值
+ *   - 密钥声明组形如 `Sn=D(0x..),Cu='<hex>',Fi=D(0x..),tr=Fi!=='prod'`
+ *
+ * 数字哨兵放在池尾,校验表达式访问的是池首若干项,因此必须旋转 6 轮
+ * (数字项才会转到被访问的下标上),rotations > 0 能真正走到旋转逻辑。
+ */
+function fakeRotatedBundle(over = {}) {
+  const SHIFT = 210;        // 解码器偏移,对应官方 0xd2
+  const DIGITS = [1, 1, 1, 1, 1, 1, 1, 1];
+  const tail = [
+    API_HOST,
+    'https://www.typeless.com',
+    over.env || 'prod',
+    over.vn || FAKE_VN,
+    over.version || '2.8.0',
+    over.prefix || 'win_',
+  ];
+  const pool = tail.concat(DIGITS);
+  const TURNS = DIGITS.reduce((a, b) => a + b, 0);  // 校验和 == 旋转轮数
+  // 旋转 TURNS 轮后各元素的新下标:前面的数字整体后移,取值项被推到末尾
+  const afterRotate = tail.map((_, i) => i + DIGITS.length);
+  const literal = '[' + pool.map(v => (typeof v === 'number' ? v : `'${v}'`)).join(',') + ']';
+  // 取值索引 = 偏移 + 旋转后的下标
+  const idx = k => '0x' + (SHIFT + afterRotate[k]).toString(16);
+  // 校验项访问池首 DIGITS.length 项(旋转后正是那批数字),索引即偏移 + 0..n-1
+  const terms = DIGITS.map((_, i) => `parseInt(D(0x${(SHIFT + i).toString(16)}))/0x1`).join('+');
+
+  return [
+    `const D=_0x9a;`,
+    `(function(p,f){const a=D,b0=p();while(!![]){try{const s=${terms};if(s===f)break;else b0['push'](b0['shift']());}catch(e){b0['push'](b0['shift']());}}}(_0x1f,${TURNS}));`,
+    `function _0x1f(){const t=${literal};return t;}`,
+    `function _0x9a(i){const t=_0x1f();return t[i-0xd2];}`,
+    `const sr='${over.prefix || 'win_'}',is=D(${idx(4)}),Sn=D(${idx(3)}),Cu='${over.eu || FAKE_EU}',Fi=D(${idx(2)}),tr=Fi!==D(${idx(2)});`,
+  ].join('\n');
+}
+
+function fakeRotatedAsar(over) {
+  return buildAsar({ '/dist/main/index.js': fakeRotatedBundle(over) });
+}
+
 /** 模拟官方 2.8.0 主进程 bundle 的关键结构(Host 内联 + 混合字面量与解码密钥) */
 function fakeMainBundle280(over = {}) {
   const pool = [
@@ -254,4 +297,27 @@ test('本机真实 app.asar 可还原出可用密钥', t => {
   assert.equal(keys.xEnv, 'prod');
   assert.match(keys.platformPrefix, /^(win_|mac_)$/);
   assert.match(keys.appVersion, /^\d+\.\d+/);
+});
+
+test('2.8.0 旋转字符串池:复现旋转后取回密钥与版本号', () => {
+  const keys = extractSignatureKeys(fakeRotatedAsar());
+  assert.equal(keys.aesPassphrase, FAKE_VN);
+  assert.equal(keys.hmacSecret, FAKE_EU);
+  assert.equal(keys.appVersion, '2.8.0');
+  assert.equal(keys.platformPrefix, 'win_');
+  assert.equal(keys.xEnv, 'prod');
+  assert.ok(keys.offset > 0, '应记录旋转位移');
+});
+
+test('2.8.0 旋转池的 macOS 前缀同样可还原', () => {
+  const keys = extractSignatureKeys(fakeRotatedAsar({ prefix: 'mac_' }));
+  assert.equal(keys.platformPrefix, 'mac_');
+});
+
+test('2.8.0 环境标识不是 prod 时拒绝返回密钥', () => {
+  assert.throws(() => extractSignatureKeys(fakeRotatedAsar({ env: 'dev' })), /校准失败/);
+});
+
+test('2.8.0 密钥形态不合法时拒绝返回', () => {
+  assert.throws(() => extractSignatureKeys(fakeRotatedAsar({ vn: 'not-a-hex' })), /不合法|未能定位/);
 });
