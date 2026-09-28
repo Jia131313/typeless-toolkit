@@ -1,0 +1,25 @@
+name: Check
+
+# PR 与 main 的每次提交都跑一遍全量检查。
+# 发布构建由 release.yml 负责(只在打 v* tag 时触发),这里只管代码质量。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 与 release.yml 保持一致;dictation-state 用到 node:sqlite,需要 Node 23.4+
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
