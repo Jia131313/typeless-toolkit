@@ -1,6 +1,7 @@
 # Typeless Toolkit 项目协作记忆
 
-本文件是仓库级开发约定。开始修改前先阅读本文与 `README.md`；若本机存在未跟踪的
+本文件是仓库级开发约定。开始修改前先阅读本文与 `README.md`；涉及 `manager.html`
+或其他 UI 的改动，还需阅读 `DESIGN.md` 中的设计和设置页改动规范。若本机存在未跟踪的
 `LOCAL_DEVELOPMENT.md`，再读取其中的工作站路径和本地发布注意事项。
 
 ## 仓库与协作流程

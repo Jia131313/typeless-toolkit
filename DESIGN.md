@@ -79,6 +79,16 @@
 - Compatibility constraints: Node.js 22.12+, Windows WebView2 host, macOS Tauri/WKWebView host, and current local API security checks.
 - Test/screenshot expectations: run `npm run check`, `git diff --check`, and inspect approximately 1200 px and 880 px layouts with no horizontal overflow or isolated controls.
 
+## 设置页 UI 改动规范 — 2026-09-29
+
+- 参考边界：参考用户提供的 CC Switch「通用」「路由」设置截图中的整行设置项、右侧开关和独立参数区；保留本项目的四个设置分类、卡片结构、蓝色主操作和明暗主题。不要照搬 CC Switch 的导航数量、绿色品牌体系或无关功能。
+- 布尔设置：独立的开/关选项使用「左侧标题与一句说明、右侧滑动开关」的整行布局。复选框只用于同一字段内的多选集合，例如 WebDAV 的同步内容；不要把多个复选框、输入框和按钮拼成一行。
+- 参数设置：阈值、策略、路径等输入项放在对应开关之后的独立表单区域；标签与控件保持一组，不让标签被挤成单字竖排。依赖项不可用时保留位置、显示禁用状态并说明原因，不以隐藏掩盖状态。
+- 字体与节奏：沿用 `manager.html` 的系统字体与 CSS 变量；设置卡片标题约 17px，选项标题约 13px，辅助说明约 11–12px，控件与相邻设置项同高。优先复用 `.settings-card`、`.fld`、`.btn` 和语义色，不引入第二套组件库或硬编码整页主题。
+- 操作语义：即时生效的设置和「调整后保存」的设置必须在文案中区分。额度提醒保留现有统一保存行为，开关视觉变化不代表已经持久化；「立即检查」是运行操作，不与阈值输入混排。
+- 状态与可访问性：开关保留原生输入、可键盘操作和可见焦点；标题提供可读名称，禁用状态不只靠颜色表达。错误、后台状态和最近成功时间仍以文字呈现；说明文字不替代真实状态。
+- 验收边界：UI 改动只覆盖所指区域，不顺手重排其他设置页。用实际 `manager.html` 和隔离示例数据检查 1200px、880px 的浅色/深色、开/关、禁用和长提示状态；不得出现横向溢出、孤立按钮或被遮挡的操作。截图与静态检查不等于用户视觉验收，合并前按当前 PR 的明确确认执行。
+
 ## Open questions
 - [ ] If Typeless later exposes a reliable server-side change log, revisit safe detection of deletions made directly inside Typeless; current ownership: maintainers; impact: automatic destructive propagation.
 
