@@ -33,7 +33,7 @@ Typeless 工具集是运行在自己电脑上的桌面管理器，适合需要�
 
 工具集还有设备标识重置、跳过新手引导和修改 Typeless 应用文件的实验性弹窗维护能力。这些操作与日常账号、词库管理不同，使用前请了解[行为与风险](#重要说明)及[平台细节](docs/reference.md#macos-适配)。
 
-> **版本提示：**账号文件导入、导出与旧备份恢复已合入 `main`，但不包含在已发布的 [v1.8.3](https://github.com/Jia131313/typeless-toolkit/releases/tag/v1.8.3) 安装包中。需要此功能的用户请等待下一版 Release，或从源码运行当前 `main`。
+> **版本提示：** 账号文件导入、导出与旧备份恢复已合入 `main`，但不包含在已发布的 [v1.8.3](https://github.com/Jia131313/typeless-toolkit/releases/tag/v1.8.3) 安装包中。需要此功能的用户请等待下一版 Release，或从源码运行当前 `main`。
 
 ## 下载与安装
 
@@ -63,10 +63,10 @@ Typeless 不在默认安装位置时，可在 `config.json`（源码）或 `data
 
 ## 重要说明
 
-- **账号凭证：**导出的账号 JSON 和本机 `accounts.json` 包含长期登录凭证，请像密码一样保管，不要上传到公开 Issue。WebDAV 同步会加密所选的账号凭证与词库，但同步密码遗失后无法解密远端数据。
-- **备份范围：**账号文件适合迁移账号，不包含设备信息、WebDAV 密码或本机登录快照。换机导入后，仍需在目标设备逐个点击「在此设备启用」；主词库需要单独迁移。参见[账号文件格式](docs/account-bundle-format.md)。
-- **两种更新：**“工具集更新”下载本项目 Release；macOS 的“安装 Typeless 官方更新”只处理 Typeless updater 已下载到本机的缓存包，不在线寻找官方最新版。二者不是同一操作。
-- **应用修改：**弹窗维护会修改 Typeless 安装文件，可能因官方版本变化而失效，并可能影响 Typeless 原生更新或 macOS 权限。它与设备重置均应在理解影响后使用；失败恢复和排错方式见[完整文档](docs/reference.md)。
+- **账号凭证：** 导出的账号 JSON 和本机 `accounts.json` 包含长期登录凭证，请像密码一样保管，不要上传到公开 Issue。WebDAV 同步会加密所选的账号凭证与词库，但同步密码遗失后无法解密远端数据。
+- **备份范围：** 账号文件适合迁移账号，不包含设备信息、WebDAV 密码或本机登录快照。换机导入后，仍需在目标设备逐个点击「在此设备启用」；主词库需要单独迁移。参见[账号文件格式](docs/account-bundle-format.md)。
+- **两种更新：** “工具集更新”下载本项目 Release；macOS 的“安装 Typeless 官方更新”只处理 Typeless updater 已下载到本机的缓存包，不在线寻找官方最新版。二者不是同一操作。
+- **应用修改：** 弹窗维护会修改 Typeless 安装文件，可能因官方版本变化而失效，并可能影响 Typeless 原生更新或 macOS 权限。它与设备重置均应在理解影响后使用；失败恢复和排错方式见[完整文档](docs/reference.md)。
 
 本项目与 Typeless 官方没有关联或认可关系。Typeless 软件及商标归其权利人所有；请遵守适用的法律和 Typeless 服务条款。完整[使用声明与许可证](docs/reference.md#免责声明)见详细文档。
 
