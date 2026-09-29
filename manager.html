@@ -522,7 +522,30 @@
         <div class="settings-note" id="accountSyncStateDetail">新增内容合并同步，不会直接覆盖另一台设备的数据。明确的删除也会同步到其他设备。</div>
         <p>只传输所选内容的加密文件，不上传短期 access token、登录快照或设备信息。</p>
       </section>
-      <section class="settings-card settings-backup"><h3>本地备份</h3><p>将账号清单与主词库备份到本机。</p><div class="row-btns"><button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>备份数据</button></div></section>
+      <section class="settings-card settings-backup">
+        <h3>账号文件</h3>
+        <p>导出长期账号凭证，或从账号文件增量导入。换机导入后，逐个点击“在此设备启用”建立本机登录态；主词库需单独迁移。</p>
+        <div class="row-btns">
+          <button class="btn" onclick="exportAccountBundle()">导出账号备份</button>
+          <button class="btn" onclick="document.getElementById('accountBundleFile').click()">导入账号文件</button>
+          <a class="btn" href="/api/master/export">导出主词库</a>
+          <button class="btn" onclick="document.getElementById('masterImportFile').click()">导入主词库</button>
+        </div>
+        <input id="accountBundleFile" type="file" accept=".json,application/json" hidden onchange="importAccountBundle(this,false)">
+        <input id="masterImportFile" type="file" accept=".csv,.txt,text/plain" hidden onchange="importAccountBundle(this,true)">
+        <p class="hint">账号文件是含长期登录凭证的明文 JSON，请妥善保管，不要公开分享。</p>
+        <div class="settings-note" id="accountBundleResult" role="status" aria-live="polite">尚未导入账号文件。</div>
+      </section>
+      <section class="settings-card settings-backup">
+        <h3>本机内部备份</h3>
+        <p>保存账号原始文件、主词库及删除记录到本机数据目录。旧备份可选择 accounts.json 和词库 CSV 增量导入；本机快照及设备配置不会跨机恢复。</p>
+        <div class="row-btns">
+          <button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>保存本机副本</button>
+          <button class="btn" onclick="openBackupDirectory()">打开备份目录</button>
+          <button class="btn" onclick="document.getElementById('legacyBackupFiles').click()">导入旧备份</button>
+        </div>
+        <input id="legacyBackupFiles" type="file" accept=".json,.csv,.txt,application/json,text/plain" multiple hidden onchange="importAccountBundle(this,true)">
+      </section>
     </aside>
   </div>
 
@@ -2125,8 +2148,72 @@ async function performOfficialUpdate(updateStatus){
 }
 async function backup(){
   toast('备份中…');
-  const r=await api('/api/backup',{method:'POST'});
-  if(r.status==='OK') toast(r.msg||'已备份','ok'); else toast('备份失败','err');
+  try{
+    const r=await api('/api/backup',{method:'POST'});
+    toast(r.msg||(r.status==='OK'?'已备份':'备份失败'),r.status==='OK'?'ok':'err');
+  }catch(e){ toast('备份失败：'+e.message,'err'); }
+}
+async function openBackupDirectory(){
+  try{
+    const r=await api('/api/backup/open-directory',{method:'POST'});
+    toast(r.msg||'无法打开备份目录',r.status==='OK'?'ok':'err');
+  }catch(e){ toast('打开备份目录失败：'+e.message,'err'); }
+}
+function accountBundleSummary(data){
+  const parts=[`文件记录 ${data.total} 条`,`新增 ${data.added} 条`,`更新 ${data.updated} 条`,`不变 ${data.unchanged} 条`];
+  if(data.duplicates) parts.push(`重复 ${data.duplicates} 条`);
+  if(data.rejected) parts.push(`无效 ${data.rejected} 条`);
+  if(data.dictionary_added) parts.push(`新增词条 ${data.dictionary_added} 条`);
+  return parts.join('，');
+}
+async function exportAccountBundle(){
+  const status=document.getElementById('accountBundleResult');
+  try{
+    const r=await api('/api/account-bundle/status');
+    if(r.status!=='OK') throw new Error(r.msg||'无法读取账号状态');
+    const d=r.data;
+    if(!d.exported){ status.textContent='当前没有可导出的有效长期账号凭证。'; return; }
+    const skipped=d.skipped.slice(0,5).map(item=>`第 ${item.index} 条 ${item.user_id||''}：${item.reason}`).join('\n');
+    const message=`将导出 ${d.exported}/${d.total} 个账号。${d.skipped.length?`其中 ${d.skipped.length} 个不会导出：\n${skipped}${d.skipped.length>5?'\n…':''}`:''}\n\n导出文件包含明文长期登录凭证，请妥善保管。继续下载？`;
+    if(!await appConfirm(message)) return;
+    window.location.href='/api/account-bundle/export';
+    status.textContent=`已开始下载 ${d.exported} 个账号的备份文件。${d.skipped.length?`跳过 ${d.skipped.length} 个无效账号。`:''}`;
+  }catch(e){ status.textContent='导出失败：'+e.message; }
+}
+async function importAccountBundle(input,legacy){
+  const status=document.getElementById('accountBundleResult');
+  try{
+    const files=[...input.files];
+    if(!files.length) return;
+    let content, dictionary_content;
+    if(legacy){
+      const accountFile=files.find(file=>file.name.toLowerCase()==='accounts.json');
+      const dictionaryFile=files.find(file=>/\.(csv|txt)$/i.test(file.name));
+      if(!accountFile&&!dictionaryFile) throw new Error('请选择旧备份中的 accounts.json 和主词库 CSV');
+      content=accountFile?await accountFile.text():'[]';
+      if(dictionaryFile) dictionary_content=await dictionaryFile.text();
+    }else content=await files[0].text();
+    const body={content,legacy};
+    if(dictionary_content!==undefined) body.dictionary_content=dictionary_content;
+    status.textContent='正在检查文件…';
+    const preview=await api('/api/account-bundle/preview',{method:'POST',body:JSON.stringify(body)});
+    if(preview.status!=='OK') throw new Error(preview.msg||'文件检查失败');
+    const summary=accountBundleSummary(preview.data);
+    const rejected=(preview.data.rejection_details||[]).slice(0,5)
+      .map(item=>`第 ${item.index} 条 ${item.user_id||''}：${item.reason}`).join('\n');
+    status.textContent=summary+(rejected?'；无效记录：'+rejected.replaceAll('\n','；'):'');
+    if(!(preview.data.added||preview.data.updated||preview.data.resurrected||preview.data.dictionary_added)) return;
+    if(!await appConfirm(`确认增量导入？\n\n${summary}${rejected?'\n\n无效记录：\n'+rejected:''}\n\n现有账号与词条会保留；新账号需在此设备启用。`)) return;
+    const result=await api('/api/account-bundle/import',{method:'POST',body:JSON.stringify(body)});
+    if(result.status!=='OK') throw new Error(result.msg||'导入失败');
+    status.textContent='已导入：'+accountBundleSummary(result.data);
+    toast('账号文件导入完成','ok');
+    try{
+      await loadAccounts();
+      if(result.data.dictionary_added) await refreshDictionarySyncStatus();
+    }catch(e){ status.textContent+='；页面刷新失败，请重新打开管理器查看结果：'+e.message; }
+  }catch(e){ status.textContent='导入失败：'+e.message; toast('导入失败','err'); }
+  finally{ input.value=''; }
 }
 async function saveSnap(){
   if(!curDetail) return;

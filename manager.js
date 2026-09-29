@@ -9,6 +9,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
+const { parseBundle, parseLegacyBackup, mergeBundle, createBundle } = require('./lib/account-bundle');
 const { createQuotaFetcher, createQuotaMonitor, normalizeQuotaConfig } = require('./lib/quota-monitor');
 // 听写状态:自动切号必须等到用户没在听写时才执行
 const { createDictationWatcher, dictationDbPath, sqliteAvailable } = require('./lib/dictation-state');
@@ -1515,6 +1517,65 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/backup') {
       const r = backupData();
       return send(res, 200, { status: 'OK', data: r, msg: `已备份 ${r.files.length} 个文件到 backups/${r.stamp}` });
+    }
+    if (m === 'POST' && p === '/api/backup/open-directory') {
+      const dir = path.join(ROOT, 'backups');
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      await new Promise((resolve, reject) => {
+        const child = spawn(IS_MAC ? '/usr/bin/open' : 'explorer.exe', [dir], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.once('error', reject);
+        child.once('spawn', () => { child.unref(); resolve(); });
+      });
+      return send(res, 200, { status: 'OK', msg: '已打开备份目录' });
+    }
+    if (m === 'GET' && p === '/api/account-bundle/status') {
+      const result = createBundle(readAccounts());
+      return send(res, 200, {
+        status: 'OK',
+        data: { total: result.total, exported: result.exported, skipped: result.skipped },
+      });
+    }
+    if (m === 'GET' && p === '/api/account-bundle/export') {
+      const result = createBundle(readAccounts());
+      const filename = `Typeless账号备份-${new Date().toISOString().slice(0, 10)}.json`;
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Cache-Control': 'no-store',
+      });
+      return res.end(JSON.stringify(result.bundle, null, 2) + '\n');
+    }
+    if (m === 'POST' && (p === '/api/account-bundle/preview' || p === '/api/account-bundle/import')) {
+      const body = await readBody(req);
+      let parsed;
+      try {
+        parsed = body.legacy ? parseLegacyBackup(body.content) : parseBundle(body.content);
+      } catch (error) {
+        return send(res, 400, { status: 'FAIL', msg: error.message });
+      }
+      const merged = mergeBundle(readAccounts(), readAccountSyncTombstones(), parsed);
+      const dictionaryTerms = body.dictionary_content === undefined ? []
+        : String(body.dictionary_content).replace(/^\uFEFF/, '').split(/\r?\n/).map(term => term.trim()).filter(Boolean);
+      const currentTerms = readMaster();
+      const currentKeys = new Set(currentTerms.map(term => term.toLowerCase()));
+      const dictionaryAdded = [...new Set(dictionaryTerms.map(term => term.toLowerCase()))]
+        .filter(term => !currentKeys.has(term)).length;
+      merged.summary.dictionary_added = dictionaryAdded;
+      if (p.endsWith('/import') && (merged.summary.added || merged.summary.updated
+        || merged.summary.resurrected || dictionaryAdded)) {
+        backupData();
+        if (merged.summary.added || merged.summary.updated) writeAccounts(merged.accounts);
+        if (merged.summary.resurrected) writeAccountSyncTombstones(merged.tombstones);
+        if (dictionaryAdded) {
+          replaceMasterTerms([...currentTerms, ...dictionaryTerms]);
+          dictionarySync.schedule('account-bundle-import');
+        }
+        scheduleAccountSync('account-bundle-import');
+      }
+      return send(res, 200, { status: 'OK', data: merged.summary });
     }
     // 启动 Typeless：已运行则完全不打扰；未运行才以普通模式启动。
     if (m === 'POST' && p === '/api/launch') {
