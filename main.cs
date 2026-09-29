@@ -43,6 +43,8 @@ class TrayApp
     const int SW_RESTORE = 9;
     const string AppTitle = "Typeless Toolkit";
     const string AppId = "TypelessToolkit.Desktop";
+    const int BackendStartTimeoutMs = 10000;
+    const int ToolkitProbeTimeoutMs = 1000;
 
     static Process nodeProcess;
     static NotifyIcon trayIcon;
@@ -174,7 +176,7 @@ class TrayApp
     {
         if (IsPortOpen())
         {
-            if (ProbeToolkit())
+            if (ProbeExistingToolkit())
             {
                 backendReused = true;
                 return true;
@@ -236,15 +238,12 @@ class TrayApp
             return false;
         }
 
-        for (int i = 0; i < 30; i++)
+        Stopwatch startupTimer = Stopwatch.StartNew();
+        while (true)
         {
-            Thread.Sleep(200);
-            if (IsPortOpen())
-            {
-                if (ProbeToolkit()) return true;
-                backendError = "端口 " + managerPort + " 已被其他程序占用，无法确认本地服务身份。";
-                return false;
-            }
+            int remainingMs = BackendStartTimeoutMs - (int)startupTimer.ElapsedMilliseconds;
+            if (remainingMs <= 0) break;
+            Thread.Sleep(Math.Min(200, remainingMs));
             if (nodeProcess.HasExited)
             {
                 string details = "";
@@ -255,8 +254,13 @@ class TrayApp
                 AppendLauncherLog(backendError);
                 return false;
             }
+            if (!IsPortOpen()) continue;
+            remainingMs = BackendStartTimeoutMs - (int)startupTimer.ElapsedMilliseconds;
+            if (remainingMs <= 0) break;
+            if (ProbeToolkit(null, Math.Min(ToolkitProbeTimeoutMs, remainingMs))) return true;
         }
-        backendError = "本地服务在端口 " + managerPort + " 上启动超时。";
+        backendError = "本地服务在端口 " + managerPort + " 上启动超时（" + BackendStartTimeoutMs / 1000 + " 秒内未就绪）。";
+        AppendLauncherLog(backendError);
         return false;
     }
 
@@ -638,14 +642,34 @@ class TrayApp
         return 7788;
     }
 
-    static bool ProbeToolkit(string expectedVersion = null)
+    static bool ProbeExistingToolkit()
     {
         try
         {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(baseUrl + "/api/env");
             request.Method = "GET";
-            request.Timeout = 1000;
-            request.ReadWriteTimeout = 1000;
+            request.Timeout = 3000;
+            request.ReadWriteTimeout = 3000;
+            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+            using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+            {
+                string body = reader.ReadToEnd();
+                return response.StatusCode == HttpStatusCode.OK &&
+                    body.IndexOf("\"status\":\"OK\"", StringComparison.Ordinal) >= 0 &&
+                    body.IndexOf("\"service\":\"typeless-toolkit\"", StringComparison.Ordinal) >= 0;
+            }
+        }
+        catch { return false; }
+    }
+
+    static bool ProbeToolkit(string expectedVersion = null, int timeoutMs = ToolkitProbeTimeoutMs)
+    {
+        try
+        {
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(baseUrl + "/api/ready");
+            request.Method = "GET";
+            request.Timeout = timeoutMs;
+            request.ReadWriteTimeout = timeoutMs;
             using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
             using (StreamReader reader = new StreamReader(response.GetResponseStream()))
             {
