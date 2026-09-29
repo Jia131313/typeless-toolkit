@@ -318,10 +318,15 @@
   .settings-card .field label { font-size:13px; color:var(--text); margin-bottom:7px; }
   .settings-card .field .hint { font-size:11px; line-height:1.65; margin-top:6px; }
   .sync-scope { border:0; border-top:1px solid var(--line); padding:16px 0 0; margin:0; }
-  .sync-scope legend { float:left; width:100%; margin-bottom:12px; font-size:13px; }
-  .check-options { display:flex; gap:24px; clear:both; }
-  .check-options label { display:inline-flex; gap:8px; align-items:center; font-size:13px; cursor:pointer; }
-  .check-options input { accent-color:var(--accent); width:15px; height:15px; margin:0; }
+  .sync-scope legend { float:left; width:100%; margin-bottom:12px; font-size:13px; font-weight:600; }
+  .sync-scope-options { display:grid; clear:both; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .sync-scope-row { display:flex; align-items:center; gap:16px; min-height:58px; padding:10px 14px; }
+  .sync-scope-row + .sync-scope-row { border-top:1px solid var(--line); }
+  .sync-scope-row > label { flex:1; min-width:0; cursor:pointer; }
+  .sync-scope-row strong { display:block; font-size:13px; font-weight:500; color:var(--text); }
+  .sync-scope-row small { display:block; margin-top:3px; font-size:11px; line-height:1.5; color:var(--sub); }
+  .sync-scope-hint { margin:8px 0 0; font-size:11px!important; }
+  .sync-scope-hint[data-invalid="true"] { color:var(--err); }
   .settings-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap; }
   .settings-actions .btn { min-height:36px; }
   .settings-actions .btn:first-child { margin-right:0; }
@@ -588,10 +593,10 @@
               <div class="field"><label for="accountSyncPath">远端账号文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；词库单独加密存于同目录。</div></div>
               <div class="field"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
             </div>
-            <fieldset class="sync-scope"><legend>同步内容</legend><div class="check-options">
-              <label><input type="checkbox" id="accountSyncAccounts" checked>账号凭证</label>
-              <label><input type="checkbox" id="accountSyncDictionary">主词库</label>
-            </div><p>可单独选择，也可以同时同步。</p></fieldset>
+            <fieldset class="sync-scope"><legend>同步内容</legend><div class="sync-scope-options">
+              <div class="sync-scope-row"><label for="accountSyncAccounts"><strong>账号凭证</strong><small>同步已保存账号的长期登录凭证。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncAccounts" aria-label="同步账号凭证" checked onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+              <div class="sync-scope-row"><label for="accountSyncDictionary"><strong>主词库</strong><small>同步主词条，不包含本机登录快照。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncDictionary" aria-label="同步主词库" onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+            </div><p class="sync-scope-hint" id="accountSyncScopeHint">可单独开启一项，也可以同时同步。</p></fieldset>
           </fieldset>
           <div class="settings-actions">
             <button class="btn ghost" id="accountSyncTestBtn" onclick="testAccountSync()">保存并测试连接</button>
@@ -1583,9 +1588,17 @@ function updateAccountSyncProvider(fromUser=false){
   }else url.readOnly=false;
   document.getElementById('accountSyncTestBtn').disabled=provider==='disabled';
   document.getElementById('accountSyncRunBtn').disabled=provider==='disabled';
+  updateAccountSyncScope();
   if(fromUser) document.getElementById('accountSyncStatus').textContent=provider==='disabled'
     ?'尚未保存：点击「保存配置」后才会关闭同步。'
     :'尚未保存：点击「保存配置」后生效；测试连接和立即同步也会先保存配置。';
+}
+function updateAccountSyncScope(){
+  const selected=document.getElementById('accountSyncAccounts').checked||document.getElementById('accountSyncDictionary').checked;
+  const enabled=document.getElementById('accountSyncProvider').value!=='disabled';
+  const hint=document.getElementById('accountSyncScopeHint');
+  hint.textContent=!enabled?'启用同步服务后选择需要同步的内容。':selected?'可单独开启一项，也可以同时同步。':'至少开启一项同步内容后才能保存配置。';
+  hint.dataset.invalid=String(enabled&&!selected);
 }
 function accountSyncPayload(){
   const provider=document.getElementById('accountSyncProvider').value;
