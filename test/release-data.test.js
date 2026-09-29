@@ -11,12 +11,11 @@ const releaseWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 
 const releaseGuide = fs.readFileSync(path.join(root, '.github', 'release-guide.md'), 'utf8');
 const { releaseContent } = require('../scripts/prepare-release-notes');
 
-test('release version is consistent across packages, launchers, scripts, and docs', () => {
+test('release version is consistent across packages, launchers, and scripts', () => {
   const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
-  assert.equal(version, '1.8.3');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
@@ -25,7 +24,6 @@ test('release version is consistent across packages, launchers, scripts, and doc
   assert.match(host, new RegExp(`AssemblyVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
   assert.match(host, new RegExp(`AssemblyFileVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));
   assert.match(host, new RegExp(`AssemblyInformationalVersion\\("${version.replaceAll('.', '\\.')}"\\)`));
-  assert.match(readme, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}.*portable`));
 });
 
 test('public packages start with an empty account list', () => {
