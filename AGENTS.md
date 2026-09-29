@@ -80,8 +80,7 @@ npm run build:mac:all
 
 ## 版本与发布注意事项
 
-- `package.json` 当前版本为 1.8.3；本轮在 1.8.2 适配 Typeless 2.8.0 的基础上并入了额度提醒与
-  额度不足时的自动切号，待本机验收后再经 PR 与 CI 发布。
+- 发布版本以 `package.json`、更新日志和对应 Git 标签为准；README 不写固定版本号。
 - UI 布局、交互体验优化和 bug 修复使用 patch 版本（如 1.7.0 → 1.7.1）；只有新增明确产品能力
   （如 WebDAV、自更新）时才提升 minor 版本（如 1.7.x → 1.8.0），不按改动行数或视觉变化幅度升 minor。
 - 创建下一次 Release 前必须统一 package、程序集、脚本文件名、README 和标签版本；

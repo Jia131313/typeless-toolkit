@@ -31,7 +31,11 @@ Typeless 工具集是运行在自己电脑上的桌面管理器，适合需要�
 | 备份与同步 | 用 WebDAV 加密同步账号凭证和主词库；也可手动导入、导出账号文件与词库。 |
 | 桌面维护 | 查看工具集更新、处理兼容性维护；macOS 可安装 Typeless 已下载并经校验的官方更新缓存。 |
 
-工具集还有设备标识重置、跳过新手引导和修改 Typeless 应用文件的实验性弹窗维护能力。这些操作与日常账号、词库管理不同，使用前请了解[行为与风险](#重要说明)及[平台细节](docs/reference.md#macos-适配)。
+工具集还有设备标识重置、跳过新手引导和修改 Typeless 应用文件的实验性弹窗维护能力。这些操作与日常账号、词库管理不同，使用前请了解[行为与风险](#重要说明)及[平台细节](docs/platform.md#macos-适配)。
+
+![Typeless 工具集首页示例，展示三个虚构账号](docs/images/dashboard-demo.png)
+
+_当前管理页面的示例截图；账号、额度和词库数字均为虚构数据，不连接真实应用。_
 
 ## 下载与安装
 
@@ -66,7 +70,7 @@ Typeless 不在默认安装位置时，可在 `config.json`（源码）或 `data
 - **两种更新：** “工具集更新”下载本项目 Release；macOS 的“安装 Typeless 官方更新”只处理 Typeless updater 已下载到本机的缓存包，不在线寻找官方最新版。二者不是同一操作。
 - **应用修改：** 弹窗维护会修改 Typeless 安装文件，可能因官方版本变化而失效，并可能影响 Typeless 原生更新或 macOS 权限。它与设备重置均应在理解影响后使用；失败恢复和排错方式见[完整文档](docs/reference.md)。
 
-本项目与 Typeless 官方没有关联或认可关系。Typeless 软件及商标归其权利人所有；请遵守适用的法律和 Typeless 服务条款。完整[使用声明与许可证](docs/reference.md#免责声明)见详细文档。
+本项目与 Typeless 官方没有关联或认可关系。Typeless 软件及商标归其权利人所有；请遵守适用的法律和 Typeless 服务条款。完整[使用声明与许可证](docs/reference.md#使用声明与许可证)见详细文档。
 
 ## 从源码运行
 
@@ -78,11 +82,11 @@ npm run check
 node manager.js
 ```
 
-管理页面默认位于 `http://127.0.0.1:7788`。macOS 可运行 `npm run build:mac` 构建当前架构的 Portable DMG；Windows 打包入口与注意事项见[完整文档](docs/reference.md#windows-桌面窗口与托盘)。主要代码分工为：`manager.js` 提供本地 API，`manager.html` 是管理页面，`lib/` 放通用业务逻辑，`main.cs` 和 `src-tauri/` 分别是 Windows、macOS 桌面宿主。
+管理页面默认位于 `http://127.0.0.1:7788`。macOS 可运行 `npm run build:mac` 构建当前架构的 Portable DMG；Windows 打包入口与注意事项见[安装指南](docs/installation.md#windows-桌面窗口与托盘)。主要代码分工为：`manager.js` 提供本地 API，`manager.html` 是管理页面，`lib/` 放通用业务逻辑，`main.cs` 和 `src-tauri/` 分别是 Windows、macOS 桌面宿主。
 
 ## 文档与反馈
 
-- [功能、配置、常见问题和平台细节](docs/reference.md)
+- [文档导航：安装、账号与备份、同步、排错和平台实现](docs/reference.md)
 - [Typeless Account Bundle v1：账号文件格式](docs/account-bundle-format.md)
 - [提交 Issue](https://github.com/Jia131313/typeless-toolkit/issues)：请附操作系统、Typeless 与工具集版本、复现步骤及错误信息；不要附账号凭证、词库私有数据或 WebDAV 密码。
 
