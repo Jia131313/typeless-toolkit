@@ -106,6 +106,51 @@ function fakeRotatedAsar(over) {
   return buildAsar({ '/dist/main/index.js': fakeRotatedBundle(over) });
 }
 
+/**
+ * 模拟 Typeless 2.8.1 的真实形态:旋转池 + 声明组不再匹配 legacy/inlined,
+ * 且连 `encrypt` 这类语义标记本身也收进了字符串池。此时只有先把
+ * `D(0xHEX)` 展开成字面量,才可能从使用点区分 AES 口令与 HMAC secret。
+ *
+ * 声明组刻意做成 `...,sr=D(..),Sn='<hex>',Ou=D(..),Mi=D(..),nr=Mi!==D(..)`,
+ * 与官方 2.8.1 一致地落在两种固定序列匹配之外。
+ */
+function fakeRotatedSemanticBundle(over = {}) {
+  const SHIFT = 210;
+  const DIGITS = [1, 1, 1, 1, 1, 1, 1, 1];
+  // 顺序对齐官方 2.8.1 的声明组:host / 官网 / 环境 / secret / 版本 / 平台 / 语义标记
+  const tail = [
+    API_HOST,
+    'https://www.typeless.com',
+    over.env || 'prod',
+    over.eu || FAKE_EU,          // HMAC secret(池内取值)
+    over.version || '2.8.1',
+    over.prefix || 'win_',
+    'now.typeless.desktop',
+    'encrypt',
+  ];
+  const pool = tail.concat(DIGITS);
+  const TURNS = DIGITS.reduce((a, b) => a + b, 0);
+  const afterRotate = tail.map((_, i) => i + DIGITS.length);
+  const literal = '[' + pool.map(v => (typeof v === 'number' ? v : `'${v}'`)).join(',') + ']';
+  const idx = k => '0x' + (SHIFT + afterRotate[k]).toString(16);
+  const terms = DIGITS.map((_, i) => `parseInt(D(0x${(SHIFT + i).toString(16)}))/0x1`).join('+');
+  return [
+    `const D=_0x9a;`,
+    `(function(p,f){const a=D,b0=p();while(!![]){try{const s=${terms};if(s===f)break;else b0['push'](b0['shift']());}catch(e){b0['push'](b0['shift']());}}}(_0x1f,${TURNS}));`,
+    `function _0x1f(){const t=${literal};return t;}`,
+    `function _0x9a(i){const t=_0x1f();return t[i-0xd2];}`,
+    `const Fi=D(${idx(0)}),Ru=D(${idx(1)}),sr=D(${idx(6)}),Ht='Typeless',Sn='${over.vn || FAKE_VN}',Ou=D(${idx(3)}),Mi=D(${idx(2)}),nr=Mi!==D(${idx(2)}),is=D(${idx(4)}),ir=D(${idx(5)});`,
+    // AES 侧:池里的 'encrypt' 只有在展开后才可见
+    `const ji=(v,k=Sn)=>_0x14b9ed[D(${idx(7)})](JSON['stringify'](v),k)['toString']();`,
+    // HMAC 侧:字面量冒号拼接密钥
+    `const sign=(ts)=>ts+':'+Ou;`,
+  ].join('\n');
+}
+
+function fakeRotatedSemanticAsar(over) {
+  return buildAsar({ '/dist/main/index.js': fakeRotatedSemanticBundle(over) });
+}
+
 /** 模拟官方 2.8.0 主进程 bundle 的关键结构(Host 内联 + 混合字面量与解码密钥) */
 function fakeMainBundle280(over = {}) {
   const pool = [
@@ -320,4 +365,29 @@ test('2.8.0 环境标识不是 prod 时拒绝返回密钥', () => {
 
 test('2.8.0 密钥形态不合法时拒绝返回', () => {
   assert.throws(() => extractSignatureKeys(fakeRotatedAsar({ vn: 'not-a-hex' })), /不合法|未能定位/);
+});
+
+// 回归:2.8.1 把字面量整体收进旋转池,语义标记必须先展开池取值才可见
+test('2.8.1 旋转池 + 全池化字面量:仍能按语义区分 AES 与 HMAC 密钥', () => {
+  const keys = extractSignatureKeys(fakeRotatedSemanticAsar());
+  assert.equal(keys.aesPassphrase, FAKE_VN);
+  assert.equal(keys.hmacSecret, FAKE_EU);
+  assert.equal(keys.appVersion, '2.8.1');
+  assert.equal(keys.platformPrefix, 'win_');
+  assert.equal(keys.xEnv, 'prod');
+  assert.equal(keys.format, 'semantic-usage');
+});
+
+test('2.8.1 语义结构下环境标识不是 prod 时拒绝返回密钥', () => {
+  assert.throws(
+    () => extractSignatureKeys(fakeRotatedSemanticAsar({ env: 'dev' })),
+    /校准失败/
+  );
+});
+
+test('2.8.1 语义结构下密钥形态不合法时拒绝返回', () => {
+  assert.throws(
+    () => extractSignatureKeys(fakeRotatedSemanticAsar({ vn: 'not-a-hex' })),
+    /不合法|未能定位|合法密钥/
+  );
 });
