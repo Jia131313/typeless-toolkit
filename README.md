@@ -33,19 +33,17 @@ Typeless 工具集是运行在自己电脑上的桌面管理器，适合需要�
 
 工具集还有设备标识重置、跳过新手引导和修改 Typeless 应用文件的实验性弹窗维护能力。这些操作与日常账号、词库管理不同，使用前请了解[行为与风险](#重要说明)及[平台细节](docs/reference.md#macos-适配)。
 
-> **版本提示：** 账号文件导入、导出与旧备份恢复已合入 `main`，但不包含在已发布的 [v1.8.3](https://github.com/Jia131313/typeless-toolkit/releases/tag/v1.8.3) 安装包中。需要此功能的用户请等待下一版 Release，或从源码运行当前 `main`。
-
 ## 下载与安装
 
 在 [Releases](https://github.com/Jia131313/typeless-toolkit/releases/latest) 选择与系统和 CPU 架构匹配的附件：
 
-以当前 v1.8.3 为例，Windows 推荐包的完整文件名是 `TypelessToolkit-v1.8.3-win-x64-portable.zip`；其他附件按表中的平台、架构和版本类型选择。
-
-| 系统 | 推荐下载 | Lite 版本适合谁 | 启动方式 |
+| 系统 | 推荐下载（文件名后缀） | Lite 版本适合谁 | 启动方式 |
 | --- | --- | --- | --- |
 | Windows 10/11 x64 | `win-x64-portable.zip`，内置 Node.js | 已安装 Node.js 22.12+ | 解压后双击 `TypelessToolkit.exe` |
 | macOS Apple Silicon | `mac-arm64-portable.dmg`，内置同架构 Node.js | 已安装同架构 Node.js 22.12+ | 打开 DMG，将应用拖入“应用程序” |
 | macOS Intel | `mac-x64-portable.dmg`，内置同架构 Node.js | 已安装同架构 Node.js 22.12+ | 打开 DMG，将应用拖入“应用程序” |
+
+附件名称会随版本变化；按表中的后缀选择即可。刚合入 `main` 的功能可能尚未进入最新安装包，请以该 Release 的更新说明为准。
 
 运行前需安装 Typeless 桌面端。Windows 还需要 Microsoft Edge WebView2 Runtime（多数 Windows 10/11 设备已具备）。macOS 发行包目前使用 ad-hoc 签名；首次打开被系统拦截时，可在 Finder 中右键应用选择“打开”。每个安装附件都附带独立的 SHA-256 校验文件。
 
