@@ -9,13 +9,30 @@ let buildURL = projectRoot.appendingPathComponent(".build", isDirectory: true)
 let iconsetURL = buildURL.appendingPathComponent("macos-icon.iconset", isDirectory: true)
 let roundedURL = assetsURL.appendingPathComponent("icon-rounded.png")
 let icnsURL = assetsURL.appendingPathComponent("icon.icns")
+let buildConfigURL = projectRoot.appendingPathComponent("macos-build.json")
+
+guard
+    let buildConfigData = try? Data(contentsOf: buildConfigURL),
+    let buildConfig = try? JSONSerialization.jsonObject(with: buildConfigData) as? [String: Any],
+    let iconConfig = buildConfig["icon"] as? [String: Any],
+    let canvasSize = iconConfig["canvasSize"] as? Int,
+    let macArtworkSize = iconConfig["macArtworkSize"] as? Int,
+    let macCornerRadius = iconConfig["macCornerRadius"] as? Int,
+    let webCornerRadiusRatio = iconConfig["webCornerRadiusRatio"] as? Double
+else {
+    fputs("无法读取 macos-build.json 中的图标参数\n", stderr)
+    exit(1)
+}
+
+let macArtworkRatio = CGFloat(macArtworkSize) / CGFloat(canvasSize)
+let macCornerRadiusRatio = CGFloat(macCornerRadius) / CGFloat(macArtworkSize)
 
 guard let source = NSImage(contentsOf: sourceURL) else {
     fputs("无法读取图标源: \(sourceURL.path)\n", stderr)
     exit(1)
 }
 
-func renderPNG(size: Int) throws -> Data {
+func renderPNG(size: Int, artworkRatio: CGFloat, cornerRadiusRatio: CGFloat) throws -> Data {
     guard let bitmap = NSBitmapImageRep(
         bitmapDataPlanes: nil,
         pixelsWide: size,
@@ -40,14 +57,21 @@ func renderPNG(size: Int) throws -> Data {
     context.imageInterpolation = .high
 
     let bounds = NSRect(x: 0, y: 0, width: size, height: size)
+    let artworkSize = CGFloat(size) * artworkRatio
+    let artworkBounds = NSRect(
+        x: (CGFloat(size) - artworkSize) / 2,
+        y: (CGFloat(size) - artworkSize) / 2,
+        width: artworkSize,
+        height: artworkSize
+    )
     NSColor.clear.setFill()
     bounds.fill()
     NSBezierPath(
-        roundedRect: bounds,
-        xRadius: CGFloat(size) * 0.22,
-        yRadius: CGFloat(size) * 0.22
+        roundedRect: artworkBounds,
+        xRadius: artworkSize * cornerRadiusRatio,
+        yRadius: artworkSize * cornerRadiusRatio
     ).addClip()
-    source.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
+    source.draw(in: artworkBounds, from: .zero, operation: .copy, fraction: 1.0)
     context.flushGraphics()
 
     guard let data = bitmap.representation(using: .png, properties: [:]) else {
@@ -77,9 +101,17 @@ let iconFiles: [(String, Int)] = [
 ]
 
 for (name, size) in iconFiles {
-    try renderPNG(size: size).write(to: iconsetURL.appendingPathComponent(name), options: .atomic)
+    try renderPNG(
+        size: size,
+        artworkRatio: macArtworkRatio,
+        cornerRadiusRatio: macCornerRadiusRatio
+    ).write(to: iconsetURL.appendingPathComponent(name), options: .atomic)
 }
-try renderPNG(size: 1024).write(to: roundedURL, options: .atomic)
+try renderPNG(
+    size: canvasSize,
+    artworkRatio: 1,
+    cornerRadiusRatio: CGFloat(webCornerRadiusRatio)
+).write(to: roundedURL, options: .atomic)
 
 let iconutil = Process()
 iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")

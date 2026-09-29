@@ -4,6 +4,12 @@
   "productName": "Typeless 工具集",
   "bundleIdentifier": "com.typeless-toolkit.manager",
   "artifactName": "Typeless-Toolkit-{version}-mac-{arch}-{edition}.dmg",
+  "icon": {
+    "canvasSize": 1024,
+    "macArtworkSize": 824,
+    "macCornerRadius": 185,
+    "webCornerRadiusRatio": 0.22
+  },
   "architectures": {
     "arm64": {
       "rustTarget": "aarch64-apple-darwin",

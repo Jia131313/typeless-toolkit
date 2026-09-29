@@ -209,7 +209,8 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
   替换 `/Applications` 中的旧 App 和启动验证；成功后旧 App 会被删除，外置用户数据不会改动。
   工具集使用个人 ad-hoc 签名而非 Developer ID/公证签名，
   首次打开若被 macOS 拦截，请在 Finder 中右键应用选择“打开”。Mac 的 ICNS、Web logo/favicon
-  与 Windows 桌面壳均从 `icon/icon.png` 生成，避免不同平台出现两套图标。macOS Tauri 宿主
+  与 Windows 桌面壳均从 `icon/icon.png` 生成，避免不同平台出现两套图标；Mac ICNS 按 1024 画布中的
+  824 像素标准视觉框生成，Web 和 Windows 保持各自现有显示比例。macOS Tauri 宿主
   支持单实例恢复；当前实例必须持有自己的 Node/Rust 宿主协议，配置端口被占用时会选择回退端口，
   不复用缺少该协议的外部后端。macOS 使用 Dock 的原生窗口生命周期，不机械复制 Windows 系统托盘。
 - **连接**:日常账号检测只读取 `app-storage.json`,不会启动调试端口或重启 Typeless。
