@@ -25,9 +25,27 @@
   .quota-notice { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:16px 0; padding:14px 16px; border:1px solid var(--line); border-left:3px solid var(--warn); border-radius:var(--r); background:var(--card); }
   .quota-notice-copy { flex:1 1 360px; min-width:0; overflow-wrap:anywhere; }
   .quota-notice p { margin:5px 0 0; font-size:12px; color:var(--sub); }
-  .quota-controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:14px; }
-  .quota-controls label { display:flex; align-items:center; gap:8px; }
-  .quota-controls input[type="number"] { width:110px; margin:0; }
+  .quota-settings { margin-top:18px; }
+  .quota-settings-section { display:grid; gap:12px; }
+  .quota-settings-section + .quota-settings-section { border-top:1px solid var(--line); margin-top:18px; padding-top:18px; }
+  .quota-setting-row { display:flex; align-items:center; flex-wrap:wrap; gap:12px 24px; min-width:0; }
+  .quota-option { display:inline-flex; align-items:center; gap:9px; min-width:0; font-size:13px; line-height:1.5; cursor:pointer; }
+  .quota-option input { width:15px; height:15px; margin:0; flex:none; accent-color:var(--accent); }
+  .quota-setting-field { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; font-size:13px; }
+  .quota-setting-field > label { color:var(--sub); white-space:nowrap; }
+  .quota-setting-field .fld { width:100px; margin:0; font-size:13px; }
+  .quota-setting-field select.fld { width:190px; }
+  .settings-card .quota-setting-help { margin:0; }
+  .quota-auto-options { display:flex; align-items:center; flex-wrap:wrap; gap:12px 28px; padding-left:24px; }
+  .quota-auto-options #quotaSilentHint { flex-basis:100%; }
+  .quota-auto-options .quota-option:has(input:disabled),.quota-auto-options .quota-setting-field:has(select:disabled) { opacity:.55; }
+  #quotaAutoHint:empty { display:none; }
+  .quota-settings-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; border-top:1px solid var(--line); margin-top:18px; padding-top:16px; }
+  .quota-settings-footer #quotaMonitorStatus { flex:1 1 260px; margin:0; }
+  .quota-settings-actions { display:flex; align-items:center; gap:8px; }
+  .quota-settings-details { margin-top:12px; color:var(--sub); font-size:12px; }
+  .quota-settings-details summary { width:max-content; cursor:pointer; }
+  .settings-card .quota-settings-details p { margin-top:6px; }
   .quota-order { display:flex; flex-direction:column; gap:6px; margin:8px 0 4px; max-width:520px; }
   .quota-order-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg2); font-size:12.5px; }
   .quota-order-item .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -335,6 +353,8 @@
     .settings-fields { grid-template-columns:minmax(0,1fr); }
     .stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .tool-group { flex-wrap:wrap; }
+    .quota-auto-options { padding-left:0; }
+    .quota-settings-footer { align-items:flex-start; }
   }
   @media (prefers-reduced-motion:reduce){ *,*::before,*::after { animation:none!important; transition:none!important; } }
 </style>
@@ -443,32 +463,43 @@
   <div class="settings-panel settings-stack" id="settings-general" role="tabpanel" aria-labelledby="settingsTabGeneral">
     <section class="settings-card">
       <h3>额度提醒</h3>
-      <p>工具集运行时在后台检查当前账号。额度不足时推荐备用账号，由你确认后切换；切换会重启 Typeless，请等听写文字回填完成。</p>
-      <div class="quota-controls">
-        <label><input type="checkbox" id="quotaEnabled" disabled>启用后台提醒</label>
-        <label for="quotaRemaining">剩余 <input class="fld" id="quotaRemaining" type="number" min="1" step="1" value="200" disabled> 字时提醒</label>
-        <button class="btn primary" id="quotaSaveBtn" onclick="saveQuotaSettings()" disabled>保存</button>
-        <button class="btn" id="quotaCheckBtn" onclick="checkQuotaNow()" disabled>立即检查</button>
+      <p>额度接近用尽时提醒；自动切号需要单独开启。</p>
+      <div class="quota-settings">
+        <div class="quota-settings-section">
+          <div class="quota-setting-row">
+            <label class="quota-option"><input type="checkbox" id="quotaEnabled" disabled>启用额度提醒</label>
+            <div class="quota-setting-field"><label for="quotaRemaining">剩余不高于</label><input class="fld" id="quotaRemaining" type="number" min="1" step="1" value="200" disabled><span>字时提醒</span></div>
+          </div>
+        </div>
+        <div class="quota-settings-section">
+          <label class="quota-option"><input type="checkbox" id="quotaAutoSwitch" onchange="syncQuotaAutoControls()" disabled>额度不足时自动切换账号</label>
+          <p class="quota-setting-help">仅在停止听写后切换，切换时会重启 Typeless。</p>
+          <div class="quota-auto-options">
+            <div class="quota-setting-field"><label for="quotaStrategy">切换策略</label>
+              <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
+                <option value="quota">剩余额度最多</option>
+                <option value="personalized">个性化程度最高</option>
+                <option value="custom">按自定义顺序</option>
+              </select>
+            </div>
+            <label class="quota-option"><input type="checkbox" id="quotaSilent" onchange="syncQuotaAutoControls()" disabled>静默切换</label>
+            <p id="quotaSilentHint" class="quota-setting-help" hidden>不显示倒计时；停止听写后直接切换，失败时仍会提示。</p>
+          </div>
+          <p id="quotaAutoHint" role="status"></p>
+          <div id="quotaOrderWrap" hidden>
+            <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
+            <div class="quota-order" id="quotaOrderList"></div>
+          </div>
+        </div>
+        <div class="quota-settings-footer">
+          <p id="quotaMonitorStatus" role="status">正在读取提醒设置…</p>
+          <div class="quota-settings-actions">
+            <button class="btn" id="quotaCheckBtn" onclick="checkQuotaNow()" disabled>立即检查</button>
+            <button class="btn primary" id="quotaSaveBtn" onclick="saveQuotaSettings()" disabled>保存设置</button>
+          </div>
+        </div>
       </div>
-      <div class="quota-controls">
-        <label><input type="checkbox" id="quotaAutoSwitch" onchange="syncQuotaAutoControls()" disabled>额度不足时自动切换账号</label>
-        <label><input type="checkbox" id="quotaSilent" disabled>完全静默模式（无弹窗提示，后台完成切换）</label>
-        <label for="quotaStrategy">切换策略
-          <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
-            <option value="quota">剩余额度最多</option>
-            <option value="personalized">个性化程度最高</option>
-            <option value="custom">按自定义顺序</option>
-          </select>
-        </label>
-      </div>
-      <p id="quotaAutoHint" role="status"></p>
-      <p id="quotaSilentHint" class="hint" hidden>静默模式下不会有任何弹窗，也不会出现 15 秒倒计时：检测到额度不足且你没在听写时直接切号。切换失败仍会提示一次。</p>
-      <div id="quotaOrderWrap" hidden>
-        <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
-        <div class="quota-order" id="quotaOrderList"></div>
-      </div>
-      <p id="quotaMonitorStatus" role="status">正在读取提醒设置…</p>
-      <p>通常每 2 分钟检查，接近阈值时每 30 秒检查。Windows 桌面版支持托盘提醒；其他运行方式请留意首页提示。额度统计可能延迟，一次长听写也可能跨过阈值。</p>
+      <details class="quota-settings-details"><summary>了解检查方式</summary><p>通常每 2 分钟检查，接近阈值时每 30 秒检查。Windows 桌面版支持托盘提醒；其他运行方式请留意首页提示。额度统计可能延迟，一次长听写也可能跨过阈值。</p></details>
     </section>
     <section class="settings-card">
       <h3>外观主题</h3><p>跟随系统，或选择你习惯的外观。立即生效并在本机记住。</p>
