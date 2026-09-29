@@ -25,9 +25,48 @@
   .quota-notice { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:16px 0; padding:14px 16px; border:1px solid var(--line); border-left:3px solid var(--warn); border-radius:var(--r); background:var(--card); }
   .quota-notice-copy { flex:1 1 360px; min-width:0; overflow-wrap:anywhere; }
   .quota-notice p { margin:5px 0 0; font-size:12px; color:var(--sub); }
-  .quota-controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:14px; }
-  .quota-controls label { display:flex; align-items:center; gap:8px; }
-  .quota-controls input[type="number"] { width:110px; margin:0; }
+  .quota-settings { display:grid; gap:12px; margin-top:18px; }
+  .quota-expand { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .quota-expand-head { display:flex; align-items:center; min-width:0; }
+  .quota-expand:has(.quota-expand-trigger[aria-expanded="true"]) .quota-expand-head { background:var(--bg2); border-bottom:1px solid var(--line); }
+  .quota-expand-trigger { display:flex; align-items:center; gap:12px; flex:1; min-width:0; padding:13px 15px; border:0; background:transparent; color:var(--text); text-align:left; cursor:pointer; }
+  .quota-expand-trigger:hover { background:color-mix(in srgb,var(--bg2) 55%,transparent); }
+  .quota-expand-trigger:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+  .quota-chevron { width:8px; height:8px; margin-left:auto; flex:none; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); transition:transform .14s; }
+  .quota-expand:has(.quota-expand-trigger[aria-expanded="true"]) .quota-chevron { transform:rotate(225deg); }
+  .quota-expand-head .quota-switch { margin:0 15px 0 8px; }
+  .quota-expand-body { display:grid; gap:14px; padding:16px 18px; }
+  .quota-expand-body[hidden] { display:none; }
+  .quota-toggle-icon { display:inline-flex; align-items:center; justify-content:center; flex:none; width:32px; height:32px; border:1px solid var(--line); border-radius:9px; color:var(--accent); }
+  .quota-toggle-copy { flex:1; min-width:0; }
+  .quota-toggle-copy strong { display:block; font-size:13px; font-weight:500; line-height:1.4; }
+  .quota-toggle-copy label { display:block; font-size:13px; font-weight:500; line-height:1.4; cursor:pointer; }
+  .quota-toggle-copy .quota-subline { display:block; margin-top:3px; font-size:11px; line-height:1.5; color:var(--sub); }
+  .settings-card .quota-toggle-copy p { margin:3px 0 0; font-size:11px; line-height:1.5; }
+  .quota-switch { display:inline-flex; align-items:center; position:relative; flex:none; cursor:pointer; }
+  .quota-switch input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; z-index:1; }
+  .quota-switch-track { position:relative; display:block; width:42px; height:24px; border:1px solid var(--line); border-radius:12px; background:var(--bg2); transition:background .14s,border-color .14s; }
+  .quota-switch-track::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(16,24,40,.2); transition:transform .14s; }
+  .quota-switch input:checked + .quota-switch-track { background:var(--ok); border-color:var(--ok); }
+  .quota-switch input:checked + .quota-switch-track::after { transform:translateX(18px); }
+  .quota-switch input:focus-visible + .quota-switch-track { outline:2px solid var(--accent); outline-offset:3px; }
+  .quota-switch input:disabled { cursor:not-allowed; }
+  .quota-setting-field { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; font-size:13px; }
+  .quota-setting-field > label { color:var(--sub); white-space:nowrap; }
+  .quota-setting-field .fld { width:100px; margin:0; font-size:13px; }
+  .quota-setting-field select.fld { width:190px; }
+  .quota-setting-field:has(:disabled) { opacity:.55; }
+  .quota-silent-row { display:flex; align-items:center; gap:12px; border-top:1px solid var(--line); padding-top:14px; }
+  .quota-silent-row:has(input:disabled) { opacity:.55; }
+  .quota-silent-row .quota-switch { margin-left:auto; }
+  #quotaAutoHint:empty { display:none; }
+  .settings-card #quotaAutoHint,.settings-card #quotaSilentHint { margin:0; }
+  .quota-settings-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; border-top:1px solid var(--line); margin-top:18px; padding-top:16px; }
+  .quota-settings-footer #quotaMonitorStatus { flex:1 1 260px; margin:0; }
+  .quota-settings-actions { display:flex; align-items:center; gap:8px; }
+  .quota-settings-details { margin-top:12px; color:var(--sub); font-size:12px; }
+  .quota-settings-details summary { width:max-content; cursor:pointer; }
+  .settings-card .quota-settings-details p { margin-top:6px; }
   .quota-order { display:flex; flex-direction:column; gap:6px; margin:8px 0 4px; max-width:520px; }
   .quota-order-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg2); font-size:12.5px; }
   .quota-order-item .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -99,7 +138,8 @@
   .btn.primary:hover { color:#fff; filter:brightness(1.05); }
   .btn.ghost { border-color:transparent; background:transparent; color:var(--sub); }
   .btn.ghost:hover { color:var(--text); background:var(--bg2); }
-  .btn.danger:hover { border-color:var(--err); color:var(--err); }
+  .btn.danger { border-color:color-mix(in srgb,var(--err) 35%,var(--line)); color:var(--err); }
+  .btn.danger:hover { background:var(--err-soft); border-color:var(--err); }
   .btn.info { border-color:var(--accent2); color:var(--accent2); }
   .btn.info:hover { background:var(--accent2); color:#fff; }
   .btn.info.done { opacity:.85; cursor:pointer; pointer-events:auto; border-color:var(--ok); color:var(--ok); }
@@ -257,25 +297,20 @@
   a.link:hover { text-decoration:underline; }
   /* 设置沿用现有业务表单，只改变入口与排布。 */
   .settings-page { max-width:1200px; padding:20px 24px 32px; }
-  .settings-heading { display:flex; align-items:baseline; gap:12px; margin:10px 0; }
+  .settings-heading { display:flex; align-items:center; gap:12px; max-width:960px; margin:4px auto 18px; }
   .settings-heading h2 { font-size:22px; line-height:1.3; font-weight:600; letter-spacing:-.3px; margin:0; }
-  .settings-heading p { font-size:13px; line-height:1.5; color:var(--sub); margin:0; }
-  .back-btn { min-height:28px; padding:4px 0; }
-  .settings-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; background:var(--bg2); border:1px solid var(--line); border-radius:10px; margin:16px 0 20px; }
+  .back-btn { width:36px; height:36px; min-height:36px; padding:0; justify-content:center; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+  .settings-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; max-width:960px; padding:4px; background:var(--card); border:1px solid var(--line); border-radius:10px; margin:0 auto 20px; }
   .settings-tabs button { appearance:none; background:none; border:0; border-radius:7px; padding:9px 16px; color:var(--sub); cursor:pointer; font-size:13px; white-space:nowrap; }
-  .settings-tabs button[aria-selected="true"] { color:var(--text); background:var(--card); box-shadow:var(--shadow); font-weight:600; }
-  .settings-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr); gap:20px; align-items:stretch; }
-  .settings-layout > aside { grid-template-rows:minmax(min-content,1fr) auto; }
+  .settings-tabs button[aria-selected="true"] { color:#fff; background:var(--accent); font-weight:600; }
+  .settings-tabs button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .settings-tabs button[aria-selected="true"] .update-badge { color:#fff; }
+  .settings-panel { max-width:960px; margin:0 auto; }
   .settings-stack { display:grid; gap:16px; min-width:0; }
   .settings-card { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:20px; min-width:0; }
   .settings-card h3 { font-size:17px; font-weight:600; margin:0; display:flex; align-items:center; gap:9px; }
   .settings-card h3 .ui-icon { color:var(--sub); width:19px; height:19px; }
   .settings-card p { font-size:12px; line-height:1.7; color:var(--sub); margin:8px 0 0; }
-  .settings-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
-  .settings-card-header .badge { font-size:10px; border-radius:5px; white-space:nowrap; }
-  .sync-service { flex:none; width:136px; }
-  .sync-service label { display:block; color:var(--sub); font-size:11px; margin-bottom:6px; }
-  .sync-service .fld { min-height:32px; padding:6px 9px; font-size:12px; }
   .settings-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
   .settings-fields .full { grid-column:1/-1; }
   .settings-card .fld { background:var(--bg2); border-radius:7px; min-height:36px; }
@@ -283,21 +318,54 @@
   .settings-card .field label { font-size:13px; color:var(--text); margin-bottom:7px; }
   .settings-card .field .hint { font-size:11px; line-height:1.65; margin-top:6px; }
   .sync-scope { border:0; border-top:1px solid var(--line); padding:16px 0 0; margin:0; }
-  .sync-scope legend { float:left; width:100%; margin-bottom:12px; font-size:13px; }
-  .check-options { display:flex; gap:24px; clear:both; }
-  .check-options label { display:inline-flex; gap:8px; align-items:center; font-size:13px; cursor:pointer; }
-  .check-options input { accent-color:var(--accent); width:15px; height:15px; margin:0; }
+  .sync-scope legend { float:left; width:100%; margin-bottom:12px; font-size:13px; font-weight:600; }
+  .sync-scope-options { display:grid; clear:both; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .sync-scope-row { display:flex; align-items:center; gap:16px; min-height:58px; padding:10px 14px; }
+  .sync-scope-row + .sync-scope-row { border-top:1px solid var(--line); }
+  .sync-scope-row > label { flex:1; min-width:0; cursor:pointer; }
+  .sync-scope-row strong { display:block; font-size:13px; font-weight:500; color:var(--text); }
+  .sync-scope-row small { display:block; margin-top:3px; font-size:11px; line-height:1.5; color:var(--sub); }
+  .sync-scope-hint { margin:8px 0 0; font-size:11px!important; }
+  .sync-scope-hint[data-invalid="true"] { color:var(--err); }
   .settings-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap; }
   .settings-actions .btn { min-height:36px; }
-  .settings-actions .btn:first-child { margin-right:auto; }
+  .settings-actions .btn:first-child { margin-right:0; }
   #accountSyncStatus { min-height:20px; margin-top:14px; font-size:11.5px; line-height:1.65; text-align:center; color:var(--sub); white-space:pre-wrap; overflow-wrap:anywhere; }
   .settings-values { margin:0; }
   .settings-values div { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--line); font-size:12px; }
   .settings-values dt { color:var(--sub); }
   .settings-values dd { margin:0; text-align:right; overflow-wrap:anywhere; }
   .settings-note { padding-top:16px; font-size:12px; color:var(--sub); line-height:1.8; overflow-wrap:anywhere; }
-  .settings-backup .row-btns { margin-top:16px; }
-  .settings-backup .btn { min-width:148px; min-height:38px; }
+  .settings-disclosure { border:1px solid var(--line); border-radius:var(--r); background:var(--card); overflow:hidden; min-width:0; }
+  .settings-disclosure > summary { display:flex; align-items:center; gap:12px; padding:18px 20px; cursor:pointer; list-style:none; }
+  .settings-disclosure > summary::-webkit-details-marker { display:none; }
+  .settings-disclosure[open] > summary { background:var(--bg2); border-bottom:1px solid var(--line); }
+  .settings-disclosure > summary:hover { background:color-mix(in srgb,var(--bg2) 65%,var(--card)); }
+  .settings-disclosure > summary:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+  .settings-disclosure .quota-toggle-icon { width:34px; height:34px; }
+  .settings-disclosure-copy { flex:1; min-width:0; }
+  .settings-disclosure-copy strong { display:block; font-size:14px; font-weight:600; }
+  .settings-disclosure-copy small { display:block; margin-top:4px; color:var(--sub); font-size:12px; line-height:1.5; }
+  .settings-disclosure > summary .quota-chevron { margin:0 3px 0 8px; }
+  .settings-disclosure[open] > summary .quota-chevron { transform:rotate(225deg); }
+  .settings-disclosure-body { padding:20px; }
+  .settings-disclosure-body p { font-size:12px; line-height:1.7; color:var(--sub); }
+  .settings-disclosure-body > p:first-child { margin-top:0; }
+  .settings-section + .settings-section { border-top:1px solid var(--line); margin-top:18px; padding-top:18px; }
+  .settings-section h4 { margin:0; font-size:13px; font-weight:600; }
+  .settings-section p { margin:5px 0 0; }
+  .settings-section .row-btns { margin-top:12px; }
+  .settings-section .btn { min-width:136px; min-height:36px; }
+  .sync-provider-field { max-width:260px; }
+  .sync-dependent { border:0; margin:0; padding:0; min-width:0; }
+  .sync-dependent:disabled { opacity:.55; }
+  .sync-disabled-hint { color:var(--sub); font-size:11px; margin:8px 0 16px; }
+  .sync-status-panel { border-top:1px solid var(--line); margin-top:18px; padding-top:16px; }
+  .sync-status-panel h4 { display:flex; align-items:center; gap:10px; margin:0; font-size:13px; }
+  .sync-status-panel .settings-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 20px; }
+  .sync-status-panel .settings-values div { min-width:0; }
+  .sync-status-panel .settings-note { padding-top:10px; }
+  .settings-warning { border:1px solid color-mix(in srgb,var(--err) 30%,var(--line)); background:var(--err-soft); color:var(--err); border-radius:9px; padding:10px 12px; margin-top:12px; font-size:12px; line-height:1.6; }
   .settings-row { display:flex; align-items:center; justify-content:space-between; gap:24px; }
   .settings-row > div { min-width:0; }
   .settings-row > .btn { flex:none; }
@@ -310,10 +378,8 @@
     .stat { padding:13px 14px; }
     .stat .v { font-size:21px; }
     .toolbar .btn { padding:8px 10px; gap:6px; }
-    .settings-layout { grid-template-columns:minmax(0,1.65fr) minmax(240px,1fr); gap:16px; }
     .settings-card { padding:20px; }
     .cfoot .btn { padding:6px 8px; gap:5px; }
-    .sync-service { width:124px; }
   }
   @media (max-width:720px){
     .wrap,#homePage { padding-left:18px; padding-right:18px; }
@@ -327,14 +393,14 @@
     .home-heading .status-pill { max-width:100%; }
     .toolbar { gap:10px; }
     .grid { grid-template-columns:minmax(0,1fr); }
-    .settings-layout { grid-template-columns:minmax(0,1fr); }
     .settings-tabs { gap:0; justify-content:space-between; }
     .settings-tabs button { min-width:0; padding:12px 4px; font-size:13px; }
-    .settings-card-header { flex-wrap:wrap; }
     .settings-row { align-items:flex-start; flex-direction:column; gap:16px; }
     .settings-fields { grid-template-columns:minmax(0,1fr); }
+    .sync-status-panel .settings-values { grid-template-columns:minmax(0,1fr); }
     .stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .tool-group { flex-wrap:wrap; }
+    .quota-settings-footer { align-items:flex-start; }
   }
   @media (prefers-reduced-motion:reduce){ *,*::before,*::after { animation:none!important; transition:none!important; } }
 </style>
@@ -431,8 +497,7 @@
 </main>
 
 <section class="wrap settings-page" id="settingsPage" hidden aria-label="设置">
-  <button class="btn ghost back-btn" onclick="closeSettings()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-back"/></svg>返回首页</button>
-  <div class="settings-heading"><h2 tabindex="-1" id="settingsHeading">设置</h2><p>Typeless 工具集</p></div>
+  <div class="settings-heading"><button class="btn ghost back-btn" onclick="closeSettings()" aria-label="返回首页" title="返回首页"><svg class="ui-icon" aria-hidden="true"><use href="#ui-back"/></svg></button><h2 tabindex="-1" id="settingsHeading">设置</h2></div>
   <nav class="settings-tabs" role="tablist" aria-label="设置分类" onkeydown="settingsTabKeydown(event)">
     <button id="settingsTabGeneral" role="tab" data-settings-tab="general" aria-selected="true" aria-controls="settings-general" onclick="selectSettingsTab('general')">通用</button>
     <button id="settingsTabSync" role="tab" data-settings-tab="sync" aria-selected="false" aria-controls="settings-sync" tabindex="-1" onclick="selectSettingsTab('sync')">同步与数据</button>
@@ -443,32 +508,59 @@
   <div class="settings-panel settings-stack" id="settings-general" role="tabpanel" aria-labelledby="settingsTabGeneral">
     <section class="settings-card">
       <h3>额度提醒</h3>
-      <p>工具集运行时在后台检查当前账号。额度不足时推荐备用账号，由你确认后切换；切换会重启 Typeless，请等听写文字回填完成。</p>
-      <div class="quota-controls">
-        <label><input type="checkbox" id="quotaEnabled" disabled>启用后台提醒</label>
-        <label for="quotaRemaining">剩余 <input class="fld" id="quotaRemaining" type="number" min="1" step="1" value="200" disabled> 字时提醒</label>
-        <button class="btn primary" id="quotaSaveBtn" onclick="saveQuotaSettings()" disabled>保存</button>
-        <button class="btn" id="quotaCheckBtn" onclick="checkQuotaNow()" disabled>立即检查</button>
+      <p>工具集运行时后台检查当前账号；修改后点击「保存设置」生效。</p>
+      <div class="quota-settings">
+        <div class="quota-expand">
+          <div class="quota-expand-head">
+            <button type="button" class="quota-expand-trigger" id="quotaReminderTrigger" aria-expanded="false" aria-controls="quotaReminderBody" onclick="toggleQuotaPanel('reminder')">
+              <span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-chart"/></svg></span>
+              <span class="quota-toggle-copy"><strong>后台额度提醒</strong><span class="quota-subline">接近阈值时提醒，并推荐可用的备用账号。</span></span>
+              <span class="quota-chevron" aria-hidden="true"></span>
+            </button>
+            <label class="quota-switch"><input type="checkbox" role="switch" aria-label="启用额度提醒" id="quotaEnabled" onchange="quotaSwitchChanged('reminder')" disabled><span class="quota-switch-track" aria-hidden="true"></span></label>
+          </div>
+          <div class="quota-expand-body" id="quotaReminderBody" hidden>
+            <div class="quota-setting-field"><label for="quotaRemaining">剩余不高于</label><input class="fld" id="quotaRemaining" type="number" min="1" step="1" value="200" disabled><span>字时提醒</span></div>
+          </div>
+        </div>
+        <div class="quota-expand">
+          <div class="quota-expand-head">
+            <button type="button" class="quota-expand-trigger" id="quotaAutoTrigger" aria-expanded="false" aria-controls="quotaAutoBody" onclick="toggleQuotaPanel('auto')">
+              <span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-switch"/></svg></span>
+              <span class="quota-toggle-copy"><strong>自动切换账号</strong><span class="quota-subline">额度不足且停止听写后执行；切换时会重启 Typeless。</span></span>
+              <span class="quota-chevron" aria-hidden="true"></span>
+            </button>
+            <label class="quota-switch"><input type="checkbox" role="switch" aria-label="额度不足时自动切换账号" id="quotaAutoSwitch" onchange="quotaSwitchChanged('auto')" disabled><span class="quota-switch-track" aria-hidden="true"></span></label>
+          </div>
+          <div class="quota-expand-body" id="quotaAutoBody" hidden>
+            <p id="quotaAutoHint" role="status"></p>
+            <div class="quota-setting-field"><label for="quotaStrategy">切换策略</label>
+              <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
+                <option value="quota">剩余额度最多</option>
+                <option value="personalized">个性化程度最高</option>
+                <option value="custom">按自定义顺序</option>
+              </select>
+            </div>
+            <div class="quota-silent-row">
+              <div class="quota-toggle-copy"><label for="quotaSilent">静默切换</label><p>跳过倒计时提示，停止听写后直接切换。</p></div>
+              <span class="quota-switch"><input type="checkbox" role="switch" id="quotaSilent" onchange="syncQuotaSilentHint()" disabled><span class="quota-switch-track" aria-hidden="true"></span></span>
+            </div>
+            <p id="quotaSilentHint" class="hint" hidden>静默切换失败时仍会提示一次。</p>
+            <div id="quotaOrderWrap" hidden>
+              <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
+              <div class="quota-order" id="quotaOrderList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="quota-settings-footer">
+          <p id="quotaMonitorStatus" role="status">正在读取提醒设置…</p>
+          <div class="quota-settings-actions">
+            <button class="btn" id="quotaCheckBtn" onclick="checkQuotaNow()" disabled>立即检查</button>
+            <button class="btn primary" id="quotaSaveBtn" onclick="saveQuotaSettings()" disabled>保存设置</button>
+          </div>
+        </div>
       </div>
-      <div class="quota-controls">
-        <label><input type="checkbox" id="quotaAutoSwitch" onchange="syncQuotaAutoControls()" disabled>额度不足时自动切换账号</label>
-        <label><input type="checkbox" id="quotaSilent" disabled>完全静默模式（无弹窗提示，后台完成切换）</label>
-        <label for="quotaStrategy">切换策略
-          <select class="fld" id="quotaStrategy" onchange="renderQuotaOrder()" disabled>
-            <option value="quota">剩余额度最多</option>
-            <option value="personalized">个性化程度最高</option>
-            <option value="custom">按自定义顺序</option>
-          </select>
-        </label>
-      </div>
-      <p id="quotaAutoHint" role="status"></p>
-      <p id="quotaSilentHint" class="hint" hidden>静默模式下不会有任何弹窗，也不会出现 15 秒倒计时：检测到额度不足且你没在听写时直接切号。切换失败仍会提示一次。</p>
-      <div id="quotaOrderWrap" hidden>
-        <p class="hint">按顺序尝试下列账号，越靠上越优先：</p>
-        <div class="quota-order" id="quotaOrderList"></div>
-      </div>
-      <p id="quotaMonitorStatus" role="status">正在读取提醒设置…</p>
-      <p>通常每 2 分钟检查，接近阈值时每 30 秒检查。Windows 桌面版支持托盘提醒；其他运行方式请留意首页提示。额度统计可能延迟，一次长听写也可能跨过阈值。</p>
+      <details class="quota-settings-details"><summary>了解检查方式</summary><p>通常每 2 分钟检查，接近阈值时每 30 秒检查。Windows 桌面版支持托盘提醒；其他运行方式请留意首页提示。额度统计可能延迟，一次长听写也可能跨过阈值。</p></details>
     </section>
     <section class="settings-card">
       <h3>外观主题</h3><p>跟随系统，或选择你习惯的外观。立即生效并在本机记住。</p>
@@ -484,69 +576,66 @@
     </section>
   </div>
 
-  <div class="settings-panel settings-layout" id="settings-sync" role="tabpanel" aria-labelledby="settingsTabSync" hidden>
-    <section class="settings-card">
-      <fieldset id="accountSyncForm" style="border:0;padding:0;margin:0;min-width:0" disabled>
-        <div class="settings-card-header">
-          <div><h3><svg class="ui-icon" aria-hidden="true"><use href="#ui-cloud"/></svg>WebDAV 同步 <span class="badge" id="accountSyncConfigured">未配置</span></h3><p>在多台设备之间同步账号和主词库。</p></div>
-          <div class="sync-service"><label for="accountSyncProvider">同步服务</label><select class="fld" id="accountSyncProvider" onchange="updateAccountSyncProvider()">
+  <div class="settings-panel settings-stack" id="settings-sync" role="tabpanel" aria-labelledby="settingsTabSync" hidden>
+    <details class="settings-disclosure" open>
+      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-cloud"/></svg></span><span class="settings-disclosure-copy"><strong>WebDAV 同步</strong><small>在多台设备之间加密同步账号和主词库。</small></span><span class="badge" id="accountSyncConfigured">未配置</span><span class="quota-chevron" aria-hidden="true"></span></summary>
+      <div class="settings-disclosure-body">
+        <fieldset id="accountSyncForm" style="border:0;padding:0;margin:0;min-width:0" disabled>
+          <div class="field sync-provider-field"><label for="accountSyncProvider">同步服务</label><select class="fld" id="accountSyncProvider" onchange="updateAccountSyncProvider(true)">
             <option value="disabled">关闭同步</option><option value="nutstore">坚果云</option><option value="webdav">其他 WebDAV</option>
           </select></div>
-        </div>
-        <div id="accountSyncFields">
-          <div class="settings-fields">
-            <div class="field full"><label for="accountSyncUrl">服务器地址</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
-            <div class="field"><label for="accountSyncUsername">用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
-            <div class="field"><label for="accountSyncPassword">WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空保持已保存密码"></div>
-            <div class="field"><label for="accountSyncPath">远端账号文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；词库单独加密存于同目录。</div></div>
-            <div class="field"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
+          <p class="sync-disabled-hint" id="accountSyncDisabledHint">同步已关闭，不会上传账号或词库。可选择服务后配置。</p>
+          <fieldset class="sync-dependent" id="accountSyncFields" disabled>
+            <div class="settings-fields">
+              <div class="field full"><label for="accountSyncUrl">服务器地址</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
+              <div class="field"><label for="accountSyncUsername">用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
+              <div class="field"><label for="accountSyncPassword">WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空保持已保存密码"></div>
+              <div class="field"><label for="accountSyncPath">远端账号文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；词库单独加密存于同目录。</div></div>
+              <div class="field"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
+            </div>
+            <fieldset class="sync-scope"><legend>同步内容</legend><div class="sync-scope-options">
+              <div class="sync-scope-row"><label for="accountSyncAccounts"><strong>账号凭证</strong><small>同步已保存账号的长期登录凭证。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncAccounts" aria-label="同步账号凭证" checked onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+              <div class="sync-scope-row"><label for="accountSyncDictionary"><strong>主词库</strong><small>同步主词条，不包含本机登录快照。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncDictionary" aria-label="同步主词库" onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+            </div><p class="sync-scope-hint" id="accountSyncScopeHint">可单独开启一项，也可以同时同步。</p></fieldset>
+          </fieldset>
+          <div class="settings-actions">
+            <button class="btn ghost" id="accountSyncTestBtn" onclick="testAccountSync()">保存并测试连接</button>
+            <button class="btn" id="accountSyncRunBtn" onclick="runAccountSync()">保存并立即同步</button>
+            <button class="btn primary" id="accountSyncSaveBtn" onclick="saveAccountSync()">保存配置</button>
           </div>
-          <fieldset class="sync-scope"><legend>同步内容</legend><div class="check-options">
-            <label><input type="checkbox" id="accountSyncAccounts" checked>账号凭证</label>
-            <label><input type="checkbox" id="accountSyncDictionary">主词库</label>
-          </div><p>可单独选择，也可以同时同步。</p></fieldset>
+        </fieldset>
+        <div id="accountSyncStatus" role="status" aria-live="polite">正在读取配置…</div>
+        <button class="btn small" id="accountSyncReloadBtn" onclick="loadAccountSyncConfig()" hidden>重新读取配置</button>
+        <div class="sync-status-panel">
+          <h4>同步状态 <span class="badge" id="accountSyncState">尚未同步</span></h4>
+          <dl class="settings-values"><div><dt>本机账号</dt><dd id="settingsAccountCount">—</dd></div><div><dt>主词库</dt><dd id="settingsMasterCount">—</dd></div><div><dt>上次同步</dt><dd id="accountSyncLastTime">尚未</dd></div></dl>
+          <div class="settings-note" id="accountSyncStateDetail">新增内容合并同步，不会直接覆盖另一台设备的数据。明确的删除也会同步到其他设备。</div>
+          <p>只传输所选内容的加密文件，不上传短期 access token、登录快照或设备信息。</p>
         </div>
-        <div class="settings-actions">
-          <button class="btn ghost" id="accountSyncTestBtn" onclick="testAccountSync()">测试连接</button>
-          <button class="btn" id="accountSyncRunBtn" onclick="runAccountSync()">立即同步</button>
-          <button class="btn primary" id="accountSyncSaveBtn" onclick="saveAccountSync()">保存配置</button>
+      </div>
+    </details>
+    <details class="settings-disclosure">
+      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-download"/></svg></span><span class="settings-disclosure-copy"><strong>数据导入与导出</strong><small>按账号数据或主词库分别迁移。</small></span><span class="quota-chevron" aria-hidden="true"></span></summary>
+      <div class="settings-disclosure-body">
+        <div class="settings-section"><h4>账号数据</h4><p>增量导入账号；换机后需逐个点击「在此设备启用」建立本机登录态。</p>
+          <div class="row-btns"><button class="btn" onclick="exportAccountBundle()">导出账号备份</button><button class="btn" onclick="document.getElementById('accountBundleFile').click()">导入账号文件</button></div>
+          <div class="settings-warning">导出的账号 JSON 含长期登录凭证，请像密码一样保管，不要公开分享。</div>
         </div>
-      </fieldset>
-      <div id="accountSyncStatus" role="status" aria-live="polite">正在读取配置…</div>
-      <button class="btn small" id="accountSyncReloadBtn" onclick="loadAccountSyncConfig()" hidden>重新读取配置</button>
-    </section>
-    <aside class="settings-stack">
-      <section class="settings-card">
-        <div class="settings-card-header"><h3>同步状态</h3><span class="badge" id="accountSyncState">尚未同步</span></div>
-        <dl class="settings-values"><div><dt>本机账号</dt><dd id="settingsAccountCount">—</dd></div><div><dt>主词库</dt><dd id="settingsMasterCount">—</dd></div><div><dt>上次同步</dt><dd id="accountSyncLastTime">尚未</dd></div></dl>
-        <div class="settings-note" id="accountSyncStateDetail">新增内容合并同步，不会直接覆盖另一台设备的数据。明确的删除也会同步到其他设备。</div>
-        <p>只传输所选内容的加密文件，不上传短期 access token、登录快照或设备信息。</p>
-      </section>
-      <section class="settings-card settings-backup">
-        <h3>账号文件</h3>
-        <p>导出长期账号凭证，或从账号文件增量导入。换机导入后，逐个点击“在此设备启用”建立本机登录态；主词库需单独迁移。</p>
-        <div class="row-btns">
-          <button class="btn" onclick="exportAccountBundle()">导出账号备份</button>
-          <button class="btn" onclick="document.getElementById('accountBundleFile').click()">导入账号文件</button>
-          <a class="btn" href="/api/master/export">导出主词库</a>
-          <button class="btn" onclick="document.getElementById('masterImportFile').click()">导入主词库</button>
+        <div class="settings-section"><h4>主词库</h4><p>词库单独迁移，不包含在账号文件中。</p>
+          <div class="row-btns"><a class="btn" href="/api/master/export">导出主词库</a><button class="btn" onclick="document.getElementById('masterImportFile').click()">导入主词库</button></div>
         </div>
         <input id="accountBundleFile" type="file" accept=".json,application/json" hidden onchange="importAccountBundle(this,false)">
         <input id="masterImportFile" type="file" accept=".csv,.txt,text/plain" hidden onchange="importAccountBundle(this,true)">
-        <p class="hint">账号文件是含长期登录凭证的明文 JSON，请妥善保管，不要公开分享。</p>
         <div class="settings-note" id="accountBundleResult" role="status" aria-live="polite">尚未导入账号文件。</div>
-      </section>
-      <section class="settings-card settings-backup">
-        <h3>本机内部备份</h3>
-        <p>保存账号原始文件、主词库及删除记录到本机数据目录。旧备份可选择 accounts.json 和词库 CSV 增量导入；本机快照及设备配置不会跨机恢复。</p>
-        <div class="row-btns">
-          <button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>保存本机副本</button>
-          <button class="btn" onclick="openBackupDirectory()">打开备份目录</button>
-          <button class="btn" onclick="document.getElementById('legacyBackupFiles').click()">导入旧备份</button>
-        </div>
+      </div>
+    </details>
+    <details class="settings-disclosure">
+      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-refresh"/></svg></span><span class="settings-disclosure-copy"><strong>本机备份与恢复</strong><small>保存本机副本，或增量导入旧备份。</small></span><span class="quota-chevron" aria-hidden="true"></span></summary>
+      <div class="settings-disclosure-body settings-section"><p>保存账号原始文件、主词库及删除记录到本机数据目录。旧备份可选择 accounts.json 和词库 CSV 增量导入；本机快照及设备配置不会跨机恢复。</p>
+        <div class="row-btns"><button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>保存本机副本</button><button class="btn" onclick="openBackupDirectory()">打开备份目录</button><button class="btn" onclick="document.getElementById('legacyBackupFiles').click()">导入旧备份</button></div>
         <input id="legacyBackupFiles" type="file" accept=".json,.csv,.txt,application/json,text/plain" multiple hidden onchange="importAccountBundle(this,true)">
-      </section>
-    </aside>
+      </div>
+    </details>
   </div>
 
   <div class="settings-panel settings-stack" id="settings-maintenance" role="tabpanel" aria-labelledby="settingsTabMaintenance" hidden>
@@ -883,6 +972,8 @@ function renderQuotaMonitor(state){
     document.getElementById('quotaEnabled').disabled=false;
     document.getElementById('quotaRemaining').disabled=false;
     document.getElementById('quotaSaveBtn').disabled=false;
+    setQuotaPanelOpen('reminder',state.config.enabled);
+    setQuotaPanelOpen('auto',state.config.auto_switch||!available);
     QUOTA_LOADED=true;
   }
   // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
@@ -893,7 +984,7 @@ function renderQuotaMonitor(state){
   const silentBox=document.getElementById('quotaSilent');
   silentBox.disabled=!available||!autoBox.checked;
   // 静默模式会替掉倒计时,提示用户它意味着没有反悔窗口
-  document.getElementById('quotaSilentHint').hidden=!(silentBox.checked&&!silentBox.disabled);
+  syncQuotaSilentHint();
   renderQuotaOrder();
   document.getElementById('quotaCheckBtn').disabled=!state.config.enabled||state.state==='checking';
   document.getElementById('quotaMonitorStatus').textContent=state.message+(state.checked_at?' · 最近成功查询 '+new Date(state.checked_at).toLocaleTimeString():'');
@@ -906,6 +997,24 @@ function renderQuotaMonitor(state){
   // 自动流程已在推进时不再提供手动入口,避免两条路径同时重启 Typeless
   btn.hidden=state.state!=='low'||!state.candidate;
   btn.disabled=QUOTA_SWITCH_BUSY;
+}
+function setQuotaPanelOpen(name,open){
+  const trigger=document.getElementById(name==='reminder'?'quotaReminderTrigger':'quotaAutoTrigger');
+  trigger.ariaExpanded=String(open);
+  document.getElementById(name==='reminder'?'quotaReminderBody':'quotaAutoBody').hidden=!open;
+}
+function toggleQuotaPanel(name){
+  const trigger=document.getElementById(name==='reminder'?'quotaReminderTrigger':'quotaAutoTrigger');
+  setQuotaPanelOpen(name,trigger.ariaExpanded!=='true');
+}
+function quotaSwitchChanged(name){
+  const checked=document.getElementById(name==='reminder'?'quotaEnabled':'quotaAutoSwitch').checked;
+  if(checked) setQuotaPanelOpen(name,true);
+  if(name==='auto') syncQuotaAutoControls();
+}
+function syncQuotaSilentHint(){
+  const silentBox=document.getElementById('quotaSilent');
+  document.getElementById('quotaSilentHint').hidden=!(silentBox.checked&&!silentBox.disabled);
 }
 function quotaNoticeDetail(state){
   if(state.state==='auto_switching'||state.state==='auto_done') return '自动切号已开启，切换过程会重启 Typeless。';
@@ -945,7 +1054,7 @@ function syncQuotaAutoControls(){
   silentBox.disabled=!available||!on;
   // 关掉自动切号时,静默也一并失效,避免留下看不懂的勾选状态
   if(!on) silentBox.checked=false;
-  document.getElementById('quotaSilentHint').hidden=!(silentBox.checked&&!silentBox.disabled);
+  syncQuotaSilentHint();
   renderQuotaOrder();
 }
 function moveQuotaOrder(userId,delta){
@@ -1467,10 +1576,11 @@ async function runDictionarySync(showResults=true){
   await loadAccounts();
   await refreshDictionarySyncStatus();
 }
-function updateAccountSyncProvider(){
+function updateAccountSyncProvider(fromUser=false){
   const provider=document.getElementById('accountSyncProvider').value;
   const fields=document.getElementById('accountSyncFields');
-  fields.style.display=provider==='disabled'?'none':'block';
+  fields.disabled=provider==='disabled';
+  document.getElementById('accountSyncDisabledHint').hidden=provider!=='disabled';
   const url=document.getElementById('accountSyncUrl');
   if(provider==='nutstore'){
     url.value='https://dav.jianguoyun.com/dav/';
@@ -1478,6 +1588,17 @@ function updateAccountSyncProvider(){
   }else url.readOnly=false;
   document.getElementById('accountSyncTestBtn').disabled=provider==='disabled';
   document.getElementById('accountSyncRunBtn').disabled=provider==='disabled';
+  updateAccountSyncScope();
+  if(fromUser) document.getElementById('accountSyncStatus').textContent=provider==='disabled'
+    ?'尚未保存：点击「保存配置」后才会关闭同步。'
+    :'尚未保存：点击「保存配置」后生效；测试连接和立即同步也会先保存配置。';
+}
+function updateAccountSyncScope(){
+  const selected=document.getElementById('accountSyncAccounts').checked||document.getElementById('accountSyncDictionary').checked;
+  const enabled=document.getElementById('accountSyncProvider').value!=='disabled';
+  const hint=document.getElementById('accountSyncScopeHint');
+  hint.textContent=!enabled?'启用同步服务后选择需要同步的内容。':selected?'可单独开启一项，也可以同时同步。':'至少开启一项同步内容后才能保存配置。';
+  hint.dataset.invalid=String(enabled&&!selected);
 }
 function accountSyncPayload(){
   const provider=document.getElementById('accountSyncProvider').value;
