@@ -203,7 +203,7 @@ class TrayApp
         string node = FindNode();
         if (node == null)
         {
-            backendError = "未找到可用的 Node.js。Portable 版应包含 runtime\\node.exe；Lite 版需要 Node.js 22.12+ 且能加载 node:sqlite。安装新版本后请完全退出工具集，再重新打开。";
+            backendError = "未找到 Node.js。Portable 版应包含 runtime\\node.exe；Lite 版需要安装 Node.js 22.12+。";
             return false;
         }
 
@@ -737,9 +737,11 @@ class TrayApp
             @"C:\Program Files (x86)\nodejs\node.exe"
         };
 
+        string fallback = null;
         Func<string, string> consider = delegate(string file)
         {
             if (string.IsNullOrWhiteSpace(file) || !File.Exists(file)) return null;
+            if (fallback == null) fallback = file;
             if (SupportsSqlite(file)) return file;
             return null;
         };
@@ -770,7 +772,8 @@ class TrayApp
                 if (selected != null) return selected;
             }
         }
-        return null;
+        // Lite can still run without node:sqlite; only automatic account switching is unavailable.
+        return fallback;
     }
 
     static Icon LoadAppIcon()

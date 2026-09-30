@@ -690,11 +690,13 @@ let dictationAvailabilityCache = null;
 function probeDictationAvailability() {
   if (!sqliteAvailable()) return { available: false, error: 'no-sqlite' };
   const probe = dictationWatcher.probe();
-  const error = dictationWatcher.lastError();
+  const error = dictationWatcher.isActive() ? dictationWatcher.lastError() : null;
   dictationAvailabilityCache = { available: probe.ok && !error, error: error || probe.error || null };
   return dictationAvailabilityCache;
 }
-function dictationAvailability() { return dictationAvailabilityCache || probeDictationAvailability(); }
+function dictationAvailability() {
+  return dictationAvailabilityCache?.available ? dictationAvailabilityCache : probeDictationAvailability();
+}
 const dictationStateAvailable = () => probeDictationAvailability().available;
 dictationWatcher.on('error', error => {
   dictationAvailabilityCache = { available: false, error };
@@ -896,7 +898,7 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/quota-monitor/config') {
       try {
         const settings = normalizeQuotaConfig(await readBody(req));
-        if (settings.auto_switch && !dictationStateAvailable()) {
+        if (settings.auto_switch && !quotaMonitor.status().config.auto_switch && !dictationStateAvailable()) {
           throw new Error('当前运行环境无法读取 Typeless 听写状态，不能开启自动切号');
         }
         writePrivateJson(quotaConfigFile, settings);

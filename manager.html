@@ -977,7 +977,7 @@ function renderQuotaMonitor(state){
     QUOTA_LOADED=true;
   }
   // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
-  autoBox.disabled=!available;
+  autoBox.disabled=!available&&!state.config.auto_switch;
   document.getElementById('quotaAutoHint').textContent=available?''
     :'当前运行环境无法读取 Typeless 听写状态（请确认 Node.js 的 SQLite 能力与 Typeless 数据库可读；状态未确认前不会自动切号），因此不能开启自动切号。';
   strategySel.disabled=!available||!autoBox.checked;
@@ -1122,7 +1122,7 @@ async function saveQuotaSettings(){
   const remaining=Number(document.getElementById('quotaRemaining').value);
   if(!Number.isSafeInteger(remaining)||remaining<1){ toast('请输入正整数剩余额度','err'); return; }
   const autoSwitch=document.getElementById('quotaAutoSwitch').checked;
-  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
+  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false&&!QUOTA_STATE?.config.auto_switch){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
   const btn=document.getElementById('quotaSaveBtn'); btn.disabled=true;
   try{
     const r=await apiTimed('/api/quota-monitor/config',{method:'POST',body:JSON.stringify({
