@@ -686,6 +686,24 @@ try { quotaConfig = normalizeQuotaConfig(readPrivateJson(quotaConfigFile, {})); 
 catch { quotaConfig = normalizeQuotaConfig(); }
 // 听写状态只能通过只读轮询本地历史库获得;运行时不可用时自动切号保持关闭。
 const dictationWatcher = createDictationWatcher({ dbPath: dictationDbPath(C.USERDATA_DIR) });
+let dictationAvailabilityCache = null;
+function probeDictationAvailability() {
+  if (!sqliteAvailable()) return { available: false, error: 'no-sqlite' };
+  const probe = dictationWatcher.probe();
+  const error = dictationWatcher.isActive() ? dictationWatcher.lastError() : null;
+  dictationAvailabilityCache = { available: probe.ok && !error, error: error || probe.error || null };
+  return dictationAvailabilityCache;
+}
+function dictationAvailability() {
+  return dictationAvailabilityCache?.available ? dictationAvailabilityCache : probeDictationAvailability();
+}
+const dictationStateAvailable = () => probeDictationAvailability().available;
+dictationWatcher.on('error', error => {
+  dictationAvailabilityCache = { available: false, error };
+});
+dictationWatcher.on('ready', () => {
+  dictationAvailabilityCache = { available: true, error: null };
+});
 
 /**
  * 执行账号切换:校验目标快照 → 保存当前号 → 重启到目标快照。
@@ -779,8 +797,8 @@ let accountSwitchInFlight = false;
 /** 只有额度提醒与自动切号都开启、且运行时支持时才轮询听写状态,避免无谓的后台查库 */
 function syncDictationWatcher() {
   const { enabled, auto_switch } = quotaMonitor.status().config;
-  if (enabled && auto_switch && sqliteAvailable()) dictationWatcher.start();
-  else dictationWatcher.stop();
+  // 监控健康时不需要每三秒读库；进入低额度并确定候选后由 quotaMonitor 启动 watcher。
+  if (!(enabled && auto_switch && dictationStateAvailable())) dictationWatcher.stop();
 }
 const toolkitBackendOwned = tauriHost.available || (
   process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
@@ -856,8 +874,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (m === 'GET' && p === '/api/quota-monitor/status') {
       // auto_switch_available 供界面判断能否开启自动切号(取决于运行时能否读取听写状态)
+      const dictation = dictationAvailability();
       return send(res, 200, { status: 'OK',
-        data: { ...quotaMonitor.status(), auto_switch_available: sqliteAvailable() } });
+        data: { ...quotaMonitor.status(), auto_switch_available: dictation.available,
+          auto_switch_error: dictation.error } });
     }
     // 原生托盘只读提醒标识；不传账号名或凭证，不执行切换。
     if (m === 'GET' && p === '/api/quota-monitor/notification') {
@@ -878,6 +898,9 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/quota-monitor/config') {
       try {
         const settings = normalizeQuotaConfig(await readBody(req));
+        if (settings.auto_switch && !quotaMonitor.status().config.auto_switch && !dictationStateAvailable()) {
+          throw new Error('当前运行环境无法读取 Typeless 听写状态，不能开启自动切号');
+        }
         writePrivateJson(quotaConfigFile, settings);
         const data = quotaMonitor.configure(settings);
         syncDictationWatcher();

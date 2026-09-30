@@ -959,7 +959,7 @@ const SC_CODE_MAP = {
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function renderQuotaMonitor(state){
   QUOTA_STATE=state;
-  const available=state.auto_switch_available!==false;
+  const available=state.auto_switch_available!==false&&!state.auto_switch_error;
   const autoBox=document.getElementById('quotaAutoSwitch');
   const strategySel=document.getElementById('quotaStrategy');
   if(!QUOTA_LOADED){
@@ -977,9 +977,9 @@ function renderQuotaMonitor(state){
     QUOTA_LOADED=true;
   }
   // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
-  autoBox.disabled=!available;
+  autoBox.disabled=!available&&!state.config.auto_switch;
   document.getElementById('quotaAutoHint').textContent=available?''
-    :'当前运行环境无法读取听写状态（需要 Node 23.4+ 内置 sqlite），因此不能开启自动切号。';
+    :'当前运行环境无法读取 Typeless 听写状态（请确认 Node.js 的 SQLite 能力与 Typeless 数据库可读；状态未确认前不会自动切号），因此不能开启自动切号。';
   strategySel.disabled=!available||!autoBox.checked;
   const silentBox=document.getElementById('quotaSilent');
   silentBox.disabled=!available||!autoBox.checked;
@@ -1095,8 +1095,12 @@ function renderAutoSwitch(state){
 }
 async function cancelAutoSwitch(){
   if(AUTO_COUNTDOWN_TIMER){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
-  closeModal('autoSwitchMask');
-  try{ await apiTimed('/api/quota-monitor/cancel-auto',{method:'POST'}); }catch(e){}
+  try{
+    const r=await apiTimed('/api/quota-monitor/cancel-auto',{method:'POST'});
+    if(r.status!=='OK') throw new Error(r.msg||'取消失败');
+    if(r.data?.cancelled===false) throw new Error(r.data.cancel_message||'自动切换已开始，无法取消');
+    closeModal('autoSwitchMask');
+  }catch(e){ toast(e.message||'取消自动切换失败','err'); }
   await refreshQuotaMonitor();
 }
 async function refreshQuotaMonitor(){
@@ -1118,7 +1122,7 @@ async function saveQuotaSettings(){
   const remaining=Number(document.getElementById('quotaRemaining').value);
   if(!Number.isSafeInteger(remaining)||remaining<1){ toast('请输入正整数剩余额度','err'); return; }
   const autoSwitch=document.getElementById('quotaAutoSwitch').checked;
-  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
+  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false&&!QUOTA_STATE?.config.auto_switch){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
   const btn=document.getElementById('quotaSaveBtn'); btn.disabled=true;
   try{
     const r=await apiTimed('/api/quota-monitor/config',{method:'POST',body:JSON.stringify({
@@ -1126,7 +1130,7 @@ async function saveQuotaSettings(){
       remaining,
       auto_switch:autoSwitch,
       strategy:document.getElementById('quotaStrategy').value,
-      order:QUOTA_ORDER,
+      order:document.getElementById('quotaStrategy').value==='custom'?QUOTA_ORDER_VIEW:QUOTA_ORDER,
       silent:document.getElementById('quotaSilent').checked,
     })});
     if(r.status!=='OK') throw new Error(r.msg||'保存失败');
@@ -1147,7 +1151,10 @@ async function checkQuotaNow(){
 async function switchQuotaCandidate(){
   if(QUOTA_SWITCH_BUSY||!QUOTA_STATE?.candidate||QUOTA_STATE.state!=='low') return;
   const state=QUOTA_STATE, target=state.candidate;
-  if(!confirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。')) return;
+  const confirmed=typeof appConfirm==='function'
+    ? await appConfirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。')
+    : confirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。');
+  if(!confirmed) return;
   QUOTA_SWITCH_BUSY=true;
   document.getElementById('quotaSwitchBtn').disabled=true;
   try{

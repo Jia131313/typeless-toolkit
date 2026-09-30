@@ -700,6 +700,30 @@ class TrayApp
         catch { return false; }
     }
 
+    static bool SupportsSqlite(string node)
+    {
+        try
+        {
+            using (Process probe = new Process())
+            {
+                probe.StartInfo.FileName = node;
+                probe.StartInfo.Arguments = "-e \"try { require('node:sqlite'); process.stdout.write('ok'); } catch (e) { process.exit(1); }\"";
+                probe.StartInfo.CreateNoWindow = true;
+                probe.StartInfo.UseShellExecute = false;
+                probe.StartInfo.RedirectStandardOutput = true;
+                probe.StartInfo.RedirectStandardError = true;
+                probe.Start();
+                if (!probe.WaitForExit(3000))
+                {
+                    try { probe.Kill(); } catch { }
+                    return false;
+                }
+                return probe.ExitCode == 0 && probe.StandardOutput.ReadToEnd().Trim() == "ok";
+            }
+        }
+        catch { return false; }
+    }
+
     static string FindNode()
     {
         // Portable release ships a pinned Node.js runtime beside the launcher.
@@ -707,21 +731,36 @@ class TrayApp
         string bundled = Path.Combine(exeDir, "runtime", "node.exe");
         if (File.Exists(bundled)) return bundled;
 
+        string[] candidates = new string[] {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "node.exe"),
+            @"C:\Program Files\nodejs\node.exe",
+            @"C:\Program Files (x86)\nodejs\node.exe"
+        };
+
+        string fallback = null;
+        Func<string, string> consider = delegate(string file)
+        {
+            if (string.IsNullOrWhiteSpace(file) || !File.Exists(file)) return null;
+            if (fallback == null) fallback = file;
+            if (SupportsSqlite(file)) return file;
+            return null;
+        };
+
         string pathValue = Environment.GetEnvironmentVariable("PATH");
         if (pathValue == null) pathValue = "";
         foreach (string directory in pathValue.Split(';'))
         {
             if (string.IsNullOrWhiteSpace(directory)) continue;
             string file = Path.Combine(directory.Trim(), "node.exe");
-            if (File.Exists(file)) return file;
+            string selected = consider(file);
+            if (selected != null) return selected;
         }
 
-        string[] candidates = new string[] {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "node.exe"),
-            @"C:\Program Files\nodejs\node.exe",
-            @"C:\Program Files (x86)\nodejs\node.exe"
-        };
-        foreach (string candidate in candidates) if (File.Exists(candidate)) return candidate;
+        foreach (string candidate in candidates)
+        {
+            string selected = consider(candidate);
+            if (selected != null) return selected;
+        }
 
         string nvm = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "nvm");
         if (Directory.Exists(nvm))
@@ -729,10 +768,12 @@ class TrayApp
             foreach (string directory in Directory.GetDirectories(nvm))
             {
                 string file = Path.Combine(directory, "node.exe");
-                if (File.Exists(file)) return file;
+                string selected = consider(file);
+                if (selected != null) return selected;
             }
         }
-        return null;
+        // Lite can still run without node:sqlite; only automatic account switching is unavailable.
+        return fallback;
     }
 
     static Icon LoadAppIcon()
