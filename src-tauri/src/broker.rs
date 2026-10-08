@@ -105,6 +105,22 @@ fn dispatch(context: &BrokerContext, method: &str, params: &Value) -> Result<Val
             "capabilities": { "mac_app_swap": true }
         })),
         "set_theme" => macos::set_theme(&context.app, params),
+        "save_account_bundle" => {
+            let filename = params["filename"].as_str().ok_or_else(|| HostError {
+                code: "INVALID_ARGUMENT".into(), message: "缺少备份文件名".into(), phase: None,
+            })?;
+            let content = params["content"].as_str().ok_or_else(|| HostError {
+                code: "INVALID_ARGUMENT".into(), message: "缺少备份内容".into(), phase: None,
+            })?;
+            let Some(path) = rfd::FileDialog::new().set_title("导出账号备份")
+                .set_file_name(filename).add_filter("JSON 账号备份", &["json"]).save_file() else {
+                return Ok(json!({ "saved": false }));
+            };
+            std::fs::write(&path, content).map_err(|error| HostError {
+                code: "SAVE_ERROR".into(), message: format!("无法保存备份：{error}"), phase: None,
+            })?;
+            Ok(json!({ "saved": true }))
+        }
         "open_privacy_settings" => macos::open_privacy_settings(params),
         "reset_privacy_permissions" => macos::reset_privacy_permissions(params),
         "reconcile_toolkit_identity" => macos::reconcile_toolkit_identity(&context.data_dir),

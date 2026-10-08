@@ -73,7 +73,8 @@
   .quota-order-item .btn { padding:2px 9px; }
   .auto-countdown { margin-top:14px; font-size:13px; color:var(--sub); text-align:center; }
   .auto-countdown b { font-size:24px; color:var(--warn); font-variant-numeric:tabular-nums; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; }
+  html { background:var(--bg); overscroll-behavior-y:none; }
+  body { min-height:100vh; margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; transition:background .2s,color .2s; overscroll-behavior-y:none; }
   button,input,select,textarea { font:inherit; }
   button:focus-visible,a:focus-visible,[tabindex]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
   .ui-icon { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
@@ -214,6 +215,13 @@
   .badge.pro,.badge.premium { background:var(--ok-soft); color:var(--ok); }
   .badge.warn { background:var(--warn-soft); color:var(--warn); }
   .badge.invalid { background:var(--err-soft); color:var(--err); }
+  .export-account-list { display:flex; flex-direction:column; gap:7px; max-height:42vh; overflow:auto; margin:12px 0; }
+  .export-account-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--line); border-radius:9px; background:var(--bg2); }
+  .export-account-row input { accent-color:var(--accent); }
+  .export-account-row .export-account-copy { min-width:0; flex:1; }
+  .export-account-row strong,.export-account-row small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .export-account-row small { color:var(--sub); margin-top:2px; }
+  .export-account-row .badge { margin-left:auto; }
 
   .quota { margin:0 0 12px; min-width:0; }
   .quota .qtop { display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--sub); margin-bottom:7px; }
@@ -681,6 +689,19 @@
   </div>
 </div>
 
+<div class="mask" id="accountExportMask" onclick="if(event.target===this)closeModal('accountExportMask')">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountExportTitle">
+    <div class="hd"><h3 id="accountExportTitle">选择要导出的账号</h3><button class="icon-btn" onclick="closeModal('accountExportMask')" aria-label="关闭">✕</button></div>
+    <div class="bd">
+      <p class="hint">只导出选中的有效长期凭证。文件包含敏感登录凭证，请像密码一样保管。</p>
+      <div class="row-btns"><button class="btn small" onclick="setExportSelection(true)">全选</button><button class="btn small" onclick="setExportSelection(false)">清空</button></div>
+      <div id="accountExportList" class="export-account-list" role="group" aria-label="选择账号"></div>
+      <p id="accountExportSummary" class="settings-note" role="status"></p>
+      <div class="settings-actions"><button class="btn" onclick="closeModal('accountExportMask')">取消</button><button class="btn primary" id="accountExportDownload" onclick="downloadSelectedAccounts()">导出选中账号</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="mask" id="detailMask" onclick="if(event.target===this)closeModal('detailMask')">
   <div class="modal">
     <div class="hd"><h3 id="dTitle">账号详情</h3><button class="icon-btn" onclick="closeModal('detailMask')">✕</button></div>
@@ -935,6 +956,7 @@ let TOOLKIT_UPDATE = null, TOOLKIT_UPDATE_POLL = null, TOOLKIT_UPDATE_NOTIFIED =
 let OFFICIAL_UPDATE = null, OFFICIAL_UPDATE_BUSY = false, OFFICIAL_UPDATE_CHECKED_AT = 0;
 let SETTINGS_TAB = 'general', HOME_SCROLL = 0, ACCOUNT_SYNC_LOADED = false, ACCOUNT_SYNC_LOADING = null;
 let ACCOUNT_SYNC_ENABLED = false;
+let ACCOUNT_EXPORT_ACCOUNTS = [];
 let QUOTA_STATE = null, QUOTA_LOADED = false, QUOTA_LOADING = false, QUOTA_SWITCH_BUSY = false;
 // 自定义切号顺序:QUOTA_ORDER 是待保存的配置,QUOTA_ORDER_VIEW 是当前渲染出来的次序
 let QUOTA_ORDER = [], QUOTA_ORDER_VIEW = [], AUTO_COUNTDOWN_TIMER = null;
@@ -1366,6 +1388,27 @@ function sortAccounts(list){
   return arr;
 }
 function render(){
+  function accountRoleBadge(live,savedRole){
+    if(live.loading) return {label:'读取中',className:'mut',title:''};
+    if(live.token_valid===false) return {label:'失效',className:'invalid',title:live._err||''};
+    const roles=Array.isArray(live.user_info?.roles)?live.user_info.roles:[];
+    if(!roles.length){
+      if(live.credential_state==='api_error') return {label:'套餐读取失败',className:'warn',title:live._err||''};
+      const saved=savedRole==='free'?'免费版':savedRole==='pro_trial'?'Pro 试用':savedRole==='pro'?'Pro':savedRole;
+      return saved?{label:'已保存：'+saved,className:'mut',title:'本机旧记录，尚未从 Typeless 服务端确认'}:{label:'套餐未返回',className:'mut',title:''};
+    }
+    const labels=roles.map(role=>{
+      const name=String(role?.name||'');
+      if(name==='free') return '免费版';
+      if(name==='pro_trial') return 'Pro 试用';
+      if(name==='pro') return 'Pro';
+      return name;
+    }).filter(Boolean);
+    const expiry=roles.find(role=>role?.name==='pro_trial'&&role.exp_time)?.exp_time;
+    const end=expiry?new Date(expiry):null;
+    const title=end&&!Number.isNaN(end.getTime())?'Pro 试用到期：'+end.toLocaleString():'';
+    return {label:labels.join(' / ')||'套餐未返回',className:roles.some(role=>role?.name==='pro_trial'||role?.name==='pro')?'pro':roles.some(role=>role?.name==='free')?'free':'',title};
+  }
   const g=document.getElementById('grid');
   if(!ACCOUNTS.length){ g.innerHTML='<div class="empty"><div class="big">👤</div>还没有账号。<br>先在 Typeless 登录你的账号，然后在这里收录。<br><button class="btn primary" style="margin:16px auto 0" onclick="addAccount()">＋ 添加当前账号</button></div>'; return; }
   const q=(document.getElementById('q').value||'').trim().toLowerCase();
@@ -1385,11 +1428,12 @@ function render(){
     const daysCls = credentialNeedsUpdate?'warn':(days==null?'mut':'');
     const ini=(a.nickname||a.email||'?').trim().charAt(0).toUpperCase();
     const cloudOnly=!!a.cloud_only && !a.has_snapshot;
+    const roleBadge=accountRoleBadge(live,a.role||'');
     return `<div class="card ${a.user_id===CUR_ID?'active':''} ${valid?'':'invalid'}" onclick="openDetail('${a.user_id}')">
       <div class="chead">
         <div class="avatar">${esc(ini)}</div>
         <div class="who"><div class="account-title"><div class="nick" title="${esc(a.nickname||a.email||a.user_id)}">${esc(a.nickname||a.email||a.user_id)}</div>${a.user_id===CUR_ID?'<span class="badge current">当前账号</span>':''}</div>${a.nickname&&a.nickname!==a.email?`<div class="email" title="${esc(a.email||a.user_id)}">${esc(a.email||a.user_id)}</div>`:''}
-          <div class="account-badges"><span class="badge ${live.loading?'mut':(serviceError?'warn':(valid?(a.role||''):'invalid'))}" title="${live._err?esc(live._err):''}">${live.loading?'读取中':(serviceError?'数据暂不可用':(valid?(a.role==='free'?'免费版':a.role||'未知'):'失效'))}</span>
+          <div class="account-badges"><span class="badge ${roleBadge.className}" title="${esc(roleBadge.title)}">${esc(roleBadge.label)}</span>
           </div>
         </div>
       </div>
@@ -2294,12 +2338,64 @@ async function exportAccountBundle(){
     if(r.status!=='OK') throw new Error(r.msg||'无法读取账号状态');
     const d=r.data;
     if(!d.exported){ status.textContent='当前没有可导出的有效长期账号凭证。'; return; }
-    const skipped=d.skipped.slice(0,5).map(item=>`第 ${item.index} 条 ${item.user_id||''}：${item.reason}`).join('\n');
-    const message=`将导出 ${d.exported}/${d.total} 个账号。${d.skipped.length?`其中 ${d.skipped.length} 个不会导出：\n${skipped}${d.skipped.length>5?'\n…':''}`:''}\n\n导出文件包含明文长期登录凭证，请妥善保管。继续下载？`;
-    if(!await appConfirm(message)) return;
-    window.location.href='/api/account-bundle/export';
-    status.textContent=`已开始下载 ${d.exported} 个账号的备份文件。${d.skipped.length?`跳过 ${d.skipped.length} 个无效账号。`:''}`;
+    ACCOUNT_EXPORT_ACCOUNTS=d.accounts.map(account=>({...account,selected:account.exportable}));
+    renderExportAccounts();
+    openModal('accountExportMask');
   }catch(e){ status.textContent='导出失败：'+e.message; }
+}
+function renderExportAccounts(){
+  const list=document.getElementById('accountExportList');
+  list.textContent='';
+  ACCOUNT_EXPORT_ACCOUNTS.forEach(account=>{
+    const row=document.createElement('label'); row.className='export-account-row';
+    const check=document.createElement('input'); check.type='checkbox'; check.checked=account.selected; check.disabled=!account.exportable;
+    check.onchange=()=>{ account.selected=check.checked; updateExportSummary(); };
+    const copy=document.createElement('span'); copy.className='export-account-copy';
+    const name=document.createElement('strong'); name.textContent=account.nickname||account.email||account.user_id;
+    const email=document.createElement('small'); email.textContent=account.email||account.user_id;
+    copy.append(name,email); row.append(check,copy);
+    if(!account.exportable){ const reason=document.createElement('span'); reason.className='badge warn'; reason.textContent=account.reason||'凭证不可导出'; row.append(reason); }
+    list.append(row);
+  });
+  updateExportSummary();
+}
+function setExportSelection(selected){
+  ACCOUNT_EXPORT_ACCOUNTS.forEach(account=>{ if(account.exportable) account.selected=selected; });
+  renderExportAccounts();
+}
+function updateExportSummary(){
+  const count=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).length;
+  const unavailable=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>!account.exportable).length;
+  document.getElementById('accountExportSummary').textContent=`已选择 ${count} 个账号${unavailable?`；${unavailable} 个凭证不可导出`:''}`;
+  document.getElementById('accountExportDownload').disabled=!count;
+}
+async function downloadSelectedAccounts(){
+  const ids=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).map(account=>account.user_id);
+  if(!ids.length) return;
+  const query=new URLSearchParams(ids.map(id=>['user_id',id]));
+  const button=document.getElementById('accountExportDownload');
+  const status=document.getElementById('accountBundleResult');
+  button.disabled=true;
+  try{
+    const response=await fetch('/api/account-bundle/export?'+query);
+    if(!response.ok){ const error=await response.json(); throw new Error(error.msg||'无法导出账号'); }
+    const content=await response.text();
+    const filename=decodeURIComponent(response.headers.get('Content-Disposition').match(/filename="([^"]+)"/)[1]);
+    if(ENV_INFO?.desktop_host==='tauri'){
+      const result=await desktopHost('save_account_bundle',{filename,content});
+      if(!result.saved) return;
+      status.textContent=`已保存 ${ids.length} 个账号的备份文件。`;
+    }else{
+      const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));
+      const link=document.createElement('a'); link.href=url; link.download=filename;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      status.textContent=`已开始下载 ${ids.length} 个账号的备份文件。`;
+    }
+    closeModal('accountExportMask');
+  }catch(e){
+    document.getElementById('accountExportSummary').textContent='导出失败：'+e.message;
+  }finally{ button.disabled=false; }
 }
 async function importAccountBundle(input,legacy){
   const status=document.getElementById('accountBundleResult');
