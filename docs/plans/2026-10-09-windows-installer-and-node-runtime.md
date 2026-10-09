@@ -1,6 +1,6 @@
 # Windows 安装版、更新交接与 Node 环境方案
 
-日期：2026-10-09。状态：本地源码实现已完成，宿主编译通过；Setup 编译与真机交互验收未完成。未推送或发布，未替换真机安装。
+日期：2026-10-09。状态：源码已推送功能分支，GitHub Windows/Mac 构建及既有包检查成功，两个 Setup 已取回。未合并或发布，未替换真机安装；G15 交互验收未完成。
 
 ## 原始需求与已确认决定
 
@@ -126,3 +126,9 @@
 - 第一轮分支提交 `a919819`，手动构建 `37899072042`。Windows 完整检查为 222 通过/0 失败/6 平台或环境跳过，既有更新替换、回退、数据保留和临时目录清理烟测通过。
 - 第一轮 Windows 打包失败：build-tray.bat 的 PowerShell 引号内 `^|` 使 caret 被当作 Get-Content 参数，WebView2 版本为空。改为 ConvertFrom-Json 显式 InputObject，无 cmd 管道转义；提交后重跑，不跳过检查。
 - 第二轮提交 `575a9e0`，构建 `37899294111`：Windows 宿主编译及两个 ZIP 生成成功；Inno 报未知函数 SaveStringToUTF8File。按官方 Pascal API 改为 SaveStringToFile + UTF8Encode，继续保留 UTF-8 结果记录，再次完整构建。
+- 第三轮提交 `4d339f4`，构建 `37899750090`：Windows job 全部成功，Inno 6.7.1 编译两个 Setup 成功，两个 ZIP 解压后的隔离 manager/API 检查成功。前两轮已被替代的运行已取消，避免重复消耗资源。
+- Windows artifact `windows-release` 已下载并核对原有四份 SHA-256 文件（读取时去除 Windows CRLF，不修改原校验文件），全部一致。Lite Setup 2,540,941 字节（2.42 MiB），内置版 Setup 24,820,243 字节（23.67 MiB）；两个 ZIP 均保留。Lite 不含 runtime，内置版携带 Node 24.15.0；公开模板账号为空、profiles 为空。
+- Windows 完整安装包已具备；真实安装向导、旧数据迁移、托盘退出、升级与取消仍待 G15 人工验收。本次没有安装或替换 G15，也没有发布 Release。
+- 最终构建 `https://github.com/Jia131313/typeless-toolkit/actions/runs/37899750090` 整体成功：Windows 4 分 26 秒、Mac 7 分 31 秒；Mac 四种 DMG 的包检查通过，release job 明确 skipped。Mac 产物留在 Actions，未替换本机 App。
+- 产物对应代码提交 `4d339f4`，仍使用未递增的 1.9.3 版本号；这是功能分支验收包，不是当前公开 v1.9.3 Release 的原附件，不构成更新通知。Windows artifact ID 为 `11601896384`，Mac artifact ID 为 `11602236623`。
+- 下一步由用户在 G15 下载 windows-release artifact，选择 Lite Setup；从旧 ZIP 托盘完整退出后首次安装，再预览/确认迁移并核对账号、词库、Node 和托盘。不要以同版本包替换成功宣称自动更新已实测；跨版本自动更新交接与取消仍需独立验收。
