@@ -79,6 +79,7 @@ class TrayApp
     {
         exeDir = Path.GetDirectoryName(Application.ExecutablePath);
         ReadBuildMetadata();
+        ToolkitLocale.Initialize(dataDir, Path.Combine(exeDir, "server", "locales"));
         if (args.Length == 2 && (args[0] == "--probe-node" || args[0] == "--probe-node-text" || args[0] == "--probe-node-text-en"))
         {
             FindNode();
@@ -117,7 +118,7 @@ class TrayApp
         if (!EnsureBackend())
         {
             MessageBox.Show(
-                "无法启动本地服务。\n\n" + (backendError ?? "请确认 server\\manager.js 存在；Portable 版还应包含 runtime\\node.exe，Lite 版则需要安装 Node.js 22.12+。"),
+                ToolkitLocale.Text("native.051b46f8bd4d","无法启动本地服务。\n\n") + (backendError ?? ToolkitLocale.Text("native.b818e98bcb12","请确认 server\\manager.js 存在；Portable 版还应包含 runtime\\node.exe，Lite 版则需要安装 Node.js 22.12+。")),
                 AppTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
@@ -144,15 +145,15 @@ class TrayApp
     {
         if (selectedRuntime == null) return english
             ? "No local Node.js runtime was found. Lite cannot start until Node.js " + nodeMinimum + "+ is installed. Alternatively, choose the installer with bundled Node."
-            : "未找到本机 Node.js。Lite 安装后尚不能启动，请先安装 Node.js " + nodeMinimum + "+，或选择内置 Node 安装版。";
+            : ToolkitLocale.Text("native.c6f67b626e1c","未找到本机 Node.js。Lite 安装后尚不能启动，请先安装 Node.js ") + nodeMinimum + ToolkitLocale.Text("native.f5b61eba2c91","+，或选择内置 Node 安装版。");
         if (english) return "Node.js version: " + selectedRuntime.version + "\r\nPath: " + selectedRuntime.path +
             "\r\nBasic requirement (" + nodeMinimum + "+): " + (selectedRuntime.runnable ? "met" : "not met; manually upgrade Node before starting Lite") +
             "\r\nSQLite capability: " + (selectedRuntime.sqlite ? "available" : "unavailable; automatic account switching is unavailable") +
             "\r\n\r\nLite does not modify system Node or PATH.";
-        return "Node.js 版本：" + selectedRuntime.version + "\r\n路径：" + selectedRuntime.path +
-            "\r\n基本运行要求（" + nodeMinimum + "+）：" + (selectedRuntime.runnable ? "满足" : "不满足，安装后仍不能启动，需要手动升级 Node") +
-            "\r\nSQLite 能力：" + (selectedRuntime.sqlite ? "可用" : "不可用，自动切号功能不可用") +
-            "\r\n\r\nLite 不会修改系统 Node 或 PATH。";
+        return ToolkitLocale.Text("native.effd99fcfaaf","Node.js 版本：") + selectedRuntime.version + ToolkitLocale.Text("native.ad1ba550dbb7","\r\n路径：") + selectedRuntime.path +
+            ToolkitLocale.Text("native.c397acc880d7","\r\n基本运行要求（") + nodeMinimum + "+）：" + (selectedRuntime.runnable ? ToolkitLocale.Text("native.3a31adc3b5a7","满足") : ToolkitLocale.Text("native.1422b495d051","不满足，安装后仍不能启动，需要手动升级 Node")) +
+            ToolkitLocale.Text("native.60fd54c6a91a","\r\nSQLite 能力：") + (selectedRuntime.sqlite ? ToolkitLocale.Text("native.e91365cf9ed9","可用") : ToolkitLocale.Text("native.9a5ba23e04ae","不可用，自动切号功能不可用")) +
+            ToolkitLocale.Text("native.252751128ad5","\r\n\r\nLite 不会修改系统 Node 或 PATH。");
     }
 
     static void ReadBuildMetadata()
@@ -256,28 +257,28 @@ class TrayApp
             int occupiedPort = managerPort;
             if (!UseFallbackPort())
             {
-                backendError = "端口 " + occupiedPort + " 已被其他程序占用，且找不到可用的回退端口。请修改 data\\config.json 中的 manager_port。";
+                backendError = ToolkitLocale.Text("native.5e10106cc290","端口 ") + occupiedPort + ToolkitLocale.Text("native.da21862af014"," 已被其他程序占用，且找不到可用的回退端口。请修改 data\\config.json 中的 manager_port。");
                 return false;
             }
-            AppendLauncherLog("端口 " + occupiedPort + " 已被其他程序占用，本次改用 " + managerPort + "。 ");
+            AppendLauncherLog(ToolkitLocale.Text("native.5e10106cc290","端口 ") + occupiedPort + ToolkitLocale.Text("native.8d15355ce999"," 已被其他程序占用，本次改用 ") + managerPort + "。 ");
         }
         else if (!CanBindPort(managerPort))
         {
             int unavailablePort = managerPort;
             if (!UseFallbackPort())
             {
-                backendError = "端口 " + unavailablePort + " 无法绑定，且找不到可用的回退端口。该端口可能被 Windows 保留，请修改 data\\config.json 中的 manager_port。";
+                backendError = ToolkitLocale.Text("native.5e10106cc290","端口 ") + unavailablePort + ToolkitLocale.Text("native.0b049b6d21ae"," 无法绑定，且找不到可用的回退端口。该端口可能被 Windows 保留，请修改 data\\config.json 中的 manager_port。");
                 return false;
             }
-            AppendLauncherLog("端口 " + unavailablePort + " 无法绑定（可能被 Windows 保留），本次改用 " + managerPort + "。 ");
+            AppendLauncherLog(ToolkitLocale.Text("native.5e10106cc290","端口 ") + unavailablePort + ToolkitLocale.Text("native.6b84a667369a"," 无法绑定（可能被 Windows 保留），本次改用 ") + managerPort + "。 ");
         }
 
         string node = FindNode();
         if (node == null)
         {
             backendError = selectedRuntime != null
-                ? "检测到 Node.js " + selectedRuntime.version + "（" + selectedRuntime.path + "），但基本运行要求为 " + nodeMinimum + "+。请手动升级 Node，或使用内置 Node 安装版。"
-                : "未找到可运行的 Node.js。内置版应包含 runtime\\node.exe；Lite 版需自行安装 Node.js " + nodeMinimum + "+。";
+                ? ToolkitLocale.Text("native.67aa8a1194f1","检测到 Node.js ") + selectedRuntime.version + "（" + selectedRuntime.path + ToolkitLocale.Text("native.efbb705d80a6","），但基本运行要求为 ") + nodeMinimum + ToolkitLocale.Text("native.9af45f3de332","+。请手动升级 Node，或使用内置 Node 安装版。")
+                : ToolkitLocale.Text("native.f07eff548a0b","未找到可运行的 Node.js。内置版应包含 runtime\\node.exe；Lite 版需自行安装 Node.js ") + nodeMinimum + "+。";
             return false;
         }
 
@@ -285,7 +286,7 @@ class TrayApp
         string manager = Path.Combine(serverDir, "manager.js");
         if (!File.Exists(manager))
         {
-            backendError = "缺少后端文件：" + manager + "。请完整解压发行包，不要单独复制或运行源码根目录中的 EXE。";
+            backendError = ToolkitLocale.Text("native.b10aa971f093","缺少后端文件：") + manager + ToolkitLocale.Text("native.364f6bb0fa9a","。请完整解压发行包，不要单独复制或运行源码根目录中的 EXE。");
             return false;
         }
 
@@ -307,7 +308,7 @@ class TrayApp
         try { nodeProcess.Start(); }
         catch (Exception error)
         {
-            backendError = "无法启动 Node.js 后端：" + error.Message;
+            backendError = ToolkitLocale.Text("native.9351b4184c92","无法启动 Node.js 后端：") + error.Message;
             return false;
         }
 
@@ -322,8 +323,8 @@ class TrayApp
                 string details = "";
                 try { details = nodeProcess.StandardError.ReadToEnd().Trim(); } catch { }
                 backendError = details.Length > 0
-                    ? "Node.js 后端启动失败：" + details
-                    : "Node.js 后端已退出，退出代码 " + nodeProcess.ExitCode + "。";
+                    ? ToolkitLocale.Text("native.24a495ff9dc1","Node.js 后端启动失败：") + details
+                    : ToolkitLocale.Text("native.edb718716018","Node.js 后端已退出，退出代码 ") + nodeProcess.ExitCode + "。";
                 AppendLauncherLog(backendError);
                 return false;
             }
@@ -332,7 +333,7 @@ class TrayApp
             if (remainingMs <= 0) break;
             if (ProbeToolkit(null, Math.Min(ToolkitProbeTimeoutMs, remainingMs))) return true;
         }
-        backendError = "本地服务在端口 " + managerPort + " 上启动超时（" + BackendStartTimeoutMs / 1000 + " 秒内未就绪）。";
+        backendError = ToolkitLocale.Text("native.b3e9dd3ce3f9","本地服务在端口 ") + managerPort + ToolkitLocale.Text("native.a090f0afab8f"," 上启动超时（") + BackendStartTimeoutMs / 1000 + ToolkitLocale.Text("native.7db7b37d9033"," 秒内未就绪）。");
         AppendLauncherLog(backendError);
         return false;
     }
@@ -395,7 +396,7 @@ class TrayApp
                 key.SetValue("IconBackgroundColor", "0", Microsoft.Win32.RegistryValueKind.String);
             }
         }
-        catch (Exception error) { AppendLauncherLog("注册通知标识失败：" + error.Message); }
+        catch (Exception error) { AppendLauncherLog(ToolkitLocale.Text("native.6f73ed1578a4","注册通知标识失败：") + error.Message); }
     }
 
     // ---------- 开始菜单快捷方式 ----------
@@ -500,7 +501,7 @@ class TrayApp
             ((IPersistFile)link).Save(linkPath, true);
             Marshal.FinalReleaseComObject(link);
         }
-        catch (Exception error) { AppendLauncherLog("创建开始菜单快捷方式失败：" + error.Message); }
+        catch (Exception error) { AppendLauncherLog(ToolkitLocale.Text("native.bcc71e14f5eb","创建开始菜单快捷方式失败：") + error.Message); }
     }
 
     // ---------- 自绘提示窗口 ----------
@@ -672,7 +673,7 @@ class TrayApp
             activeToast = new ToastForm(title, body, warning);
             activeToast.ShowToast(8);
         }
-        catch (Exception error) { AppendLauncherLog("提示窗口失败：" + error.Message); }
+        catch (Exception error) { AppendLauncherLog(ToolkitLocale.Text("native.fc9c3d52f537","提示窗口失败：") + error.Message); }
     }
 
     static void AppendLauncherLog(string message)
@@ -885,13 +886,22 @@ class TrayApp
         trayIcon.Visible = true;
 
         ContextMenu menu = new ContextMenu();
-        menu.MenuItems.Add("打开管理器", delegate { OpenManager(); });
-        menu.MenuItems.Add("刷新页面", delegate { if (managerForm != null) managerForm.ReloadPage(); });
+        menu.MenuItems.Add(ToolkitLocale.Text("native.fe4ba94101f9","打开管理器"), delegate { OpenManager(); });
+        menu.MenuItems.Add(ToolkitLocale.Text("native.5a5a7a890c0c","刷新页面"), delegate { if (managerForm != null) managerForm.ReloadPage(); });
         menu.MenuItems.Add("-");
-        menu.MenuItems.Add("退出", delegate { ExitApplication(); });
+        menu.MenuItems.Add(ToolkitLocale.Text("native.feecb1e6adec","退出"), delegate { ExitApplication(); });
         trayIcon.ContextMenu = menu;
         trayIcon.DoubleClick += delegate { OpenManager(); };
         trayIcon.BalloonTipClicked += delegate { OpenManager(); };
+    }
+
+    public static void RefreshTrayLanguage()
+    {
+        ToolkitLocale.Refresh();
+        if (trayIcon == null || trayIcon.ContextMenu == null) return;
+        trayIcon.ContextMenu.MenuItems[0].Text = ToolkitLocale.Text("native.fe4ba94101f9", "打开管理器");
+        trayIcon.ContextMenu.MenuItems[1].Text = ToolkitLocale.Text("native.5a5a7a890c0c", "刷新页面");
+        trayIcon.ContextMenu.MenuItems[3].Text = ToolkitLocale.Text("native.feecb1e6adec", "退出");
     }
 
     static void StartQuotaNotifications()
@@ -900,6 +910,7 @@ class TrayApp
         quotaTimer.Interval = 10000;
         quotaTimer.Tick += async delegate
         {
+            RefreshTrayLanguage();
             if (quotaPollBusy || exiting) return;
             quotaPollBusy = true;
             try
@@ -924,17 +935,17 @@ class TrayApp
                 lastQuotaAlert = alert;
                 // 用自绘提示替代系统气泡:便携应用的系统通知会把“应用名”显示成乱码
                 if (autoSwitch)
-                    ShowToast("Typeless 即将自动切换账号",
-                        "当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。", true);
+                    ShowToast(ToolkitLocale.Text("native.8f4389afec51","Typeless 即将自动切换账号"),
+                        ToolkitLocale.Text("native.26c1a480f603","当前账号额度已达阈值，15 秒后自动切换。点击打开管理器可取消。"), true);
                 else if (autoFailed)
-                    ShowToast("Typeless 自动切换失败",
-                        "没有切换到备用账号，额度仍然不足。请打开管理器查看原因并手动切换。", true);
+                    ShowToast(ToolkitLocale.Text("native.c85e1a06d12c","Typeless 自动切换失败"),
+                        ToolkitLocale.Text("native.6b3fb7e3e09a","没有切换到备用账号，额度仍然不足。请打开管理器查看原因并手动切换。"), true);
                 else
-                    ShowToast("Typeless 额度提醒",
-                        "当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。", false);
+                    ShowToast(ToolkitLocale.Text("native.2e88b25f64bb","Typeless 额度提醒"),
+                        ToolkitLocale.Text("native.c3e94e774ed3","当前账号额度不足。点击打开管理器，听写完成后可确认切换备用账号。"), false);
             }
             catch (WebException) { /* 后端重启或暂不可用时，下次轮询重试。 */ }
-            catch (Exception error) { AppendLauncherLog("额度提醒失败：" + error.Message); }
+            catch (Exception error) { AppendLauncherLog(ToolkitLocale.Text("native.ca88d9b962b3","额度提醒失败：") + error.Message); }
             finally { quotaPollBusy = false; }
         };
         quotaTimer.Start();
@@ -1024,7 +1035,7 @@ class ManagerForm : Form
         loadingLabel.Dock = DockStyle.Fill;
         loadingLabel.TextAlign = ContentAlignment.MiddleCenter;
         loadingLabel.Font = new Font("Microsoft YaHei UI", 11F);
-        loadingLabel.Text = "正在打开 Typeless Toolkit…";
+        loadingLabel.Text = ToolkitLocale.Text("native.1e107518f4b6","正在打开 Typeless Toolkit…");
         Controls.Add(loadingLabel);
 
         Shown += async delegate { await InitializeBrowser(); };
@@ -1085,6 +1096,7 @@ class ManagerForm : Form
                     // 页面在“跟随系统”时也会解析成 light/dark 再发过来,这里直接采用即可
                     if (message == "theme:dark") { TrayApp.toastDarkTheme = true; ApplyTitleBarTheme(true); }
                     else if (message == "theme:light") { TrayApp.toastDarkTheme = false; ApplyTitleBarTheme(false); }
+                    else if (message == "language:changed") TrayApp.RefreshTrayLanguage();
                     else if (message == "toolkit-update:quit") TrayApp.ExitForToolkitUpdate();
                 }
                 catch { }
@@ -1093,7 +1105,7 @@ class ManagerForm : Form
         }
         catch (Exception error)
         {
-            loadingLabel.Text = "无法初始化内嵌浏览器。\n请安装 Microsoft Edge WebView2 Runtime 后重试。\n\n" + error.Message;
+            loadingLabel.Text = ToolkitLocale.Text("native.4df3ae7eb1da","无法初始化内嵌浏览器。\n请安装 Microsoft Edge WebView2 Runtime 后重试。\n\n") + error.Message;
         }
     }
 

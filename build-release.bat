@@ -31,6 +31,9 @@ copy /Y package.json "%RELEASE%\server\package.json" >nul || exit /b 1
 copy /Y package-lock.json "%RELEASE%\server\package-lock.json" >nul || exit /b 1
 copy /Y icon\icon-rounded.png "%RELEASE%\server\icon.png" >nul || exit /b 1
 xcopy /E /I /Y lib "%RELEASE%\server\lib" >nul || exit /b 1
+xcopy /E /I /Y locales "%RELEASE%\server\locales" >nul || exit /b 1
+if not exist "%RELEASE%\server\assets" mkdir "%RELEASE%\server\assets"
+copy /Y assets\i18n.js "%RELEASE%\server\assets\i18n.js" >nul || exit /b 1
 if exist "%RELEASE%\server\node_modules" rmdir /S /Q "%RELEASE%\server\node_modules"
 call npm.cmd --prefix "%RELEASE%\server" ci --omit=dev --ignore-scripts --no-audit --no-fund
 if errorlevel 1 exit /b 1

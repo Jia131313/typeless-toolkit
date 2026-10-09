@@ -1,10 +1,11 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
 
 // Exercise the page's real functions without starting the manager or touching user data.
 function extractFunction(name) {
@@ -62,7 +63,7 @@ function element() {
 
 function contextFor(functions, overrides = {}) {
   const elements = new Map();
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     TOOLKIT_UPDATE: null,
     OFFICIAL_UPDATE: null,
     OFFICIAL_UPDATE_BUSY: false,
@@ -78,7 +79,7 @@ function contextFor(functions, overrides = {}) {
       },
     },
     ...overrides,
-  });
+  }));
   vm.runInContext(functions.map(extractFunction).join('\n'), context);
   return { context, node: id => context.document.getElementById(id) };
 }

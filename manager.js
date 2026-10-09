@@ -9,6 +9,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const I18N = require('./lib/i18n');
 const { spawn } = require('child_process');
 const { parseBackup, mergeBundle, createBundle, createBackup } = require('./lib/account-bundle');
 const { createQuotaFetcher, createQuotaMonitor, normalizeQuotaConfig } = require('./lib/quota-monitor');
@@ -49,6 +50,7 @@ const {
 } = C;
 
 const PORT = config.manager_port;
+const uiPreferences = I18N.createPreferences(ROOT);
 const ACCOUNT_STATUS_CONCURRENCY = 3;
 const TYPELESS_APP = TYPELESS_EXE ? String(TYPELESS_EXE).split('/Contents/')[0] : '';
 const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
@@ -819,7 +821,7 @@ const toolkitUpdate = createToolkitUpdateController({
 // ---------- HTTP ----------
 function send(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify(obj));
+  res.end(JSON.stringify(I18N.localizeResponse(obj, uiPreferences.read())));
 }
 // 文本文件下载(词库导出用)
 function sendDownload(res, filename, text) {
@@ -866,11 +868,25 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404); return res.end('not found');
     }
 
+    if (m === 'GET' && p === '/assets/i18n.js') {
+      res.writeHead(200, {'Content-Type':'text/javascript; charset=utf-8', 'Cache-Control':'no-cache'});
+      return res.end(fs.readFileSync(path.join(C.CODE_DIR, 'assets', 'i18n.js'), 'utf8'));
+    }
+    if (m === 'GET' && p === '/api/preferences/language') {
+      return send(res, 200, {status:'OK', data:{language:uiPreferences.read(), supported:I18N.SUPPORTED}});
+    }
+    if (m === 'POST' && p === '/api/preferences/language') {
+      const body = await readBody(req);
+      if (!I18N.SUPPORTED.includes(body.language)) return send(res, 400, {status:'FAIL', msg:'Unsupported interface language.'});
+      const language = uiPreferences.write(body.language);
+      return send(res, 200, {status:'OK', data:{language}});
+    }
+
     // 前端首页
     if (m === 'GET' && (p === '/' || p === '/index.html' || p === '/manager.html')) {
       const html = fs.readFileSync(path.join(C.CODE_DIR, 'manager.html'), 'utf8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(html);
+      return res.end(I18N.renderPage(html, uiPreferences.read()));
     }
     if (m === 'GET' && p === '/api/quota-monitor/status') {
       // auto_switch_available 供界面判断能否开启自动切号(取决于运行时能否读取听写状态)

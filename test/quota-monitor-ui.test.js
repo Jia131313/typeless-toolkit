@@ -1,16 +1,17 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
 // 此连续代码段只包含额度 UI 函数，运行真实实现而不是复制逻辑。
 const code = html.slice(html.indexOf('function renderQuotaMonitor('), html.indexOf('function openModal('));
 function harness() {
   const elements = new Map(), posts = [], messages = [];
   const state = { state: 'low', config: { enabled: true, remaining: 200 }, current: { user_id: 'a' },
     candidate: { user_id: 'b', name: '<img src=x onerror=alert(1)>', remaining: 1900 }, alert_id: '1000-1', message: '剩余 100 字' };
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     QUOTA_STATE: null, QUOTA_LOADED: false, QUOTA_LOADING: false, QUOTA_SWITCH_BUSY: false,
     // 自动切号引入的模块级变量(真实页面里声明在提取的代码段之外)
     QUOTA_ORDER: [], QUOTA_ORDER_VIEW: [], AUTO_COUNTDOWN_TIMER: null,
@@ -25,7 +26,7 @@ function harness() {
     nfmt: String, confirm: () => false, toast: (...args) => messages.push(args), setTimeout: () => {},
     apiTimed: async () => ({ status: 'OK', data: state }),
     api: async (p, options) => { posts.push({ p, options }); return { status: 'OK' }; },
-  });
+  }));
   vm.runInContext(code, context);
   context.renderQuotaMonitor(state);
   return { context, elements, posts, messages, state };

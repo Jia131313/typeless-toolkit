@@ -93,3 +93,10 @@ node manager.js
 - [提交 Issue](https://github.com/Jia131313/typeless-toolkit/issues)：请附操作系统、Typeless 与工具集版本、复现步骤及错误信息；不要附账号凭证、词库私有数据或 WebDAV 密码。
 
 项目采用 [MIT 许可证](LICENSE)。感谢 [LINUX DO 论坛社区](https://linux.do/) 的关注、反馈与支持；设备重置思路参考了 [typeless-reset-device](https://github.com/estarpro1022/typeless-reset-device)。
+
+## Interface languages / Arayüz dilleri
+
+English and Turkish can be selected in Settings → General → Interface language.
+Türkçe için Settings → General → Interface language bölümünden Türkçe seçin.
+Translations are bundled and the language preference persists across restarts.
+See [LOCALIZATION.md](LOCALIZATION.md) for usage, maintenance and validation.

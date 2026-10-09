@@ -1,3 +1,4 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -94,7 +95,7 @@ test('periodic current-account detection never restarts Typeless implicitly', ()
 });
 
 test('manager inline browser script remains valid JavaScript', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+  const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
   assert.ok(scripts.length > 0);
   for (const [, source] of scripts) new vm.Script(source);
