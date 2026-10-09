@@ -1,10 +1,11 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
 
 function extractFunction(name) {
   const signature = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`, 'g');
@@ -122,7 +123,7 @@ test('keeps current-account and maintenance status together above the account gr
 });
 
 test('keeps snapshot state and account actions together in the card footer', () => {
-  const source = extractFunction('render');
+  const source = extractFunction('render').replace(/\\"/g, '"');
   const headIndex = source.indexOf('class="chead"');
   const snapshotIndex = source.indexOf('class="snap ');
   const quotaIndex = source.indexOf('class="quota"');
@@ -172,11 +173,11 @@ test('renders account actions from current-account, snapshot, and cloud-only sta
       live: { token_valid: true, dict_count: 5, personal: {}, usage: {} },
     },
   ];
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     document: { getElementById(id) { return elements[id]; } },
     ACCOUNTS: accounts,
     CUR_ID: 'current-id',
-  });
+  }));
   vm.runInContext([
     extractFunction('esc'),
     extractFunction('pct'),
@@ -231,11 +232,11 @@ test('escapes quoted account names and emails in card text and title attributes'
   };
   const nickname = `备注" onmouseover="alert('nickname') & <tag>`;
   const email = `" onfocus="alert('email') & <mail>@example.com`;
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     document: { getElementById(id) { return elements[id]; } },
     ACCOUNTS: [{ user_id: 'quoted-id', nickname, email, has_snapshot: true, live: {} }],
     CUR_ID: null,
-  });
+  }));
   vm.runInContext([
     extractFunction('esc'),
     extractFunction('pct'),
@@ -285,7 +286,7 @@ test('settings navigation switches between the home and settings pages', () => {
   let syncLoads = 0;
   let syncRefreshes = 0;
   let updateRefreshes = 0;
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     document,
     window: {
       scrollY: 184,
@@ -297,7 +298,7 @@ test('settings navigation switches between the home and settings pages', () => {
     loadAccountSyncConfig() { syncLoads += 1; },
     refreshAccountSyncStatus() { syncRefreshes += 1; },
     refreshOfficialUpdate() { updateRefreshes += 1; },
-  });
+  }));
   vm.runInContext(`${extractFunction('selectSettingsTab')}\n${extractFunction('openSettings')}\n${extractFunction('closeSettings')}`, context);
 
   for (const selectedTab of ['general', 'sync', 'maintenance', 'updates']) {
@@ -354,7 +355,7 @@ test('keeps WebDAV fields in settings and maps checkbox scope to the existing AP
     accountSyncDictionary: makeElement(),
   };
   const document = { getElementById(id) { return elements[id]; } };
-  const context = vm.createContext({ document });
+  const context = vm.createContext(localizedContext({ document }));
   vm.runInContext(extractFunction('accountSyncPayload'), context);
 
   elements.accountSyncAccounts.checked = true;
@@ -408,7 +409,7 @@ test('loads WebDAV config once, keeps saved passwords blank, and preserves unsav
   const panels = tabs.map(({ dataset }) => makeElement({ id: `settings-${dataset.settingsTab}` }));
   let refreshes = 0;
   let loads = 0;
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     document: {
       getElementById(id) { return elements[id] || null; },
       querySelectorAll(selector) {
@@ -440,7 +441,7 @@ test('loads WebDAV config once, keeps saved passwords blank, and preserves unsav
     },
     updateAccountSyncProvider() {},
     refreshAccountSyncStatus() { refreshes += 1; },
-  });
+  }));
   vm.runInContext(`${extractFunction('loadAccountSyncConfig')}\n${extractFunction('selectSettingsTab')}`, context);
 
   await context.loadAccountSyncConfig();
@@ -477,7 +478,7 @@ test('keeps WebDAV passwords blank when saving and exposes retry after config lo
     accountSyncConfigured: makeElement({ textContent: '' }),
   };
   let request;
-  const saveContext = vm.createContext({
+  const saveContext = vm.createContext(localizedContext({
     document: { getElementById(id) { return saveElements[id]; } },
     ACCOUNT_SYNC_ENABLED: false,
     api: async (url, options) => {
@@ -486,7 +487,7 @@ test('keeps WebDAV passwords blank when saving and exposes retry after config lo
     },
     refreshAccountSyncStatus() {},
     toast() {},
-  });
+  }));
   vm.runInContext(`${extractFunction('accountSyncPayload')}\n${extractFunction('saveAccountSync')}`, saveContext);
 
   assert.equal(await saveContext.saveAccountSync(), true);
@@ -504,12 +505,12 @@ test('keeps WebDAV passwords blank when saving and exposes retry after config lo
     accountSyncForm: makeElement({ disabled: false }),
     accountSyncReloadBtn: makeElement({ hidden: true }),
   };
-  const failureContext = vm.createContext({
+  const failureContext = vm.createContext(localizedContext({
     document: { getElementById(id) { return failureElements[id]; } },
     ACCOUNT_SYNC_LOADING: null,
     ACCOUNT_SYNC_LOADED: false,
     api: async () => ({ status: 'FAIL', msg: '读取配置失败' }),
-  });
+  }));
   vm.runInContext(extractFunction('loadAccountSyncConfig'), failureContext);
   await failureContext.loadAccountSyncConfig();
   assert.equal(failureElements.accountSyncForm.disabled, true);
@@ -525,11 +526,11 @@ test('theme preference stores explicit themes and resolves system mode before ap
     setItem(key, value) { stored.set(key, value); },
     removeItem(key) { stored.delete(key); },
   };
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     localStorage,
     matchMedia() { return { matches: true }; },
     applyTheme(theme) { calls.push(theme); },
-  });
+  }));
   vm.runInContext(extractFunction('setThemePreference'), context);
 
   context.setThemePreference('light');

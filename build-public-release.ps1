@@ -43,6 +43,7 @@ function Remove-BuildPath([string]$path, [switch]$Recurse) {
 
 function Copy-PublicFiles([string]$target) {
   New-Item -ItemType Directory -Force -Path (Join-Path $target 'server\lib') | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $target 'server\assets') | Out-Null
   New-Item -ItemType Directory -Force -Path (Join-Path $target 'data\profiles') | Out-Null
 
   $desktopFiles = @(
@@ -67,6 +68,8 @@ function Copy-PublicFiles([string]$target) {
   }
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'icon\icon-rounded.png') -Destination (Join-Path $target 'server\icon.png') -Force
   Copy-Item -Path (Join-Path $sourceRoot 'lib\*') -Destination (Join-Path $target 'server\lib') -Recurse -Force
+  Copy-Item -LiteralPath (Join-Path $sourceRoot 'locales') -Destination (Join-Path $target 'server\locales') -Recurse -Force
+  Copy-Item -LiteralPath (Join-Path $sourceRoot 'assets\i18n.js') -Destination (Join-Path $target 'server\assets\i18n.js') -Force
 
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'config.example.json') -Destination (Join-Path $target 'data\config.json') -Force
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'accounts.example.json') -Destination (Join-Path $target 'data\accounts.example.json') -Force

@@ -1,10 +1,11 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
 
 // Execute the real page functions with isolated UI/API doubles, never a live manager.
 function extractFunction(name) {
@@ -54,7 +55,7 @@ function harness({ confirmed = true, disabled = false, request = async () => ({ 
   const refreshes = [];
   const unexpectedActions = [];
   const timers = [];
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     document: {
       getElementById(id) {
         assert.equal(id, 'resetDeviceBtn', 'manual reset must use its own button');
@@ -79,7 +80,7 @@ function harness({ confirmed = true, disabled = false, request = async () => ({ 
     async detectCurrent() { refreshes.push('current'); },
     setTimeout(...args) { timers.push(['timeout', ...args]); },
     setInterval(...args) { timers.push(['interval', ...args]); },
-  });
+  }));
   vm.runInContext(extractFunction('resetDeviceOnly'), context);
   return { context, button, confirmations, requests, notices, refreshes, unexpectedActions, timers };
 }
@@ -209,7 +210,7 @@ test('ordinary account switching uses only the switch API, never the manual rese
   const timers = [];
   const refreshes = [];
   const unexpectedActions = [];
-  const context = vm.createContext({
+  const context = vm.createContext(localizedContext({
     ACCOUNTS: [{ user_id: 'saved-account', nickname: '已有账号', snapshot_ok: true }],
     appConfirm: async () => true,
     toast() {},
@@ -223,7 +224,7 @@ test('ordinary account switching uses only the switch API, never the manual rese
     async loadAccounts() { refreshes.push('accounts'); },
     async detectCurrent() { refreshes.push('current'); },
     async refreshOnboardingStatus() { refreshes.push('onboarding'); },
-  });
+  }));
   vm.runInContext(extractFunction('switchTo'), context);
   await context.switchTo('saved-account');
   assert.deepEqual(requests, [{ route: '/api/accounts/saved-account/switch', options: { method: 'POST' } }]);

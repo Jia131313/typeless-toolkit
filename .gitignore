@@ -47,3 +47,6 @@ logs/
 
 # 运行时状态(额度监控等,勿提交)
 quota-monitor.json
+
+# Localized interface preference (user data)
+ui-preferences.json

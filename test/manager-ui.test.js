@@ -1,9 +1,10 @@
+const { localizedContext, sourcePage } = require('./helpers/i18n');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8');
+const html = sourcePage(fs.readFileSync(path.join(__dirname, '..', 'manager.html'), 'utf8'));
 
 function group(name) {
   const start = html.indexOf(`<div class="tool-group ${name}">`);
@@ -38,7 +39,7 @@ test('guides managed legacy accounts through credential recapture', () => {
 test('renders effective login lifetime and a direct empty-state action', () => {
   assert.match(html, /credential_days_left/);
   assert.match(html, /登录有效期/);
-  assert.match(html, /还没有账号[\s\S]*onclick="addAccount\(\)"[\s\S]*添加当前账号/);
+  assert.match(html, /还没有账号[\s\S]*onclick=\\?"addAccount\(\)\\?"[\s\S]*添加当前账号/);
 });
 
 test('submits refresh credentials captured from Typeless', () => {
@@ -57,7 +58,7 @@ test('offers encrypted WebDAV account sync with a Nutstore preset', () => {
 
 test('cloud-only accounts can be activated on the current device', () => {
   assert.match(html, /a\.cloud_only/);
-  assert.match(html, /activateAccount\('\$\{a\.user_id\}'\)/);
+  assert.match(html, /activateAccount\('\{p0\}'\)/);
   assert.match(html, /在此设备启用/);
   assert.match(html, /\/activate/);
 });

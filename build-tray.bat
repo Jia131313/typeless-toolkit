@@ -33,7 +33,7 @@ if not exist "%WV2_CORE%" (
 )
 
 echo [3/4] Compiling the single desktop application...
-"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs
+"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs ToolkitLocale.cs
 if errorlevel 1 exit /b 1
 
 copy /Y "%WV2_CORE%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.Core.dll" >nul

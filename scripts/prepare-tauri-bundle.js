@@ -18,6 +18,8 @@ fs.mkdirSync(serverDir, { recursive: true });
 
 for (const file of buildConfig.serverFiles) copy(file, file);
 copy('lib', 'lib');
+copy('locales', 'locales');
+copy('assets/i18n.js', 'assets/i18n.js');
 copy('assets/icon-rounded.png', 'icon.png');
 copy('config.example.json', 'config.json');
 
