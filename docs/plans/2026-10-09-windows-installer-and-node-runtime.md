@@ -141,3 +141,8 @@
 - 欢迎页明确用途和发行类型，Lite 显示真实环境探测；目录页说明当前用户安装及独立数据位置；运行中提示明确从托盘退出且无需关闭 Typeless；完成页说明旧 ZIP 数据迁移入口。
 - 重要样式/字体/图片尺寸和颜色放根目录 windows-build.json，沿用 gen-icon.cs 生成品牌资产；不引入框架、AI 图案、网页安装器或改变更新/迁移行为。
 - 验收：现有检查、两个 Setup 在 GitHub Windows runner 编译、中文与英文资源及明暗品牌资产核对；最终界面仍需用户在 G15 看实际窗口。继续功能分支构建，不合并、不发布。
+- 实现提交 `1222c8f`，完整本地检查仍为 227 通过/0 失败/1 条环境跳过。构建 `37902644905` 的 Windows job 成功：中文 ISL、四份明暗品牌 BMP、Windows 11 dynamic 样式及两个 Setup 编译通过；两个 ZIP 的包检查、更新替换/回退/数据保留检查通过。
+- 新 Windows artifact `11602952742` 已取回并核对四份原有校验文件，全一致。它替代上一轮英文 Setup 作为下一次视觉验收包；不把编译通过当作实际界面验收，G15 当前安装未动。
+- 本轮构建 `https://github.com/Jia131313/typeless-toolkit/actions/runs/37902644905` 整体成功，Windows/Mac jobs 均 success，release job skipped。内置 Node Setup 25,172,288 字节（24.01 MiB），Lite Setup 2,896,906 字节（2.76 MiB）；仍是未递增版本号的分支验收包。
+- 已清理 Mac 上约 60 MiB 的旧英文附件缓存及约 144 KiB 的早期单宿主验证目录，旧源和旧云构建保留可追溯性；保留新的完整 Windows 包与现有检查日志。无 G15 安装/退出动作，无系统 Node 修改，无合并或 Release。
+- 下一步用户在 G15 从本轮 windows-release artifact 选择 portable-setup.exe（内置 Node 安装版）检查中文、深色窗口、欢迎/目录/完成页；两个 edition 仍保留。真实跨版本自更新与取消安装仍待验收，不因本轮界面修订改称已完成。
