@@ -1165,6 +1165,7 @@ const server = http.createServer(async (req, res) => {
       }
       const methods = new Set([
         'set_theme',
+        'save_account_bundle',
         'open_privacy_settings',
         'reset_privacy_permissions',
         'open_toolkit_update_file',
@@ -1532,14 +1533,33 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { status: 'OK', msg: '已打开备份目录' });
     }
     if (m === 'GET' && p === '/api/account-bundle/status') {
-      const result = createBundle(readAccounts());
+      const accounts = readAccounts();
+      const result = createBundle(accounts);
+      const exportable = new Set(result.bundle.accounts.map(account => account.user_id));
+      const skipped = new Map(result.skipped.map(item => [item.user_id, item.reason]));
       return send(res, 200, {
         status: 'OK',
-        data: { total: result.total, exported: result.exported, skipped: result.skipped },
+        data: { total: result.total, exported: result.exported, skipped: result.skipped,
+          accounts: accounts.map(account => ({ user_id: account.user_id,
+            nickname: account.nickname || '', email: account.email || '',
+            exportable: exportable.has(account.user_id), reason: skipped.get(account.user_id) || null })) },
       });
     }
     if (m === 'GET' && p === '/api/account-bundle/export') {
-      const result = createBundle(readAccounts());
+      const ids = u.searchParams.getAll('user_id');
+      const accounts = readAccounts();
+      let selected = accounts;
+      if (u.searchParams.has('user_id')) {
+        if (!ids.length || ids.some(id => !id) || new Set(ids).size !== ids.length) {
+          return send(res, 400, { status: 'FAIL', msg: '请选择至少一个有效账号' });
+        }
+        selected = ids.map(id => accounts.find(account => account.user_id === id));
+        if (selected.some(account => !account)) return send(res, 400, { status: 'FAIL', msg: '所选账号已变化，请重新选择' });
+      }
+      const result = createBundle(selected);
+      if (u.searchParams.has('user_id') && result.skipped.length) {
+        return send(res, 400, { status: 'FAIL', msg: '所选账号中有凭证不可导出的账号，请重新选择' });
+      }
       const filename = `Typeless账号备份-${new Date().toISOString().slice(0, 10)}.json`;
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
