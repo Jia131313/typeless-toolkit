@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Web.Script.Serialization;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -19,9 +20,9 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyDescription("Typeless desktop account and dictionary toolkit")]
 [assembly: AssemblyCompany("Typeless Toolkit Contributors")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Typeless Toolkit Contributors")]
-[assembly: AssemblyVersion("1.9.3.0")]
-[assembly: AssemblyFileVersion("1.9.3.0")]
-[assembly: AssemblyInformationalVersion("1.9.3")]
+[assembly: AssemblyVersion("1.9.4.0")]
+[assembly: AssemblyFileVersion("1.9.4.0")]
+[assembly: AssemblyInformationalVersion("1.9.4")]
 
 class TrayApp
 {
@@ -56,6 +57,17 @@ class TrayApp
     static string backendError;
     static bool exiting;
     static bool backendReused;
+    static string dataDir;
+    static string distribution = "portable";
+    static string edition;
+    static Version nodeMinimum;
+    static int nodeProbeTimeoutMs;
+    static NodeRuntime selectedRuntime;
+    static readonly uint QuitForInstallMessage = RegisterWindowMessage("TypelessToolkit.QuitForInstall");
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern uint RegisterWindowMessage(string message);
+    [DllImport("user32.dll")]
+    static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     static string updateReadyPath;
     static string updateTargetVersion;
     static System.Windows.Forms.Timer quotaTimer;
@@ -65,6 +77,21 @@ class TrayApp
     [STAThread]
     static void Main(string[] args)
     {
+        exeDir = Path.GetDirectoryName(Application.ExecutablePath);
+        ReadBuildMetadata();
+        if (args.Length == 2 && (args[0] == "--probe-node" || args[0] == "--probe-node-text" || args[0] == "--probe-node-text-en"))
+        {
+            FindNode();
+            string report = args[0] == "--probe-node" ? new JavaScriptSerializer().Serialize(selectedRuntime)
+                : NodeProbeReport(args[0] == "--probe-node-text-en");
+            File.WriteAllText(args[1], report, new UTF8Encoding(false));
+            return;
+        }
+        if (args.Length == 1 && args[0] == "--quit-for-install")
+        {
+            PostMessage(FindWindow(null, AppTitle), QuitForInstallMessage, IntPtr.Zero, IntPtr.Zero);
+            return;
+        }
         // 让 WinForms 与 WebView2 使用相同的物理 DPI，避免系统位图缩放造成页面发糊。
         try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { }
         ParseUpdateReadyArguments(args);
@@ -83,7 +110,7 @@ class TrayApp
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        exeDir = Path.GetDirectoryName(Application.ExecutablePath);
+        Directory.CreateDirectory(dataDir);
         managerPort = ReadManagerPort();
         baseUrl = "http://127.0.0.1:" + managerPort;
 
@@ -106,12 +133,57 @@ class TrayApp
 
         BuildTray();
         string pageUrl = baseUrl + (backendReused ? "/?toolkit_backend=shared" : "/");
-        managerForm = new ManagerForm(pageUrl, exeDir, LoadAppIcon());
+        managerForm = new ManagerForm(pageUrl, dataDir, LoadAppIcon());
         managerForm.FormClosing += OnManagerFormClosing;
         StartQuotaNotifications();
         Application.Run(managerForm);
         Cleanup();
     }
+
+    static string NodeProbeReport(bool english)
+    {
+        if (selectedRuntime == null) return english
+            ? "No local Node.js runtime was found. Lite cannot start until Node.js " + nodeMinimum + "+ is installed. Alternatively, choose the installer with bundled Node."
+            : "未找到本机 Node.js。Lite 安装后尚不能启动，请先安装 Node.js " + nodeMinimum + "+，或选择内置 Node 安装版。";
+        if (english) return "Node.js version: " + selectedRuntime.version + "\r\nPath: " + selectedRuntime.path +
+            "\r\nBasic requirement (" + nodeMinimum + "+): " + (selectedRuntime.runnable ? "met" : "not met; manually upgrade Node before starting Lite") +
+            "\r\nSQLite capability: " + (selectedRuntime.sqlite ? "available" : "unavailable; automatic account switching is unavailable") +
+            "\r\n\r\nLite does not modify system Node or PATH.";
+        return "Node.js 版本：" + selectedRuntime.version + "\r\n路径：" + selectedRuntime.path +
+            "\r\n基本运行要求（" + nodeMinimum + "+）：" + (selectedRuntime.runnable ? "满足" : "不满足，安装后仍不能启动，需要手动升级 Node") +
+            "\r\nSQLite 能力：" + (selectedRuntime.sqlite ? "可用" : "不可用，自动切号功能不可用") +
+            "\r\n\r\nLite 不会修改系统 Node 或 PATH。";
+    }
+
+    static void ReadBuildMetadata()
+    {
+        string metadataPath = Path.Combine(exeDir, "toolkit-build.json");
+        edition = File.Exists(Path.Combine(exeDir, "runtime", "node.exe")) ? "portable" : "lite";
+        var buildConfig = new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string, object>>(File.ReadAllText(Path.Combine(exeDir, "windows-build.json")));
+        string dataDirectory = (string)buildConfig["data_directory"];
+        nodeMinimum = new Version((string)buildConfig["node_minimum"]);
+        nodeProbeTimeoutMs = Convert.ToInt32(buildConfig["node_probe_timeout_ms"]);
+        if (File.Exists(metadataPath))
+        {
+            var metadata = new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string, object>>(File.ReadAllText(metadataPath));
+            distribution = (string)metadata["distribution"];
+            edition = (string)metadata["edition"];
+            dataDirectory = (string)metadata["data_directory"];
+            nodeMinimum = new Version((string)metadata["node_minimum"]);
+            nodeProbeTimeoutMs = Convert.ToInt32(metadata["node_probe_timeout_ms"]);
+        }
+        dataDir = distribution == "installer"
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), dataDirectory, "data")
+            : Path.Combine(exeDir, "data");
+    }
+
+    static string QuoteArgument(string value)
+    {
+        return "\"" + Regex.Replace(value, "(\\\\*)\"", "$1$1\\\"").TrimEnd('\\') +
+            new string('\\', value.Length - value.TrimEnd('\\').Length) + new string('\\', value.Length - value.TrimEnd('\\').Length) + "\"";
+    }
+
+    internal static bool IsInstallQuitMessage(uint message) { return message == QuitForInstallMessage; }
 
     static void ShowExistingWindow()
     {
@@ -203,7 +275,9 @@ class TrayApp
         string node = FindNode();
         if (node == null)
         {
-            backendError = "未找到 Node.js。Portable 版应包含 runtime\\node.exe；Lite 版需要安装 Node.js 22.12+。";
+            backendError = selectedRuntime != null
+                ? "检测到 Node.js " + selectedRuntime.version + "（" + selectedRuntime.path + "），但基本运行要求为 " + nodeMinimum + "+。请手动升级 Node，或使用内置 Node 安装版。"
+                : "未找到可运行的 Node.js。内置版应包含 runtime\\node.exe；Lite 版需自行安装 Node.js " + nodeMinimum + "+。";
             return false;
         }
 
@@ -215,21 +289,20 @@ class TrayApp
             return false;
         }
 
-        string dataDir = Path.Combine(exeDir, "data");
         Directory.CreateDirectory(dataDir);
 
         nodeProcess = new Process();
         nodeProcess.StartInfo.FileName = node;
-        nodeProcess.StartInfo.Arguments = "manager.js";
+        nodeProcess.StartInfo.Arguments = "manager.js --toolkit-data-dir " + QuoteArgument(dataDir) +
+            " --toolkit-manager-port " + managerPort + " --toolkit-host-pid " + Process.GetCurrentProcess().Id +
+            " --toolkit-backend-owner desktop-host --toolkit-install-dir " + QuoteArgument(exeDir) +
+            " --toolkit-edition " + edition + " --toolkit-distribution " + distribution +
+            " --toolkit-node-path " + QuoteArgument(node) + " --toolkit-node-source " + selectedRuntime.source +
+            " --toolkit-node-version " + selectedRuntime.version + " --toolkit-node-sqlite " + selectedRuntime.sqlite.ToString().ToLowerInvariant();
         nodeProcess.StartInfo.WorkingDirectory = serverDir;
         nodeProcess.StartInfo.CreateNoWindow = true;
         nodeProcess.StartInfo.UseShellExecute = false;
         nodeProcess.StartInfo.RedirectStandardError = true;
-        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_DATA_DIR"] = dataDir;
-        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_MANAGER_PORT"] = managerPort.ToString();
-        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_HOST_PID"] = Process.GetCurrentProcess().Id.ToString();
-        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_BACKEND_OWNER"] = "desktop-host";
-        nodeProcess.StartInfo.EnvironmentVariables["TYPELESS_TOOLKIT_INSTALL_DIR"] = exeDir;
 
         try { nodeProcess.Start(); }
         catch (Exception error)
@@ -606,10 +679,7 @@ class TrayApp
     {
         try
         {
-            string logDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "TypelessToolkit"
-            );
+            string logDir = dataDir;
             Directory.CreateDirectory(logDir);
             File.AppendAllText(
                 Path.Combine(logDir, "launcher.log"),
@@ -622,7 +692,7 @@ class TrayApp
     static int ReadManagerPort()
     {
         string[] candidates = new string[] {
-            Path.Combine(exeDir, "data", "config.json"),
+            Path.Combine(dataDir, "config.json"),
             Path.Combine(exeDir, "config.json"),
             Path.Combine(exeDir, "server", "config.json")
         };
@@ -700,28 +770,41 @@ class TrayApp
         catch { return false; }
     }
 
-    static bool SupportsSqlite(string node)
+    class NodeRuntime
+    {
+        public string path;
+        public string version;
+        public string source;
+        public bool sqlite;
+        public bool runnable;
+    }
+
+    static NodeRuntime ProbeNode(string node, string source)
     {
         try
         {
             using (Process probe = new Process())
             {
                 probe.StartInfo.FileName = node;
-                probe.StartInfo.Arguments = "-e \"try { require('node:sqlite'); process.stdout.write('ok'); } catch (e) { process.exit(1); }\"";
+                probe.StartInfo.Arguments = "-e \"let sqlite=false;try{require('node:sqlite');sqlite=true}catch(e){};process.stdout.write(JSON.stringify({version:process.versions.node,sqlite}))\"";
                 probe.StartInfo.CreateNoWindow = true;
                 probe.StartInfo.UseShellExecute = false;
                 probe.StartInfo.RedirectStandardOutput = true;
                 probe.StartInfo.RedirectStandardError = true;
                 probe.Start();
-                if (!probe.WaitForExit(3000))
+                if (!probe.WaitForExit(nodeProbeTimeoutMs))
                 {
                     try { probe.Kill(); } catch { }
-                    return false;
+                    return null;
                 }
-                return probe.ExitCode == 0 && probe.StandardOutput.ReadToEnd().Trim() == "ok";
+                if (probe.ExitCode != 0) return null;
+                var result = new JavaScriptSerializer().Deserialize<System.Collections.Generic.Dictionary<string, object>>(probe.StandardOutput.ReadToEnd());
+                string version = (string)result["version"];
+                return new NodeRuntime { path = node, version = version, source = source,
+                    sqlite = (bool)result["sqlite"], runnable = new Version(version) >= nodeMinimum };
             }
         }
-        catch { return false; }
+        catch { return null; }
     }
 
     static string FindNode()
@@ -729,7 +812,11 @@ class TrayApp
         // Portable release ships a pinned Node.js runtime beside the launcher.
         // Prefer it so the app works after extraction without a system install.
         string bundled = Path.Combine(exeDir, "runtime", "node.exe");
-        if (File.Exists(bundled)) return bundled;
+        if (edition == "portable")
+        {
+            selectedRuntime = ProbeNode(bundled, "bundled");
+            return selectedRuntime != null && selectedRuntime.runnable ? bundled : null;
+        }
 
         string[] candidates = new string[] {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs", "node.exe"),
@@ -741,8 +828,11 @@ class TrayApp
         Func<string, string> consider = delegate(string file)
         {
             if (string.IsNullOrWhiteSpace(file) || !File.Exists(file)) return null;
-            if (fallback == null) fallback = file;
-            if (SupportsSqlite(file)) return file;
+            NodeRuntime runtime = ProbeNode(file, "system");
+            if (runtime == null) return null;
+            if (!runtime.runnable) { if (selectedRuntime == null) selectedRuntime = runtime; return null; }
+            if (fallback == null) { fallback = file; selectedRuntime = runtime; }
+            if (runtime.sqlite) { selectedRuntime = runtime; return file; }
             return null;
         };
 
@@ -891,7 +981,7 @@ class TrayApp
         }
         try
         {
-            if (nodeProcess != null && !nodeProcess.HasExited) nodeProcess.Kill();
+            if (nodeProcess != null && !nodeProcess.HasExited) { nodeProcess.Kill(); nodeProcess.WaitForExit(); }
             if (nodeProcess != null) nodeProcess.Dispose();
         }
         catch { }
@@ -901,6 +991,11 @@ class TrayApp
 
 class ManagerForm : Form
 {
+    protected override void WndProc(ref Message message)
+    {
+        if (TrayApp.IsInstallQuitMessage((uint)message.Msg)) { TrayApp.ExitForToolkitUpdate(); return; }
+        base.WndProc(ref message);
+    }
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int valueSize);
 
@@ -968,11 +1063,7 @@ class ManagerForm : Form
 
         try
         {
-            string profileDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "TypelessToolkit",
-                "WebView2"
-            );
+            string profileDir = Path.Combine(exeDir, "webview2-profile");
             Directory.CreateDirectory(profileDir);
 
             CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, profileDir);

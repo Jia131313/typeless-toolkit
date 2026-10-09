@@ -18,7 +18,7 @@ test('release version is consistent across packages, launchers, and scripts', ()
   const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
-  assert.match(publicBuild, new RegExp(`publicVersion = '${version.replaceAll('.', '\\.')}'`));
+  assert.match(publicBuild, /\$publicVersion\s*=\s*\(Get-Content\s+-Raw\s+-Encoding\s+UTF8\s+\(Join-Path\s+\$PSScriptRoot\s+'package\.json'\)\s*\|\s*ConvertFrom-Json\)\.version/);
   assert.match(localBuild, new RegExp(`TypelessToolkit-v${version.replaceAll('.', '\\.')}`));
   assert.match(manifest, new RegExp(`version="${version.replaceAll('.', '\\.')}\\.0"`));
   assert.match(host, new RegExp(`AssemblyVersion\\("${version.replaceAll('.', '\\.')}\\.0"\\)`));

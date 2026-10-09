@@ -5,7 +5,7 @@ title Typeless Toolkit - build
 cd /d "%~dp0"
 
 set "CSC=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-set "WV2_VERSION=1.0.4078.44"
+for /f "delims=" %%V in ('powershell -NoProfile -Command "(ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 windows-build.json)).webview2_version"') do set "WV2_VERSION=%%V"
 set "WV2_DIR=.build\webview2\%WV2_VERSION%"
 set "WV2_CORE=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.Core.dll"
 set "WV2_WINFORMS=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.WinForms.dll"
@@ -21,7 +21,7 @@ if not exist "%CSC%" (
 )
 
 echo [1/4] Generating application icons...
-"%CSC%" /nologo /reference:System.Drawing.dll /platform:anycpu /out:.build\gen-icon.exe gen-icon.cs
+"%CSC%" /nologo /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /platform:anycpu /out:.build\gen-icon.exe gen-icon.cs
 if errorlevel 1 exit /b 1
 .build\gen-icon.exe
 if errorlevel 1 exit /b 1
@@ -33,12 +33,13 @@ if not exist "%WV2_CORE%" (
 )
 
 echo [3/4] Compiling the single desktop application...
-"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs
+"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs
 if errorlevel 1 exit /b 1
 
 copy /Y "%WV2_CORE%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.Core.dll" >nul
 copy /Y "%WV2_WINFORMS%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.WinForms.dll" >nul
 copy /Y "%WV2_LOADER%" "%WINDOWS_OUT%\WebView2Loader.dll" >nul
+copy /Y "windows-build.json" "%WINDOWS_OUT%\windows-build.json" >nul
 
 echo [4/4] Done: %WINDOWS_OUT%\TypelessToolkit.exe
 endlocal

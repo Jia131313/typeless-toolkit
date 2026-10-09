@@ -42,6 +42,8 @@
     "typeless-dict-sync.js",
     "package.json",
     "package-lock.json",
+    "windows-build.json",
+    "toolkit-update.json",
     "LICENSE"
   ],
   "privateDataNames": [

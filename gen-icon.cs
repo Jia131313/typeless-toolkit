@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
 class GenIcon
 {
@@ -26,6 +28,7 @@ class GenIcon
             {
                 File.WriteAllBytes(roundedPath, RenderPng(source, 256));
                 for (int i = 0; i < Sizes.Length; i++) images[i] = RenderPng(source, Sizes[i]);
+                RenderInstallerArtwork(source);
             }
 
             using (FileStream stream = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
@@ -58,6 +61,42 @@ class GenIcon
         {
             Console.Error.WriteLine("Icon generation failed: " + error.Message);
             Environment.Exit(1);
+        }
+    }
+
+    static void RenderInstallerArtwork(Bitmap source)
+    {
+        var config = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText("windows-build.json"));
+        var ui = (Dictionary<string, object>)config["installer_ui"];
+        string output = Path.Combine(".build", "windows");
+        Directory.CreateDirectory(output);
+        RenderInstallerBitmap(source, Path.Combine(output, "installer-welcome.bmp"),
+            Convert.ToInt32(ui["welcome_width"]), Convert.ToInt32(ui["welcome_height"]),
+            Convert.ToInt32(ui["welcome_logo_size"]), ColorTranslator.FromHtml((string)ui["background_color"]));
+        RenderInstallerBitmap(source, Path.Combine(output, "installer-welcome-dark.bmp"),
+            Convert.ToInt32(ui["welcome_width"]), Convert.ToInt32(ui["welcome_height"]),
+            Convert.ToInt32(ui["welcome_logo_size"]), ColorTranslator.FromHtml((string)ui["background_dark_color"]));
+        int headerSize = Convert.ToInt32(ui["header_size"]);
+        RenderInstallerBitmap(source, Path.Combine(output, "installer-logo.bmp"),
+            headerSize, headerSize, Convert.ToInt32(ui["header_logo_size"]), ColorTranslator.FromHtml((string)ui["header_color"]));
+        RenderInstallerBitmap(source, Path.Combine(output, "installer-logo-dark.bmp"),
+            headerSize, headerSize, Convert.ToInt32(ui["header_logo_size"]), ColorTranslator.FromHtml((string)ui["header_dark_color"]));
+        Console.WriteLine("Installer artwork generated from the application icon");
+    }
+
+    static void RenderInstallerBitmap(Bitmap source, string output, int width, int height, int logoSize, Color background)
+    {
+        using (Bitmap canvas = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+        using (Graphics graphics = Graphics.FromImage(canvas))
+        using (MemoryStream memory = new MemoryStream(RenderPng(source, logoSize)))
+        using (Bitmap logo = new Bitmap(memory))
+        {
+            graphics.Clear(background);
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.SmoothingMode = SmoothingMode.HighQuality;
+            graphics.DrawImage(logo, (width - logoSize) / 2, (height - logoSize) / 2, logoSize, logoSize);
+            canvas.Save(output, ImageFormat.Bmp);
         }
     }
 

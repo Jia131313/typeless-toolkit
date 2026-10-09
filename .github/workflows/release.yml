@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Install Inno Setup compiler
+        run: choco install innosetup --no-progress -y
       - name: Test Windows update replacement and rollback
         run: node scripts/smoke-windows-update.js
       - run: cmd.exe /c build-public-release.bat
@@ -34,7 +36,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release-assets | Out-Null
-          Copy-Item ..\release\*.zip, ..\release\*.sha256.txt release-assets\
+          Copy-Item ..\release\*.zip, ..\release\*-setup.exe, ..\release\*.sha256.txt release-assets\
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release

@@ -801,8 +801,8 @@ function syncDictationWatcher() {
   if (!(enabled && auto_switch && dictationStateAvailable())) dictationWatcher.stop();
 }
 const toolkitBackendOwned = tauriHost.available || (
-  process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
-  path.resolve(process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..')
+  (runtimeOptions.backendOwner || process.env.TYPELESS_TOOLKIT_BACKEND_OWNER) === 'desktop-host' &&
+  path.resolve(runtimeOptions.installDir || process.env.TYPELESS_TOOLKIT_INSTALL_DIR || '') === path.resolve(C.CODE_DIR, '..')
 );
 const toolkitUpdate = createToolkitUpdateController({
   platform: IS_MAC ? 'darwin' : 'win32',
@@ -1224,7 +1224,7 @@ const server = http.createServer(async (req, res) => {
     // 不把 ad-hoc 签名版本伪装成可无感安装的自动更新。
     if (m === 'GET' && p === '/api/toolkit-update') {
       try {
-        const status = await toolkitUpdate.check();
+        const status = await toolkitUpdate.check({ force: u.searchParams.get('force') === '1' });
         return send(res, 200, { status: 'OK', data: status });
       } catch (error) {
         return send(res, 502, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
@@ -1244,10 +1244,12 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/toolkit-update/install') {
       await readBody(req);
       try {
-        const result = toolkitUpdate.prepareWindowsInstall();
+        const result = await toolkitUpdate.prepareWindowsInstall();
         return send(res, 202, {
           status: 'OK', data: result,
-          msg: `工具集 ${result.version} 已准备完成，退出当前窗口后将保留 data 目录并自动替换程序文件`,
+          msg: runtimeOptions.distribution === 'installer'
+            ? `工具集 ${result.version} 安装程序已启动，退出后继续安装，用户数据保留`
+            : `工具集 ${result.version} 已准备完成，退出当前窗口后将保留 data 目录并自动替换程序文件`,
         });
       } catch (error) {
         return send(res, 409, { status: 'FAIL', data: toolkitUpdate.status(), msg: error.message });
@@ -1533,10 +1535,37 @@ const server = http.createServer(async (req, res) => {
     }
     // 运行环境信息(排错用:平台、探测到的路径、凭据名)
     if (m === 'GET' && p === '/api/env') {
+      const dictation = dictationAvailability();
       return send(res, 200, {
         status: 'OK',
-        data: { ...envInfo(), toolkit_version: TOOLKIT_VERSION, code_root: C.CODE_DIR },
+        data: { ...envInfo(), toolkit_version: TOOLKIT_VERSION, code_root: C.CODE_DIR,
+          auto_switch_available: dictation.available, auto_switch_error: dictation.error },
       });
+    }
+    if (p.startsWith('/api/windows-migration/')) {
+      if (runtimeOptions.desktopHost !== 'windows' || runtimeOptions.distribution !== 'installer' || !toolkitBackendOwned) {
+        return send(res, 409, { status: 'FAIL', msg: '旧目录迁移仅用于 Windows 安装版；便携版请使用备份导入。' });
+      }
+      const { previewMigration, prepareMigration, targetEmpty } = require('./lib/windows-migration');
+      if (m === 'GET' && p === '/api/windows-migration/status') {
+        return send(res, 200, { status: 'OK', data: {
+          eligible: targetEmpty(ROOT, config.master_csv), target_dir: ROOT,
+          last_result: readPrivateJson(path.join(ROOT, 'windows-migration-result.json'), null),
+        } });
+      }
+      if (m === 'POST' && (p === '/api/windows-migration/preview' || p === '/api/windows-migration/apply')) {
+        const body = await readBody(req);
+        const request = { sourceDir: String(body.source_dir || '').trim(), targetDir: ROOT,
+          masterName: config.master_csv, installDir: runtimeOptions.installDir,
+          hostPid: runtimeOptions.hostPid, backendPid: process.pid };
+        try {
+          const result = p.endsWith('/apply') ? await prepareMigration(request) : previewMigration(request);
+          const { entries, ...summary } = result;
+          return send(res, 200, { status: 'OK', data: summary });
+        } catch (error) {
+          return send(res, 409, { status: 'FAIL', msg: error.message });
+        }
+      }
     }
     // 一键备份(账号表 + 主词库,带时间戳)
     if (m === 'POST' && p === '/api/backup') {
@@ -1670,6 +1699,7 @@ function startServer() {
     const onListening = () => {
       server.off('error', onError);
       log('[mgr] 管理器运行于 http://127.0.0.1:' + PORT);
+      toolkitUpdate.confirmStartup();
       dictionarySync.start();
       // 首轮额度检查推后:它和页面首屏要打同一批官方接口,抢在一起会拖慢首屏
       quotaMonitor.start({ delayMs: 8000 });

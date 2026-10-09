@@ -1,0 +1,6 @@
+{
+  "check_cache_ms": 900000,
+  "check_timeout_ms": 30000,
+  "download_timeout_ms": 600000,
+  "rate_limit_retry_ms": 60000
+}
