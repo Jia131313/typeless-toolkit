@@ -43,7 +43,7 @@ _当前管理页面的示例截图；账号、额度和词库数字均为虚构�
 
 | 系统 | 推荐下载（文件名后缀） | Lite 版本适合谁 | 启动方式 |
 | --- | --- | --- | --- |
-| Windows 10/11 x64 | `win-x64-portable.zip`，内置 Node.js | 已安装 Node.js 22.12+ | 解压后双击 `TypelessToolkit.exe` |
+| Windows 10/11 x64 | `win-x64-portable-setup.exe`，内置 Node.js | 已安装 Node.js 22.12+，推荐 Node 24 LTS | 运行安装向导；免安装可选 ZIP |
 | macOS Apple Silicon | `mac-arm64-portable.dmg`，内置同架构 Node.js | 已安装同架构 Node.js 22.12+ | 打开 DMG，将应用拖入“应用程序” |
 | macOS Intel | `mac-x64-portable.dmg`，内置同架构 Node.js | 已安装同架构 Node.js 22.12+ | 打开 DMG，将应用拖入“应用程序” |
 
@@ -51,11 +51,11 @@ _当前管理页面的示例截图；账号、额度和词库数字均为虚构�
 
 运行前需安装 Typeless 桌面端。Windows 还需要 Microsoft Edge WebView2 Runtime（多数 Windows 10/11 设备已具备）。macOS 发行包目前使用 ad-hoc 签名；首次打开被系统拦截时，可在 Finder 中右键应用选择“打开”。每个安装附件都附带独立的 SHA-256 校验文件。
 
-公开包从空账号列表和空快照目录开始，不包含维护者的私人数据。升级现有 Windows 安装时只替换程序文件，务必保留原解压目录的 `data/`，不要用新包中的空数据目录覆盖它。
+公开包从空账号列表和空快照目录开始，不包含维护者的私人数据。Windows 安装版的数据存放在 `%LOCALAPPDATA%\TypelessToolkit\data`，与程序目录分离，升级和卸载保留数据。ZIP 用户升级时务必保留原解压目录的 `data/`，不要用新包中的空数据目录覆盖它。
 
 优先选择 Portable；Lite 不含 Node.js，体积更小，但需要自己维护运行环境。macOS 用户数据存放在 `~/Library/Application Support/Typeless 工具集/data/`，替换 App 不会自动搬迁或删除该目录。
 
-Windows 安装版尚未发布；两种 Setup、独立数据目录、旧 ZIP 迁移与 Lite 环境维护方式见[Windows 安装版说明](docs/windows-installer.md)。下载仍以 Release 实际附件为准。Lite 的基本要求为 Node 22.12+，推荐 Node 24 LTS；官网安装的 Node 不会自行更新，自动切号还需实际 SQLite 和 Typeless 数据库读取能力。
+Windows 提供内置 Node 与 Lite 两种 Setup，也保留两种 ZIP。日常使用推荐内置 Node 安装版，运行环境随工具集更新；独立数据目录、旧 ZIP 迁移与 Lite 环境维护方式见[Windows 安装版说明](docs/windows-installer.md)。下载以 Release 实际附件为准。Lite 的基本要求为 Node 22.12+，推荐 Node 24 LTS；官网安装的 Node 不会自行更新，自动切号还需实际 SQLite 和 Typeless 数据库读取能力。
 
 ## 快速开始
 

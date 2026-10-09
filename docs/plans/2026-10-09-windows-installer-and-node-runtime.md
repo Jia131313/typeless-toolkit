@@ -146,3 +146,11 @@
 - 本轮构建 `https://github.com/Jia131313/typeless-toolkit/actions/runs/37902644905` 整体成功，Windows/Mac jobs 均 success，release job skipped。内置 Node Setup 25,172,288 字节（24.01 MiB），Lite Setup 2,896,906 字节（2.76 MiB）；仍是未递增版本号的分支验收包。
 - 已清理 Mac 上约 60 MiB 的旧英文附件缓存及约 144 KiB 的早期单宿主验证目录，旧源和旧云构建保留可追溯性；保留新的完整 Windows 包与现有检查日志。无 G15 安装/退出动作，无系统 Node 修改，无合并或 Release。
 - 下一步用户在 G15 从本轮 windows-release artifact 选择 portable-setup.exe（内置 Node 安装版）检查中文、深色窗口、欢迎/目录/完成页；两个 edition 仍保留。真实跨版本自更新与取消安装仍待验收，不因本轮界面修订改称已完成。
+
+## 正式发布准备
+
+- 用户已在 G15 手动安装内置 Node Setup 并重新导入账号，反馈无明显问题；2026-10-09 明确授权正式发布，版本定为 patch 1.9.4。
+- 只读环境核对确认安装版实际使用包内 Node 24.15.0、SQLite 可用，数据位于用户 LocalAppData。新旧账号一致来自用户手动导入，不能作为自动迁移验收。
+- 按用户明确授权删除已不再引用的旧安装目录 data（10 文件、9,226 字节），新数据和程序保留；跨版本自动更新与取消仍未完成真机验收。
+- Mac 的打开 DMG 并退出宿主及后端已包含于公开 v1.9.3，1.9.4 沿用，不替换本机 App。
+- 同步版本、更新日志和下载说明，通过 PR 合并后打标签，由 GitHub Windows/Mac runner 构建发布；不再在 Mac 保留 Windows 安装包副本。

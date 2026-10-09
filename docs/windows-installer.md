@@ -1,6 +1,6 @@
 # Windows 安装版与运行环境
 
-本文描述本地实现中的 Windows 安装版；尚未发布，当前 Release 是否提供 Setup 以实际附件为准。
+Windows 提供内置 Node 与 Lite 两种安装版，并保留两种 ZIP；下载请以 Release 实际附件为准。
 
 ## 选择发行形式
 
