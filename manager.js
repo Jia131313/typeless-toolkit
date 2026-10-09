@@ -10,7 +10,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { parseBundle, parseLegacyBackup, mergeBundle, createBundle } = require('./lib/account-bundle');
+const { parseBackup, mergeBundle, createBundle, createBackup } = require('./lib/account-bundle');
 const { createQuotaFetcher, createQuotaMonitor, normalizeQuotaConfig } = require('./lib/quota-monitor');
 // 听写状态:自动切号必须等到用户没在听写时才执行
 const { createDictationWatcher, dictationDbPath, sqliteAvailable } = require('./lib/dictation-state');
@@ -686,6 +686,24 @@ try { quotaConfig = normalizeQuotaConfig(readPrivateJson(quotaConfigFile, {})); 
 catch { quotaConfig = normalizeQuotaConfig(); }
 // 听写状态只能通过只读轮询本地历史库获得;运行时不可用时自动切号保持关闭。
 const dictationWatcher = createDictationWatcher({ dbPath: dictationDbPath(C.USERDATA_DIR) });
+let dictationAvailabilityCache = null;
+function probeDictationAvailability() {
+  if (!sqliteAvailable()) return { available: false, error: 'no-sqlite' };
+  const probe = dictationWatcher.probe();
+  const error = dictationWatcher.isActive() ? dictationWatcher.lastError() : null;
+  dictationAvailabilityCache = { available: probe.ok && !error, error: error || probe.error || null };
+  return dictationAvailabilityCache;
+}
+function dictationAvailability() {
+  return dictationAvailabilityCache?.available ? dictationAvailabilityCache : probeDictationAvailability();
+}
+const dictationStateAvailable = () => probeDictationAvailability().available;
+dictationWatcher.on('error', error => {
+  dictationAvailabilityCache = { available: false, error };
+});
+dictationWatcher.on('ready', () => {
+  dictationAvailabilityCache = { available: true, error: null };
+});
 
 /**
  * 执行账号切换:校验目标快照 → 保存当前号 → 重启到目标快照。
@@ -779,8 +797,8 @@ let accountSwitchInFlight = false;
 /** 只有额度提醒与自动切号都开启、且运行时支持时才轮询听写状态,避免无谓的后台查库 */
 function syncDictationWatcher() {
   const { enabled, auto_switch } = quotaMonitor.status().config;
-  if (enabled && auto_switch && sqliteAvailable()) dictationWatcher.start();
-  else dictationWatcher.stop();
+  // 监控健康时不需要每三秒读库；进入低额度并确定候选后由 quotaMonitor 启动 watcher。
+  if (!(enabled && auto_switch && dictationStateAvailable())) dictationWatcher.stop();
 }
 const toolkitBackendOwned = tauriHost.available || (
   process.env.TYPELESS_TOOLKIT_BACKEND_OWNER === 'desktop-host' &&
@@ -856,8 +874,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (m === 'GET' && p === '/api/quota-monitor/status') {
       // auto_switch_available 供界面判断能否开启自动切号(取决于运行时能否读取听写状态)
+      const dictation = dictationAvailability();
       return send(res, 200, { status: 'OK',
-        data: { ...quotaMonitor.status(), auto_switch_available: sqliteAvailable() } });
+        data: { ...quotaMonitor.status(), auto_switch_available: dictation.available,
+          auto_switch_error: dictation.error } });
     }
     // 原生托盘只读提醒标识；不传账号名或凭证，不执行切换。
     if (m === 'GET' && p === '/api/quota-monitor/notification') {
@@ -878,6 +898,9 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/quota-monitor/config') {
       try {
         const settings = normalizeQuotaConfig(await readBody(req));
+        if (settings.auto_switch && !quotaMonitor.status().config.auto_switch && !dictationStateAvailable()) {
+          throw new Error('当前运行环境无法读取 Typeless 听写状态，不能开启自动切号');
+        }
         writePrivateJson(quotaConfigFile, settings);
         const data = quotaMonitor.configure(settings);
         syncDictationWatcher();
@@ -1169,6 +1192,7 @@ const server = http.createServer(async (req, res) => {
         'open_privacy_settings',
         'reset_privacy_permissions',
         'open_toolkit_update_file',
+        'open_toolkit_update_and_quit',
       ]);
       if (!methods.has(body.method)) {
         return send(res, 400, { status: 'FAIL', msg: '不支持的桌面宿主操作' });
@@ -1539,51 +1563,56 @@ const server = http.createServer(async (req, res) => {
       const skipped = new Map(result.skipped.map(item => [item.user_id, item.reason]));
       return send(res, 200, {
         status: 'OK',
-        data: { total: result.total, exported: result.exported, skipped: result.skipped,
+        data: { total: result.total, exported: result.exported, skipped: result.skipped, dictionary_total: readMaster().length,
           accounts: accounts.map(account => ({ user_id: account.user_id,
             nickname: account.nickname || '', email: account.email || '',
             exportable: exportable.has(account.user_id), reason: skipped.get(account.user_id) || null })) },
       });
     }
     if (m === 'GET' && p === '/api/account-bundle/export') {
+      const unified = u.searchParams.get('backup') === '1';
+      const includeAccounts = !unified || u.searchParams.get('include_accounts') !== '0';
+      const includeDictionary = unified && u.searchParams.get('include_dictionary') !== '0';
+      if (!includeAccounts && !includeDictionary) return send(res, 400, { status: 'FAIL', msg: '请选择账号或主词库' });
       const ids = u.searchParams.getAll('user_id');
       const accounts = readAccounts();
-      let selected = accounts;
-      if (u.searchParams.has('user_id')) {
+      let selected = includeAccounts ? accounts : [];
+      if (includeAccounts && u.searchParams.has('user_id')) {
         if (!ids.length || ids.some(id => !id) || new Set(ids).size !== ids.length) {
           return send(res, 400, { status: 'FAIL', msg: '请选择至少一个有效账号' });
         }
         selected = ids.map(id => accounts.find(account => account.user_id === id));
         if (selected.some(account => !account)) return send(res, 400, { status: 'FAIL', msg: '所选账号已变化，请重新选择' });
       }
-      const result = createBundle(selected);
-      if (u.searchParams.has('user_id') && result.skipped.length) {
+      const result = unified ? createBackup(selected, includeDictionary ? readMaster() : []) : createBundle(selected);
+      if (includeAccounts && u.searchParams.has('user_id') && result.skipped.length) {
         return send(res, 400, { status: 'FAIL', msg: '所选账号中有凭证不可导出的账号，请重新选择' });
       }
-      const filename = `Typeless账号备份-${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `Typeless${unified ? '工具集' : '账号'}备份-${new Date().toISOString().slice(0, 10)}.json`;
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
         'Cache-Control': 'no-store',
       });
-      return res.end(JSON.stringify(result.bundle, null, 2) + '\n');
+      return res.end(JSON.stringify(unified ? result.backup : result.bundle, null, 2) + '\n');
     }
     if (m === 'POST' && (p === '/api/account-bundle/preview' || p === '/api/account-bundle/import')) {
       const body = await readBody(req);
       let parsed;
       try {
-        parsed = body.legacy ? parseLegacyBackup(body.content) : parseBundle(body.content);
+        parsed = parseBackup(body.content);
       } catch (error) {
         return send(res, 400, { status: 'FAIL', msg: error.message });
       }
       const merged = mergeBundle(readAccounts(), readAccountSyncTombstones(), parsed);
-      const dictionaryTerms = body.dictionary_content === undefined ? []
-        : String(body.dictionary_content).replace(/^\uFEFF/, '').split(/\r?\n/).map(term => term.trim()).filter(Boolean);
+      const dictionaryTerms = [...parsed.dictionary, ...(body.dictionary_content === undefined ? []
+        : String(body.dictionary_content).replace(/^\uFEFF/, '').split(/\r?\n/).map(term => term.trim()).filter(Boolean))];
       const currentTerms = readMaster();
       const currentKeys = new Set(currentTerms.map(term => term.toLowerCase()));
       const dictionaryAdded = [...new Set(dictionaryTerms.map(term => term.toLowerCase()))]
         .filter(term => !currentKeys.has(term)).length;
       merged.summary.dictionary_added = dictionaryAdded;
+      merged.summary.dictionary_total = new Set(dictionaryTerms.map(term => term.toLowerCase())).size;
       if (p.endsWith('/import') && (merged.summary.added || merged.summary.updated
         || merged.summary.resurrected || dictionaryAdded)) {
         backupData();

@@ -90,6 +90,10 @@ pub fn run(stdout: ChildStdout, stdin: ChildStdin, context: BrokerContext) {
         if writeln!(input, "{serialized}").is_err() || input.flush().is_err() {
             break;
         }
+        if request.method == "open_toolkit_update_and_quit" && response.ok {
+            context.app.exit(0);
+            break;
+        }
     }
 }
 
@@ -112,8 +116,8 @@ fn dispatch(context: &BrokerContext, method: &str, params: &Value) -> Result<Val
             let content = params["content"].as_str().ok_or_else(|| HostError {
                 code: "INVALID_ARGUMENT".into(), message: "缺少备份内容".into(), phase: None,
             })?;
-            let Some(path) = rfd::FileDialog::new().set_title("导出账号备份")
-                .set_file_name(filename).add_filter("JSON 账号备份", &["json"]).save_file() else {
+            let Some(path) = rfd::FileDialog::new().set_title("导出备份")
+                .set_file_name(filename).add_filter("JSON 备份", &["json"]).save_file() else {
                 return Ok(json!({ "saved": false }));
             };
             std::fs::write(&path, content).map_err(|error| HostError {
@@ -126,7 +130,7 @@ fn dispatch(context: &BrokerContext, method: &str, params: &Value) -> Result<Val
         "reconcile_toolkit_identity" => macos::reconcile_toolkit_identity(&context.data_dir),
         "swap_typeless_app" => macos::swap_typeless_app(params, &context.data_dir),
         "restore_typeless_backup" => macos::restore_typeless_backup(params, &context.data_dir),
-        "open_toolkit_update_file" => {
+        "open_toolkit_update_file" | "open_toolkit_update_and_quit" => {
             macos::open_toolkit_update_file(params, &context.edition, toolkit_arch())
         }
         _ => Err(HostError {

@@ -598,13 +598,13 @@
               <div class="field full"><label for="accountSyncUrl">服务器地址</label><input class="fld" id="accountSyncUrl" placeholder="https://dav.example.com/"></div>
               <div class="field"><label for="accountSyncUsername">用户名 / 邮箱</label><input class="fld" id="accountSyncUsername" autocomplete="username"></div>
               <div class="field"><label for="accountSyncPassword">WebDAV 应用密码</label><input class="fld" id="accountSyncPassword" type="password" autocomplete="new-password" placeholder="留空保持已保存密码"></div>
-              <div class="field"><label for="accountSyncPath">远端账号文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；词库单独加密存于同目录。</div></div>
-              <div class="field"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
+              <div class="field full"><label for="accountSyncVaultPassword">同步密码</label><input class="fld" id="accountSyncVaultPassword" type="password" autocomplete="new-password" placeholder="各设备必须相同；遗失后无法解密"><div class="hint">非 WebDAV 密码；各设备保持相同，遗失无法解密。</div></div>
             </div>
             <fieldset class="sync-scope"><legend>同步内容</legend><div class="sync-scope-options">
               <div class="sync-scope-row"><label for="accountSyncAccounts"><strong>账号凭证</strong><small>同步已保存账号的长期登录凭证。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncAccounts" aria-label="同步账号凭证" checked onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
               <div class="sync-scope-row"><label for="accountSyncDictionary"><strong>主词库</strong><small>同步主词条，不包含本机登录快照。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="accountSyncDictionary" aria-label="同步主词库" onchange="updateAccountSyncScope()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
             </div><p class="sync-scope-hint" id="accountSyncScopeHint">可单独开启一项，也可以同时同步。</p></fieldset>
+            <details class="settings-section"><summary>高级选项</summary><div class="field"><label for="accountSyncPath">远端文件路径</label><input class="fld" id="accountSyncPath" value="TypelessToolkit/accounts.vault.json"><div class="hint">各设备使用相同路径；账号与词库分别加密保存。</div></div></details>
           </fieldset>
           <div class="settings-actions">
             <button class="btn ghost" id="accountSyncTestBtn" onclick="testAccountSync()">保存并测试连接</button>
@@ -623,25 +623,15 @@
       </div>
     </details>
     <details class="settings-disclosure">
-      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-download"/></svg></span><span class="settings-disclosure-copy"><strong>数据导入与导出</strong><small>按账号数据或主词库分别迁移。</small></span><span class="quota-chevron" aria-hidden="true"></span></summary>
+      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-download"/></svg></span><span class="settings-disclosure-copy"><strong>备份与迁移</strong><small>账号与主词库一起备份，也可选择部分内容。</small></span><span class="quota-chevron" aria-hidden="true"></span></summary>
       <div class="settings-disclosure-body">
-        <div class="settings-section"><h4>账号数据</h4><p>增量导入账号；换机后需逐个点击「在此设备启用」建立本机登录态。</p>
-          <div class="row-btns"><button class="btn" onclick="exportAccountBundle()">导出账号备份</button><button class="btn" onclick="document.getElementById('accountBundleFile').click()">导入账号文件</button></div>
-          <div class="settings-warning">导出的账号 JSON 含长期登录凭证，请像密码一样保管，不要公开分享。</div>
+        <div class="settings-section"><p>一个备份文件包含所选账号和主词库。导入时合并新增内容，不覆盖已有数据；换机后账号需点击「在此设备启用」。</p>
+          <div class="row-btns"><button class="btn primary" onclick="exportAccountBundle()">导出备份</button><button class="btn" onclick="document.getElementById('accountBundleFile').click()">导入备份</button></div>
+          <p class="hint">备份含长期登录凭证，请像密码一样保管，不要公开分享。不包含本机登录快照、设备配置或同步删除记录。</p>
         </div>
-        <div class="settings-section"><h4>主词库</h4><p>词库单独迁移，不包含在账号文件中。</p>
-          <div class="row-btns"><a class="btn" href="/api/master/export">导出主词库</a><button class="btn" onclick="document.getElementById('masterImportFile').click()">导入主词库</button></div>
-        </div>
-        <input id="accountBundleFile" type="file" accept=".json,application/json" hidden onchange="importAccountBundle(this,false)">
-        <input id="masterImportFile" type="file" accept=".csv,.txt,text/plain" hidden onchange="importAccountBundle(this,true)">
-        <div class="settings-note" id="accountBundleResult" role="status" aria-live="polite">尚未导入账号文件。</div>
-      </div>
-    </details>
-    <details class="settings-disclosure">
-      <summary><span class="quota-toggle-icon" aria-hidden="true"><svg class="ui-icon"><use href="#ui-refresh"/></svg></span><span class="settings-disclosure-copy"><strong>本机备份与恢复</strong><small>保存本机副本，或增量导入旧备份。</small></span><span class="quota-chevron" aria-hidden="true"></span></summary>
-      <div class="settings-disclosure-body settings-section"><p>保存账号原始文件、主词库及删除记录到本机数据目录。旧备份可选择 accounts.json 和词库 CSV 增量导入；本机快照及设备配置不会跨机恢复。</p>
-        <div class="row-btns"><button class="btn" onclick="backup()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-download"/></svg>保存本机副本</button><button class="btn" onclick="openBackupDirectory()">打开备份目录</button><button class="btn" onclick="document.getElementById('legacyBackupFiles').click()">导入旧备份</button></div>
-        <input id="legacyBackupFiles" type="file" accept=".json,.csv,.txt,application/json,text/plain" multiple hidden onchange="importAccountBundle(this,true)">
+        <details class="settings-section"><summary>更多操作</summary><p>可导入原有账号 JSON、注册器账号文件或词库 TXT / CSV；旧备份的账号与词库可同时选择。</p><div class="row-btns"><a class="btn" href="/api/master/export">单独导出主词库</a><button class="btn" onclick="openBackupDirectory()">打开历史备份目录</button></div></details>
+        <input id="accountBundleFile" type="file" accept=".json,.csv,.txt,application/json,text/plain" multiple hidden onchange="importAccountBundle(this)">
+        <div class="settings-note" id="accountBundleResult" role="status" aria-live="polite">尚未导入备份。</div>
       </div>
     </details>
   </div>
@@ -691,13 +681,17 @@
 
 <div class="mask" id="accountExportMask" onclick="if(event.target===this)closeModal('accountExportMask')">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="accountExportTitle">
-    <div class="hd"><h3 id="accountExportTitle">选择要导出的账号</h3><button class="icon-btn" onclick="closeModal('accountExportMask')" aria-label="关闭">✕</button></div>
+    <div class="hd"><h3 id="accountExportTitle">导出备份</h3><button class="icon-btn" onclick="closeModal('accountExportMask')" aria-label="关闭">✕</button></div>
     <div class="bd">
-      <p class="hint">只导出选中的有效长期凭证。文件包含敏感登录凭证，请像密码一样保管。</p>
+      <div class="sync-scope-row"><label for="backupIncludeAccounts"><strong>账号</strong><small>可选择要迁移的账号，不包含本机登录快照。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="backupIncludeAccounts" checked onchange="updateExportSummary()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+      <div id="accountExportSelection">
       <div class="row-btns"><button class="btn small" onclick="setExportSelection(true)">全选</button><button class="btn small" onclick="setExportSelection(false)">清空</button></div>
       <div id="accountExportList" class="export-account-list" role="group" aria-label="选择账号"></div>
+      </div>
+      <div class="sync-scope-row"><label for="backupIncludeDictionary"><strong>主词库</strong><small>包含整份共用主词库，不按账号拆分。</small></label><span class="quota-switch"><input type="checkbox" role="switch" id="backupIncludeDictionary" checked onchange="updateExportSummary()"><span class="quota-switch-track" aria-hidden="true"></span></span></div>
+      <p class="hint">导出一个文件；含账号时请像密码一样保管。</p>
       <p id="accountExportSummary" class="settings-note" role="status"></p>
-      <div class="settings-actions"><button class="btn" onclick="closeModal('accountExportMask')">取消</button><button class="btn primary" id="accountExportDownload" onclick="downloadSelectedAccounts()">导出选中账号</button></div>
+      <div class="settings-actions"><button class="btn" onclick="closeModal('accountExportMask')">取消</button><button class="btn primary" id="accountExportDownload" onclick="downloadSelectedAccounts()">导出备份</button></div>
     </div>
   </div>
 </div>
@@ -957,6 +951,7 @@ let OFFICIAL_UPDATE = null, OFFICIAL_UPDATE_BUSY = false, OFFICIAL_UPDATE_CHECKE
 let SETTINGS_TAB = 'general', HOME_SCROLL = 0, ACCOUNT_SYNC_LOADED = false, ACCOUNT_SYNC_LOADING = null;
 let ACCOUNT_SYNC_ENABLED = false;
 let ACCOUNT_EXPORT_ACCOUNTS = [];
+let ACCOUNT_EXPORT_DICTIONARY_TOTAL = 0;
 let QUOTA_STATE = null, QUOTA_LOADED = false, QUOTA_LOADING = false, QUOTA_SWITCH_BUSY = false;
 // 自定义切号顺序:QUOTA_ORDER 是待保存的配置,QUOTA_ORDER_VIEW 是当前渲染出来的次序
 let QUOTA_ORDER = [], QUOTA_ORDER_VIEW = [], AUTO_COUNTDOWN_TIMER = null;
@@ -981,7 +976,7 @@ const SC_CODE_MAP = {
 function toast(m, kind){ const t=document.getElementById('toast'); t.className='toast on'+(kind?' '+kind:''); t.textContent=m; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2200); }
 function renderQuotaMonitor(state){
   QUOTA_STATE=state;
-  const available=state.auto_switch_available!==false;
+  const available=state.auto_switch_available!==false&&!state.auto_switch_error;
   const autoBox=document.getElementById('quotaAutoSwitch');
   const strategySel=document.getElementById('quotaStrategy');
   if(!QUOTA_LOADED){
@@ -999,9 +994,9 @@ function renderQuotaMonitor(state){
     QUOTA_LOADED=true;
   }
   // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
-  autoBox.disabled=!available;
+  autoBox.disabled=!available&&!state.config.auto_switch;
   document.getElementById('quotaAutoHint').textContent=available?''
-    :'当前运行环境无法读取听写状态（需要 Node 23.4+ 内置 sqlite），因此不能开启自动切号。';
+    :'当前运行环境无法读取 Typeless 听写状态（请确认 Node.js 的 SQLite 能力与 Typeless 数据库可读；状态未确认前不会自动切号），因此不能开启自动切号。';
   strategySel.disabled=!available||!autoBox.checked;
   const silentBox=document.getElementById('quotaSilent');
   silentBox.disabled=!available||!autoBox.checked;
@@ -1117,8 +1112,12 @@ function renderAutoSwitch(state){
 }
 async function cancelAutoSwitch(){
   if(AUTO_COUNTDOWN_TIMER){ clearInterval(AUTO_COUNTDOWN_TIMER); AUTO_COUNTDOWN_TIMER=null; }
-  closeModal('autoSwitchMask');
-  try{ await apiTimed('/api/quota-monitor/cancel-auto',{method:'POST'}); }catch(e){}
+  try{
+    const r=await apiTimed('/api/quota-monitor/cancel-auto',{method:'POST'});
+    if(r.status!=='OK') throw new Error(r.msg||'取消失败');
+    if(r.data?.cancelled===false) throw new Error(r.data.cancel_message||'自动切换已开始，无法取消');
+    closeModal('autoSwitchMask');
+  }catch(e){ toast(e.message||'取消自动切换失败','err'); }
   await refreshQuotaMonitor();
 }
 async function refreshQuotaMonitor(){
@@ -1140,7 +1139,7 @@ async function saveQuotaSettings(){
   const remaining=Number(document.getElementById('quotaRemaining').value);
   if(!Number.isSafeInteger(remaining)||remaining<1){ toast('请输入正整数剩余额度','err'); return; }
   const autoSwitch=document.getElementById('quotaAutoSwitch').checked;
-  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
+  if(autoSwitch&&QUOTA_STATE?.auto_switch_available===false&&!QUOTA_STATE?.config.auto_switch){ toast('当前运行环境无法读取听写状态，不能开启自动切号','err'); return; }
   const btn=document.getElementById('quotaSaveBtn'); btn.disabled=true;
   try{
     const r=await apiTimed('/api/quota-monitor/config',{method:'POST',body:JSON.stringify({
@@ -1148,7 +1147,7 @@ async function saveQuotaSettings(){
       remaining,
       auto_switch:autoSwitch,
       strategy:document.getElementById('quotaStrategy').value,
-      order:QUOTA_ORDER,
+      order:document.getElementById('quotaStrategy').value==='custom'?QUOTA_ORDER_VIEW:QUOTA_ORDER,
       silent:document.getElementById('quotaSilent').checked,
     })});
     if(r.status!=='OK') throw new Error(r.msg||'保存失败');
@@ -1169,7 +1168,10 @@ async function checkQuotaNow(){
 async function switchQuotaCandidate(){
   if(QUOTA_SWITCH_BUSY||!QUOTA_STATE?.candidate||QUOTA_STATE.state!=='low') return;
   const state=QUOTA_STATE, target=state.candidate;
-  if(!confirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。')) return;
+  const confirmed=typeof appConfirm==='function'
+    ? await appConfirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。')
+    : confirm('切换到「'+target.name+'」？\n\n请确认录音已结束，听写文字已完整回填。工具集无法自动判断听写是否完成。\n切换前会重新检查双方额度，随后关闭并重启 Typeless。');
+  if(!confirmed) return;
   QUOTA_SWITCH_BUSY=true;
   document.getElementById('quotaSwitchBtn').disabled=true;
   try{
@@ -1761,7 +1763,7 @@ async function runAccountSync(){
     toast(r.msg||'同步完成',r.status==='OK'?'ok':'err');
     if(r.status==='OK'){ await loadAccounts(); refreshDictionarySyncStatus(); }
     refreshAccountSyncStatus();
-  }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('账号同步失败','err'); }
+  }catch(e){ status.textContent='同步失败：'+(e.message||e); toast('同步失败','err'); }
 }
 async function resetDeviceOnly(){
   const btn=document.getElementById('resetDeviceBtn');
@@ -2114,7 +2116,7 @@ function renderToolkitUpdate(){
     btn.disabled=false;
     btn.classList.toggle('primary',!!d?.available);
     if(d?.running) btn.textContent='查看更新进度';
-    else if(d?.state==='downloaded') btn.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG';
+    else if(d?.state==='downloaded') btn.textContent=d.platform==='windows'?'退出并安装更新':'打开 DMG 并退出工具集';
     else if(d?.available) btn.textContent='查看更新';
     else btn.textContent='检查工具集更新';
     btn.title=d?.available
@@ -2170,9 +2172,9 @@ function renderToolkitUpdate(){
   }else if(d.state==='downloaded'){
     progress.textContent=d.platform==='windows'
       ? '已下载且 SHA-256 校验通过，但尚未安装。\n下一步：点击“退出并安装更新”，确认后工具集才会退出、替换并重新打开。'
-      : '已下载且 SHA-256 校验通过，但尚未安装。请打开 DMG 并将 App 拖入“应用程序”。';
+      : '更新包已下载并校验。打开 DMG 后工具集将完整退出，再将 App 拖入“应用程序”替换。';
     progress.className='update-state-callout warn';
-    action.textContent=d.platform==='windows'?'退出并安装更新':'打开已下载的 DMG'; action.disabled=false;
+    action.textContent=d.platform==='windows'?'退出并安装更新':'打开 DMG 并退出工具集'; action.disabled=false;
   }else if(d.state==='installing'){
     progress.textContent='即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
     action.textContent='正在安装…'; action.disabled=true;
@@ -2182,7 +2184,7 @@ function renderToolkitUpdate(){
   }
   if(boundary){
     boundary.textContent=(d.platform==='macos'
-      ? 'macOS 当前采用 ad-hoc 签名：这里只会校验下载并打开 DMG，仍需你将 App 拖入“应用程序”完成替换。'
+      ? 'macOS 当前采用 ad-hoc 签名：下载校验后可打开 DMG 并退出工具集，仍需你将 App 拖入“应用程序”完成替换。'
       : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。'));
   }
 }
@@ -2245,10 +2247,11 @@ async function downloadToolkitUpdate(){
   if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
   if(d.state==='downloaded'){
     if(d.platform==='macos'){
+      if(!await appConfirm('打开 DMG 并退出 Typeless 工具集？\n\n成功打开安装包后会完整退出工具集，方便你拖入“应用程序”替换。账号、词库和配置会保留。')) return;
       const result=ENV_INFO?.desktop_host==='tauri'
-        ? await desktopHost('open_toolkit_update_file',{file_path:d.download_path})
+        ? await desktopHost('open_toolkit_update_and_quit',{file_path:d.download_path})
         : null;
-      if(result?.ok) toast('已在 Finder 中打开 DMG，请拖入“应用程序”完成替换','ok');
+      if(result?.ok) toast('已打开 DMG，工具集正在退出','ok');
       else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
       return;
     }
@@ -2311,13 +2314,6 @@ async function performOfficialUpdate(updateStatus){
   } catch(e) { toast('官方升级请求失败:'+e.message,'err'); }
   finally { OFFICIAL_UPDATE_BUSY=false; refreshOfficialUpdate(); }
 }
-async function backup(){
-  toast('备份中…');
-  try{
-    const r=await api('/api/backup',{method:'POST'});
-    toast(r.msg||(r.status==='OK'?'已备份':'备份失败'),r.status==='OK'?'ok':'err');
-  }catch(e){ toast('备份失败：'+e.message,'err'); }
-}
 async function openBackupDirectory(){
   try{
     const r=await api('/api/backup/open-directory',{method:'POST'});
@@ -2325,10 +2321,10 @@ async function openBackupDirectory(){
   }catch(e){ toast('打开备份目录失败：'+e.message,'err'); }
 }
 function accountBundleSummary(data){
-  const parts=[`文件记录 ${data.total} 条`,`新增 ${data.added} 条`,`更新 ${data.updated} 条`,`不变 ${data.unchanged} 条`];
+  const parts=[`账号 ${data.total} 个`,`新增 ${data.added} 个`,`更新 ${data.updated} 个`,`不变 ${data.unchanged} 个`];
   if(data.duplicates) parts.push(`重复 ${data.duplicates} 条`);
   if(data.rejected) parts.push(`无效 ${data.rejected} 条`);
-  if(data.dictionary_added) parts.push(`新增词条 ${data.dictionary_added} 条`);
+  if(data.dictionary_total!==undefined) parts.push(`词库 ${data.dictionary_total} 条，新增 ${data.dictionary_added} 条`);
   return parts.join('，');
 }
 async function exportAccountBundle(){
@@ -2337,8 +2333,10 @@ async function exportAccountBundle(){
     const r=await api('/api/account-bundle/status');
     if(r.status!=='OK') throw new Error(r.msg||'无法读取账号状态');
     const d=r.data;
-    if(!d.exported){ status.textContent='当前没有可导出的有效长期账号凭证。'; return; }
     ACCOUNT_EXPORT_ACCOUNTS=d.accounts.map(account=>({...account,selected:account.exportable}));
+    ACCOUNT_EXPORT_DICTIONARY_TOTAL=d.dictionary_total;
+    document.getElementById('backupIncludeAccounts').checked=true;
+    document.getElementById('backupIncludeDictionary').checked=true;
     renderExportAccounts();
     openModal('accountExportMask');
   }catch(e){ status.textContent='导出失败：'+e.message; }
@@ -2346,6 +2344,7 @@ async function exportAccountBundle(){
 function renderExportAccounts(){
   const list=document.getElementById('accountExportList');
   list.textContent='';
+  if(!ACCOUNT_EXPORT_ACCOUNTS.length) list.textContent='当前没有已保存账号，可仅导出主词库。';
   ACCOUNT_EXPORT_ACCOUNTS.forEach(account=>{
     const row=document.createElement('label'); row.className='export-account-row';
     const check=document.createElement('input'); check.type='checkbox'; check.checked=account.selected; check.disabled=!account.exportable;
@@ -2364,53 +2363,56 @@ function setExportSelection(selected){
   renderExportAccounts();
 }
 function updateExportSummary(){
-  const count=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).length;
+  const includeAccounts=document.getElementById('backupIncludeAccounts').checked;
+  const includeDictionary=document.getElementById('backupIncludeDictionary').checked;
+  const count=includeAccounts?ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).length:0;
   const unavailable=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>!account.exportable).length;
-  document.getElementById('accountExportSummary').textContent=`已选择 ${count} 个账号${unavailable?`；${unavailable} 个凭证不可导出`:''}`;
-  document.getElementById('accountExportDownload').disabled=!count;
+  document.getElementById('accountExportSelection').hidden=!includeAccounts;
+  document.getElementById('accountExportSummary').textContent=`导出 ${count} 个账号${includeDictionary?`及 ${ACCOUNT_EXPORT_DICTIONARY_TOTAL} 条主词库词条`:''}${includeAccounts&&unavailable?`；${unavailable} 个凭证不可导出`:''}`;
+  document.getElementById('accountExportDownload').disabled=!count&&(!includeDictionary||!ACCOUNT_EXPORT_DICTIONARY_TOTAL);
 }
 async function downloadSelectedAccounts(){
-  const ids=ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).map(account=>account.user_id);
-  if(!ids.length) return;
-  const query=new URLSearchParams(ids.map(id=>['user_id',id]));
+  const includeDictionary=document.getElementById('backupIncludeDictionary').checked;
+  const ids=document.getElementById('backupIncludeAccounts').checked?ACCOUNT_EXPORT_ACCOUNTS.filter(account=>account.selected).map(account=>account.user_id):[];
+  if(!ids.length&&(!includeDictionary||!ACCOUNT_EXPORT_DICTIONARY_TOTAL)) return;
+  const query=new URLSearchParams([['backup','1'],['include_accounts',ids.length?'1':'0'],['include_dictionary',includeDictionary?'1':'0'],...ids.map(id=>['user_id',id])]);
+  const summary=`${ids.length} 个账号${includeDictionary?`及 ${ACCOUNT_EXPORT_DICTIONARY_TOTAL} 条主词库词条`:''}`;
   const button=document.getElementById('accountExportDownload');
   const status=document.getElementById('accountBundleResult');
   button.disabled=true;
   try{
     const response=await fetch('/api/account-bundle/export?'+query);
-    if(!response.ok){ const error=await response.json(); throw new Error(error.msg||'无法导出账号'); }
+    if(!response.ok){ const error=await response.json(); throw new Error(error.msg||'无法导出备份'); }
     const content=await response.text();
     const filename=decodeURIComponent(response.headers.get('Content-Disposition').match(/filename="([^"]+)"/)[1]);
     if(ENV_INFO?.desktop_host==='tauri'){
       const result=await desktopHost('save_account_bundle',{filename,content});
       if(!result.saved) return;
-      status.textContent=`已保存 ${ids.length} 个账号的备份文件。`;
+      status.textContent=`已保存${summary}的备份文件。`;
     }else{
       const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));
       const link=document.createElement('a'); link.href=url; link.download=filename;
       document.body.append(link); link.click(); link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),60000);
-      status.textContent=`已开始下载 ${ids.length} 个账号的备份文件。`;
+      status.textContent=`已开始下载${summary}的备份文件。`;
     }
     closeModal('accountExportMask');
   }catch(e){
     document.getElementById('accountExportSummary').textContent='导出失败：'+e.message;
-  }finally{ button.disabled=false; }
+  }finally{ button.disabled=(!document.getElementById('backupIncludeDictionary').checked||!ACCOUNT_EXPORT_DICTIONARY_TOTAL)&&(!document.getElementById('backupIncludeAccounts').checked||!ACCOUNT_EXPORT_ACCOUNTS.some(account=>account.selected)); }
 }
-async function importAccountBundle(input,legacy){
+async function importAccountBundle(input){
   const status=document.getElementById('accountBundleResult');
   try{
     const files=[...input.files];
     if(!files.length) return;
-    let content, dictionary_content;
-    if(legacy){
-      const accountFile=files.find(file=>file.name.toLowerCase()==='accounts.json');
-      const dictionaryFile=files.find(file=>/\.(csv|txt)$/i.test(file.name));
-      if(!accountFile&&!dictionaryFile) throw new Error('请选择旧备份中的 accounts.json 和主词库 CSV');
-      content=accountFile?await accountFile.text():'[]';
-      if(dictionaryFile) dictionary_content=await dictionaryFile.text();
-    }else content=await files[0].text();
-    const body={content,legacy};
+    const accountFiles=files.filter(file=>/\.json$/i.test(file.name));
+    const dictionaryFiles=files.filter(file=>/\.(csv|txt)$/i.test(file.name));
+    if(accountFiles.length>1||dictionaryFiles.length>1||accountFiles.length+dictionaryFiles.length!==files.length) throw new Error('请选择一份 JSON 备份，或一份账号 JSON 与一份词库 TXT / CSV。');
+    const content=accountFiles.length?await accountFiles[0].text():'[]';
+    const dictionary_content=dictionaryFiles.length?await dictionaryFiles[0].text():undefined;
+    const body={content};
+    if(!accountFiles.length) body.legacy=true;
     if(dictionary_content!==undefined) body.dictionary_content=dictionary_content;
     status.textContent='正在检查文件…';
     const preview=await api('/api/account-bundle/preview',{method:'POST',body:JSON.stringify(body)});
@@ -2424,7 +2426,7 @@ async function importAccountBundle(input,legacy){
     const result=await api('/api/account-bundle/import',{method:'POST',body:JSON.stringify(body)});
     if(result.status!=='OK') throw new Error(result.msg||'导入失败');
     status.textContent='已导入：'+accountBundleSummary(result.data);
-    toast('账号文件导入完成','ok');
+    toast('备份导入完成','ok');
     try{
       await loadAccounts();
       if(result.data.dictionary_added) await refreshDictionarySyncStatus();

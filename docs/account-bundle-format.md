@@ -1,6 +1,34 @@
-# Typeless Account Bundle v1
+# 备份与账号文件格式
 
-工具集的「导出账号备份」下载此格式的 JSON 文件。「导入账号文件」接受同一格式，供换机和兼容工具交换长期账号凭证。独立 Registrar 若要生成可导入文件，也应使用这个协议；当前 Registrar 原型尚未实现正式导出。
+## Typeless Toolkit Backup v1
+
+工具集「导出备份」使用以下统一 JSON，将账号和主词库放在同一个文件中：
+
+```json
+{
+  "format": "typeless-toolkit-backup",
+  "version": 1,
+  "exported_at": "2026-10-09T00:00:00.000Z",
+  "account_bundle": {
+    "format": "typeless-account-bundle",
+    "version": 1,
+    "exported_at": "2026-10-09T00:00:00.000Z",
+    "source": "typeless-toolkit",
+    "accounts": []
+  },
+  "dictionary": ["示例词条"]
+}
+```
+
+`account_bundle` 使用下述 Account Bundle v1，`dictionary` 是主词库字符串数组。只导出词库时 `accounts` 为空，只导出账号时 `dictionary` 为空。导出部分账号仍携带整份所选主词库，不按账号筛选词条。文件不包含登录快照、设备配置、账号或词库的删除记录。
+
+导入入口自动识别统一备份、Account Bundle v1 和旧 `accounts.json` 数组；统一备份中的账号与词库一起预览并增量合并，词条不区分大小写去重。旧账号文件不含词库，不会被当成完整备份。单独 CSV/TXT 词库沿用词库导入流程。
+
+API：`GET /api/account-bundle/export?backup=1&include_accounts=1&include_dictionary=1`，重复的 `user_id` 参数选择账号；`include_accounts=0` 或 `include_dictionary=0` 排除对应内容。不设置 `backup=1` 时仍导出原 Account Bundle。`POST /api/account-bundle/preview` 和 `/import` 接受 `{ "content": "<JSON文本>" }`，结果同时包含 `dictionary_total`、`dictionary_added`。
+
+## Typeless Account Bundle v1
+
+这是现有账号交换协议，新的统一备份将它嵌入 `account_bundle`。工具集继续接受独立的 Account Bundle 文件，供兼容工具交换长期账号凭证；独立 Registrar 可沿用这个协议，不必携带主词库。
 
 ```json
 {
@@ -28,4 +56,4 @@
 
 文件是明文，含可用于登录的长期凭证。不要公开分享，导入后妥善保管。离线 JWT 检查无法证明凭证未被服务端撤销；在目标电脑点击「在此设备启用」后才能确认账号可用。
 
-旧版「本机内部备份」中的 `accounts.json` 是原始账号数组，使用设置页专门的「导入旧备份」入口；它不是本协议。主词库单独使用设置页的「导出主词库」和「导入主词库」迁移。
+旧版「本机内部备份」中的 `accounts.json` 是原始账号数组，不是本协议；统一导入入口会自动识别它。独立词库仍可通过更多操作导入／导出。

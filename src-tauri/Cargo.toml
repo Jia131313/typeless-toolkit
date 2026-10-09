@@ -1,6 +1,6 @@
 [package]
 name = "typeless-toolkit"
-version = "1.9.2"
+version = "1.9.3"
 description = "Typeless 工具集 macOS Tauri host"
 authors = ["Typeless Toolkit contributors"]
 edition = "2021"
