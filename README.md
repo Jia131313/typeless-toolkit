@@ -55,6 +55,8 @@ _当前管理页面的示例截图；账号、额度和词库数字均为虚构�
 
 优先选择 Portable；Lite 不含 Node.js，体积更小，但需要自己维护运行环境。macOS 用户数据存放在 `~/Library/Application Support/Typeless 工具集/data/`，替换 App 不会自动搬迁或删除该目录。
 
+Windows 安装版尚未发布；两种 Setup、独立数据目录、旧 ZIP 迁移与 Lite 环境维护方式见[Windows 安装版说明](docs/windows-installer.md)。下载仍以 Release 实际附件为准。Lite 的基本要求为 Node 22.12+，推荐 Node 24 LTS；官网安装的 Node 不会自行更新，自动切号还需实际 SQLite 和 Typeless 数据库读取能力。
+
 ## 快速开始
 
 1. 启动 Typeless 并登录一个账号，再打开工具集。

@@ -630,6 +630,12 @@
           <p class="hint">备份含长期登录凭证，请像密码一样保管，不要公开分享。不包含本机登录快照、设备配置或同步删除记录。</p>
         </div>
         <details class="settings-section"><summary>更多操作</summary><p>可导入原有账号 JSON、注册器账号文件或词库 TXT / CSV；旧备份的账号与词库可同时选择。</p><div class="row-btns"><a class="btn" href="/api/master/export">单独导出主词库</a><button class="btn" onclick="openBackupDirectory()">打开历史备份目录</button></div></details>
+        <details class="settings-section" id="windowsMigrationPanel" hidden><summary>从旧 Windows ZIP 目录迁移</summary>
+          <p>仅用于安装版尚无账号、词库和登录快照时。先从旧工具集托盘退出，再填写旧目录；迁移保留配置与登录快照，不复制历史备份、日志或缓存。</p>
+          <div class="field"><label for="windowsMigrationSource">旧工具集目录</label><input class="fld" id="windowsMigrationSource" placeholder="包含 TypelessToolkit.exe 的完整目录" oninput="clearMigrationPreview()"></div>
+          <div class="row-btns"><button class="btn" id="windowsMigrationPreviewBtn" onclick="previewWindowsMigration()">预览迁移内容</button><button class="btn primary" id="windowsMigrationApplyBtn" onclick="applyWindowsMigration()" disabled>退出并迁移</button></div>
+          <div class="settings-note" id="windowsMigrationStatus" role="status" aria-live="polite" style="white-space:pre-line"></div>
+        </details>
         <input id="accountBundleFile" type="file" accept=".json,.csv,.txt,application/json,text/plain" multiple hidden onchange="importAccountBundle(this)">
         <div class="settings-note" id="accountBundleResult" role="status" aria-live="polite">尚未导入备份。</div>
       </div>
@@ -644,6 +650,10 @@
   </div>
 
   <div class="settings-panel settings-stack" id="settings-updates" role="tabpanel" aria-labelledby="settingsTabUpdates" hidden>
+    <details class="settings-disclosure"><summary><span class="settings-disclosure-copy"><strong>Node 运行环境</strong><small id="nodeRuntimeSummary">正在读取环境…</small></span><span class="quota-chevron" aria-hidden="true"></span></summary><div class="settings-disclosure-body">
+      <dl class="settings-values"><div><dt>版本</dt><dd id="nodeRuntimeVersion">—</dd></div><div><dt>来源</dt><dd id="nodeRuntimeSource">—</dd></div><div><dt>SQLite</dt><dd id="nodeRuntimeSqlite">—</dd></div></dl>
+      <p class="settings-note" id="nodeRuntimePath" style="overflow-wrap:anywhere"></p><p id="nodeRuntimeCapability" role="status"></p><p class="hint" id="nodeRuntimeMaintenance"></p>
+    </div></details>
     <section class="settings-card"><div class="settings-row"><div><h3>Typeless 工具集 <span class="badge" id="settingsToolkitVersion">读取版本中</span></h3><p>更新账号管理工具，保留已保存的账号、快照、词库和配置。</p><p id="settingsToolkitStatus">正在检查更新…</p></div><button class="btn" id="toolkitUpdateBtn" onclick="openToolkitUpdate()">检查工具集更新</button></div><div id="settingsToolkitResult" class="update-state-callout" hidden></div><div class="settings-note" id="settingsToolkitBoundary">工具集更新与 Typeless 本体更新相互独立。</div></section>
     <section class="settings-card" id="officialUpdateCard" hidden><div class="settings-row"><div><h3>Typeless 本体 <span class="badge">官方应用</span></h3><p id="officialUpdateStatus">正在检查本地更新缓存…</p></div><button class="btn" id="officialUpdateBtn" style="display:none" onclick="openOfficialUpdate()">检查本地更新包</button></div><div class="settings-note">仅安装 Typeless updater 已下载的本地缓存包，不检查或更新工具集。</div></section>
     <div class="about-footer"><span>Typeless 工具集 · 开源辅助工具</span><a class="link" href="https://github.com/Jia131313/typeless-toolkit" target="_blank" rel="noopener noreferrer">GitHub 仓库 ↗</a></div>
@@ -996,7 +1006,7 @@ function renderQuotaMonitor(state){
   // 运行时读不到听写状态时禁用自动切号,而不是静默跳过听写保护
   autoBox.disabled=!available&&!state.config.auto_switch;
   document.getElementById('quotaAutoHint').textContent=available?''
-    :'当前运行环境无法读取 Typeless 听写状态（请确认 Node.js 的 SQLite 能力与 Typeless 数据库可读；状态未确认前不会自动切号），因此不能开启自动切号。';
+    :dictationFailureText(state.auto_switch_error);
   strategySel.disabled=!available||!autoBox.checked;
   const silentBox=document.getElementById('quotaSilent');
   silentBox.disabled=!available||!autoBox.checked;
@@ -2095,22 +2105,87 @@ function updateBytes(value){
   if(bytes<1024*1024) return (bytes/1024).toFixed(1)+' KB';
   return (bytes/1024/1024).toFixed(1)+' MB';
 }
+function dictationFailureText(error){
+  if(error==='no-sqlite') return '实际使用的 Node 不支持 SQLite，基本功能可用，但不能开启自动切号。Lite 可升级 Node LTS 或使用内置 Node 安装版。';
+  if(error==='no-db') return '未找到 Typeless 听写数据库，不能确认听写状态，因此暂不能自动切号。请先正常使用 Typeless 后重试。';
+  return '无法读取 Typeless 听写状态'+(error?'（'+error+'）':'')+'；状态未确认前不会自动切号。';
+}
+function renderNodeRuntime(e){
+  const source={bundled:'包内 Node',configured:'配置指定的 Node',path:'系统 PATH',source:'源码运行',system:'本机 Node'}[e.node_source]||e.node_source||'来源未记录';
+  document.getElementById('nodeRuntimeSummary').textContent=(e.node_version||e.node||'未知版本')+' · '+source;
+  document.getElementById('nodeRuntimeVersion').textContent=e.node_version||e.node||'未知';
+  document.getElementById('nodeRuntimeSource').textContent=source;
+  document.getElementById('nodeRuntimeSqlite').textContent=e.node_sqlite?'支持':'不支持';
+  document.getElementById('nodeRuntimePath').textContent='实际路径：'+(e.node_path||'尚未读取');
+  document.getElementById('nodeRuntimeCapability').textContent=e.node_supported===false
+    ? '运行时低于基本要求 Node '+e.node_minimum_version+'，请升级运行环境。'
+    : e.auto_switch_available?'基本功能与听写状态读取可用。':dictationFailureText(e.auto_switch_error);
+  document.getElementById('nodeRuntimeMaintenance').textContent=e.node_source==='bundled'
+    ? '包内运行时随工具集更新维护，不修改系统 Node。'
+    : 'Lite 使用本机 Node，官网安装的 Node 不会自行更新。推荐受支持的 Node LTS；工具集不会替你升级系统 Node 或修改 PATH。';
+}
+let WINDOWS_MIGRATION=null;
+function clearMigrationPreview(){
+  WINDOWS_MIGRATION=null;
+  document.getElementById('windowsMigrationApplyBtn').disabled=true;
+}
+async function loadWindowsMigration(){
+  const panel=document.getElementById('windowsMigrationPanel');
+  panel.hidden=ENV_INFO?.platform!=='windows'||ENV_INFO?.toolkit_distribution!=='installer';
+  if(panel.hidden) return;
+  try{
+    const r=await api('/api/windows-migration/status');
+    if(r.status!=='OK') throw new Error(r.msg);
+    const d=r.data;
+    document.getElementById('windowsMigrationSource').disabled=!d.eligible;
+    document.getElementById('windowsMigrationPreviewBtn').disabled=!d.eligible;
+    document.getElementById('windowsMigrationStatus').textContent=(d.last_result?d.last_result.message+'\n':'')+(d.eligible?'目标：'+d.target_dir:'当前安装已有数据。请使用上方“导入备份”合并账号和词库。');
+  }catch(error){document.getElementById('windowsMigrationStatus').textContent=error.message;}
+}
+async function previewWindowsMigration(){
+  clearMigrationPreview();
+  const status=document.getElementById('windowsMigrationStatus');
+  status.textContent='正在统计待迁移内容…';
+  try{
+    const r=await api('/api/windows-migration/preview',{method:'POST',body:JSON.stringify({source_dir:document.getElementById('windowsMigrationSource').value})});
+    if(r.status!=='OK') throw new Error(r.msg);
+    WINDOWS_MIGRATION=r.data;
+    const d=r.data;
+    status.textContent=`来源：${d.source_data}\n目标：${d.target_dir}\n${d.account_count} 个账号 · ${d.dictionary_count} 个词条 · ${d.profile_count} 个快照目录\n${d.file_count} 个文件，共 ${(d.bytes/1024/1024).toFixed(2)} MB。旧目录不会删除。`;
+    document.getElementById('windowsMigrationApplyBtn').disabled=false;
+  }catch(error){status.textContent=error.message;}
+}
+async function applyWindowsMigration(){
+  if(!WINDOWS_MIGRATION) return;
+  if(!await appConfirm('完整退出工具集并迁移旧目录数据？\n\n退出后迁入账号、词库、配置和登录快照，然后重新打开。旧目录不会删除，Typeless 本体不会退出。')) return;
+  const r=await api('/api/windows-migration/apply',{method:'POST',body:JSON.stringify({source_dir:WINDOWS_MIGRATION.source_dir})});
+  if(r.status!=='OK'){document.getElementById('windowsMigrationStatus').textContent=r.msg;clearMigrationPreview();return;}
+  document.getElementById('windowsMigrationStatus').textContent='已准备迁移。正在完整退出；重新打开后查看迁移结果。';
+  clearMigrationPreview();
+  window.chrome.webview.postMessage('toolkit-update:quit');
+}
 function renderToolkitUpdate(){
   const updateResultView=result=>{
     if(!result?.state) return null;
     const version=result.version?` v${result.version}`:'';
     if(result.state==='succeeded') return {tone:'ok',text:`上次更新成功${version}\n${result.message||'新版已完成启动确认。'}`};
+    if(result.state==='installed') return {tone:'warn',text:`安装程序已完成${version}\n${result.message||'等待新版启动确认。'}`};
+    if(result.state==='cancelled') return {tone:'warn',text:`上次安装已取消${version}\n${result.message||'旧版本仍可使用。'}`};
     if(result.state==='rolled-back') return {tone:'warn',text:`上次更新未生效，已自动回滚${version}\n${result.message||'已恢复更新前的版本。'}`};
     return {tone:'err',text:`上次更新失败${version}\n${result.message||'请根据错误信息重试或手动更新。'}`};
   };
   const btn=document.getElementById('toolkitUpdateBtn');
   const d=TOOLKIT_UPDATE, u=d?.update;
+  const stageName={check:'检查版本',download:'下载',verify:'校验',install:'安装交接'}[d?.failure_stage]||'更新';
+  const retryBlocked=!!d?.retry_at&&new Date(d.retry_at).getTime()>Date.now();
+  const checkTime=d?.checked_at?'\n'+(d.cached?'缓存检查结果':'检查时间')+'：'+new Date(d.checked_at).toLocaleString():'';
+  const retryTime=retryBlocked?'\n可重试时间：'+new Date(d.retry_at).toLocaleString():'';
   document.getElementById('settingsToolkitVersion').textContent=d?.current_version?'v'+d.current_version:'版本暂不可用';
   const checking=!d||d.state==='idle'||d.state==='checking';
-  document.getElementById('settingsToolkitStatus').textContent=d?.error?'更新检查或下载失败：'+d.error:d?.running?'正在处理更新…':d?.state==='downloaded'?`更新包 v${d.version} 已下载，尚未安装`:d?.available?'发现新版本 v'+d.version:checking?'正在检查更新…':'当前已是最新版本';
+  document.getElementById('settingsToolkitStatus').textContent=(d?.error?stageName+'失败：'+d.error:d?.running?'正在处理更新…':d?.state==='downloaded'?`更新包 v${d.version} 已下载，尚未安装`:d?.available?'发现新版本 v'+d.version:checking?'正在检查更新…':'当前已是最新版本')+checkTime+retryTime;
   document.getElementById('settingsToolkitBoundary').textContent=(d?.platform||ENV_INFO?.platform)==='macos'
     ? 'macOS 会下载并校验 DMG，仍需将 App 拖入“应用程序”完成替换。'
-    : 'Windows 会下载并校验更新包，退出后替换程序文件，并保留 data 目录。';
+    : d?.distribution==='installer'?'Windows 下载并校验安装包，退出后由可见安装程序继续，保留独立数据目录。':'Windows 会下载并校验 ZIP，退出后替换程序文件，并保留 data 目录。';
   renderUpdateIndicators();
   if(btn){
     btn.disabled=false;
@@ -2144,13 +2219,13 @@ function renderToolkitUpdate(){
     progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
   }
   if(d.error && !u){
-    summary.textContent='检查更新失败：'+d.error; action.textContent='重试检查'; action.disabled=false;
-    progress.textContent=''; notes.style.display='none'; release.style.display='none'; return;
+    summary.textContent=stageName+'失败：'+d.error; action.textContent=retryBlocked?'等待限流解除':'重试检查'; action.disabled=retryBlocked;
+    progress.textContent=retryTime+checkTime; notes.style.display='none'; release.style.display='none'; return;
   }
   if(!d.available){
     summary.textContent='当前已是最新版本 v'+(d.current_version||'');
     action.textContent='重新检查'; action.disabled=!!d.running;
-    progress.textContent=d.error||''; notes.style.display='none'; release.style.display=u?.release_url?'':'none';
+    progress.textContent=(d.error||'')+checkTime; notes.style.display='none'; release.style.display=u?.release_url?'':'none';
     if(release) release.style.display=u?.release_url?'':'none';
     if(boundary) boundary.textContent='更新检查只读取 GitHub Release 元数据，不会读取账号、词库或配置。';
     return;
@@ -2166,35 +2241,37 @@ function renderToolkitUpdate(){
   }else if(d.state==='downloading'){
     const p=d.progress||{};
     progress.textContent=p.total
-      ? `正在下载并校验：${updateBytes(p.downloaded)} / ${updateBytes(p.total)}（${p.percent||0}%）`
-      : `正在下载并校验：${updateBytes(p.downloaded)}`;
+      ? `正在下载：${updateBytes(p.downloaded)} / ${updateBytes(p.total)}（${p.percent||0}%）`
+      : `正在下载：${updateBytes(p.downloaded)}`;
     action.textContent='下载中…'; action.disabled=true;
+  }else if(d.state==='verifying'){
+    progress.textContent='下载完成，正在校验文件；尚未安装。'; action.textContent='校验中…'; action.disabled=true;
   }else if(d.state==='downloaded'){
     progress.textContent=d.platform==='windows'
-      ? '已下载且 SHA-256 校验通过，但尚未安装。\n下一步：点击“退出并安装更新”，确认后工具集才会退出、替换并重新打开。'
+      ? (d.distribution==='installer'?'已下载且校验通过，尚未安装。点击“退出并安装更新”后将显示安装程序，完成后重新打开。':'已下载且 SHA-256 校验通过，但尚未安装。\n下一步：点击“退出并安装更新”，确认后工具集才会退出、替换并重新打开。')
       : '更新包已下载并校验。打开 DMG 后工具集将完整退出，再将 App 拖入“应用程序”替换。';
     progress.className='update-state-callout warn';
     action.textContent=d.platform==='windows'?'退出并安装更新':'打开 DMG 并退出工具集'; action.disabled=false;
   }else if(d.state==='installing'){
-    progress.textContent='即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
+    progress.textContent=d.distribution==='installer'?'安装程序已启动，正在退出工具集；请在安装窗口完成操作。数据保留，启动安装程序不代表更新已成功。':'即将退出当前窗口并替换程序文件；账号、快照、词库和配置不会被覆盖。';
     action.textContent='正在安装…'; action.disabled=true;
   }else {
-    progress.textContent=d.error||'';
+    progress.textContent=d.error?stageName+'失败：'+d.error+retryTime:'';
     action.textContent=d.state==='error'?'重新下载':'下载更新'; action.disabled=false;
   }
   if(boundary){
     boundary.textContent=(d.platform==='macos'
       ? 'macOS 当前采用 ad-hoc 签名：下载校验后可打开 DMG 并退出工具集，仍需你将 App 拖入“应用程序”完成替换。'
-      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : 'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。'));
+      : ((u?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND) ? (u?.error||d.manual_install_reason||'当前安装只能手动更新。') : d.distribution==='installer'?'Windows 会启动可见安装程序。请完成安装，重新打开后确认版本；账号和词库保留在独立数据目录。':'Windows 会在退出当前工具集后由独立更新程序替换代码文件，并明确保留 data 目录。'));
   }
 }
-async function refreshToolkitUpdate(announce=false){
-  if(TOOLKIT_UPDATE?.running||['downloading','downloaded','installing'].includes(TOOLKIT_UPDATE?.state)){
+async function refreshToolkitUpdate(announce=false,force=false){
+  if(TOOLKIT_UPDATE?.running||['downloading','verifying','downloaded','installing'].includes(TOOLKIT_UPDATE?.state)){
     renderToolkitUpdate(); return TOOLKIT_UPDATE;
   }
   let responseData=null;
   try{
-    const r=await apiTimed('/api/toolkit-update',{},25000);
+    const r=await apiTimed('/api/toolkit-update'+(force?'?force=1':''),{},25000);
     responseData=r.data||null;
     if(r.status!=='OK') throw new Error(r.msg||'检查失败');
     TOOLKIT_UPDATE=responseData;
@@ -2206,6 +2283,7 @@ async function refreshToolkitUpdate(announce=false){
     const previous=TOOLKIT_UPDATE;
     const source=responseData||previous||{};
     TOOLKIT_UPDATE={
+      ...source,
       current_version:source.current_version,
       platform:source.platform,
       flavor:source.flavor,
@@ -2243,7 +2321,7 @@ function openToolkitUpdateRelease(){
 }
 async function downloadToolkitUpdate(){
   const d=TOOLKIT_UPDATE;
-  if(!d?.available){ await refreshToolkitUpdate(false); return; }
+  if(!d?.available){ await refreshToolkitUpdate(false,true); return; }
   if(d.update?.manual_only || TOOLKIT_UPDATE_SHARED_BACKEND){ openToolkitUpdateRelease(); toast(d.update?.error||'当前安装只能手动更新','err'); return; }
   if(d.state==='downloaded'){
     if(d.platform==='macos'){
@@ -2255,7 +2333,7 @@ async function downloadToolkitUpdate(){
       else toast(result?.message||'DMG 已下载，请在下载目录手动打开','err');
       return;
     }
-    if(!await appConfirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。`)) return;
+    if(!await appConfirm(`退出 Typeless 工具集并安装 v${d.version}？\n\n${d.distribution==='installer'?'将启动可见安装程序，请完成安装；独立数据目录中的账号、快照、词库和配置保留。':'更新只替换程序文件，将保留 data 中的账号、快照、词库和配置。'}`)) return;
     const r=await api('/api/toolkit-update/install',{method:'POST',body:'{}'});
     if(r.status!=='OK'){ toast(r.msg||'准备更新失败','err'); return; }
     TOOLKIT_UPDATE={...TOOLKIT_UPDATE,state:'installing',running:true}; renderToolkitUpdate();
@@ -2740,6 +2818,8 @@ async function fetchEnv(){
     const r=await api('/api/env'); if(r.status!=='OK') return;
     const e=r.data, b=document.getElementById('envBadge');
     ENV_INFO=e;
+    renderNodeRuntime(e);
+    loadWindowsMigration();
     if(e.desktop_host==='tauri') applyTheme(document.documentElement.getAttribute('data-theme')||'light');
     const updateBtn=document.getElementById('officialUpdateBtn');
     const permissionBtn=document.getElementById('macPermissionBtn');
