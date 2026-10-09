@@ -8,6 +8,21 @@
   "installer_app_id": "D96074E1-F07D-4B1D-B0E4-C0AB40822123",
   "installer_wait_seconds": 30,
   "architecture": "x64",
+  "installer_ui": {
+    "style": "modern dynamic windows11",
+    "font_name": "Microsoft YaHei UI",
+    "font_size": 9,
+    "size_percent": 115,
+    "welcome_width": 492,
+    "welcome_height": 942,
+    "welcome_logo_size": 216,
+    "header_size": 128,
+    "header_logo_size": 96,
+    "background_color": "#EEF4FF",
+    "header_color": "#FFFFFF",
+    "background_dark_color": "#172033",
+    "header_dark_color": "#202020"
+  },
   "migration": {
     "wait_timeout_ms": 75000,
     "poll_interval_ms": 250,

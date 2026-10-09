@@ -21,7 +21,7 @@ if not exist "%CSC%" (
 )
 
 echo [1/4] Generating application icons...
-"%CSC%" /nologo /reference:System.Drawing.dll /platform:anycpu /out:.build\gen-icon.exe gen-icon.cs
+"%CSC%" /nologo /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /platform:anycpu /out:.build\gen-icon.exe gen-icon.cs
 if errorlevel 1 exit /b 1
 .build\gen-icon.exe
 if errorlevel 1 exit /b 1

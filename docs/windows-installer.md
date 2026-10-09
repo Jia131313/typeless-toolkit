@@ -15,6 +15,10 @@
 
 安装包暂未签名，Windows 可能显示未知发布者。不要以关闭系统安全检查作为安装步骤。Windows 仍需 WebView2 Runtime。
 
+推荐日常使用内置 Node 安装版：运行时随工具集更新，不需要另行维护系统 Node。Lite 仍适合已有受支持 Node 且愿意维护该环境的用户，两者不因名称区分为不同功能等级。
+
+安装向导提供简体中文和英文，使用工具集图标并跟随 Windows 明暗外观。欢迎页注明发行类型；目录页区分程序与数据位置，完成页说明旧 ZIP 数据迁移入口。如提示工具集仍在运行，请从托盘退出工具集，不需要关闭 Typeless 本体。
+
 ## Lite 的 Node 要求
 
 基本运行要求为 Node 22.12+，推荐 Node 24 LTS。Lite 不安装、升级系统 Node，也不修改 PATH；从官网安装的 Node 不会自行更新。
@@ -41,6 +45,6 @@ GitHub 限流时显示原因及可重试时间，等待期不重复查询；成�
 
 ## 构建
 
-使用现有 `build-public-release.bat` / `.ps1`，需要 Inno Setup 6 编译器。版本来自 `package.json`；Node、安装身份、数据目录、迁移范围等参数来自根目录 `windows-build.json`，更新超时与缓存参数来自 `toolkit-update.json`。
+使用现有 `build-public-release.bat` / `.ps1`，需要支持动态明暗样式的 Inno Setup 6.7+ 编译器。版本来自 `package.json`；Node、安装身份、数据目录、迁移范围和安装界面样式等参数来自根目录 `windows-build.json`，更新超时与缓存参数来自 `toolkit-update.json`。
 
 公开构建从空账号和空快照模板生成两个 ZIP 与两个 Setup。安装器只部署程序及默认模板，不覆盖独立数据目录。工作流已接入 Setup 构建，实际发布仍是单独授权动作。

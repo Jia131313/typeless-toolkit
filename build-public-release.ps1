@@ -92,7 +92,20 @@ function Build-Installer([string]$target, [string]$edition) {
   Move-Item -LiteralPath (Join-Path $installerStage 'data') -Destination (Join-Path $installerStage 'defaults')
   Write-BuildMetadata $installerStage $edition 'installer'
   $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-  & $compiler "/DSourceDir=$installerStage" "/DOutputDir=$releaseRoot" "/DAppVersion=$publicVersion" "/DEdition=$edition" "/DAppId=$($buildConfig.installer_app_id)" "/DInstallDirectory=$($buildConfig.install_directory)" "/DWaitSeconds=$($buildConfig.installer_wait_seconds)" (Join-Path $sourceRoot 'scripts\windows-installer.iss')
+  $installerDefines = @(
+    "/DSourceDir=$installerStage", "/DOutputDir=$releaseRoot", "/DAppVersion=$publicVersion",
+    "/DEdition=$edition", "/DAppId=$($buildConfig.installer_app_id)",
+    "/DInstallDirectory=$($buildConfig.install_directory)", "/DDataDirectory=$($buildConfig.data_directory)",
+    "/DWaitSeconds=$($buildConfig.installer_wait_seconds)",
+    "/DWizardStyle=$($buildConfig.installer_ui.style)",
+    "/DWizardImageFile=$(Join-Path $windowsBuildRoot 'installer-welcome.bmp')",
+    "/DWizardImageFileDynamicDark=$(Join-Path $windowsBuildRoot 'installer-welcome-dark.bmp')",
+    "/DWizardSmallImageFile=$(Join-Path $windowsBuildRoot 'installer-logo.bmp')",
+    "/DWizardSmallImageFileDynamicDark=$(Join-Path $windowsBuildRoot 'installer-logo-dark.bmp')",
+    "/DWizardSizePercent=$($buildConfig.installer_ui.size_percent)",
+    "/DWizardFontName=$($buildConfig.installer_ui.font_name)", "/DWizardFontSize=$($buildConfig.installer_ui.font_size)"
+  )
+  & $compiler @installerDefines (Join-Path $sourceRoot 'scripts\windows-installer.iss')
   if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed: $edition" }
   $setupPath = Join-Path $releaseRoot "$baseName-$edition-setup.exe"
   [IO.File]::WriteAllText("$setupPath.sha256.txt", (Get-Sha256 $setupPath) + '  ' + [IO.Path]::GetFileName($setupPath) + [Environment]::NewLine, [Text.Encoding]::ASCII)

@@ -79,15 +79,11 @@ class TrayApp
     {
         exeDir = Path.GetDirectoryName(Application.ExecutablePath);
         ReadBuildMetadata();
-        if (args.Length == 2 && (args[0] == "--probe-node" || args[0] == "--probe-node-text"))
+        if (args.Length == 2 && (args[0] == "--probe-node" || args[0] == "--probe-node-text" || args[0] == "--probe-node-text-en"))
         {
             FindNode();
             string report = args[0] == "--probe-node" ? new JavaScriptSerializer().Serialize(selectedRuntime)
-                : selectedRuntime == null ? "未找到可运行的本机 Node.js。安装 Lite 后尚不能启动，请先安装 Node.js " + nodeMinimum + "+，或选择内置 Node 安装版。"
-                : "Node.js 版本：" + selectedRuntime.version + "\r\n路径：" + selectedRuntime.path +
-                    "\r\n基本运行要求（" + nodeMinimum + "+）：" + (selectedRuntime.runnable ? "满足" : "不满足，安装后仍不能启动，需要手动升级 Node") +
-                    "\r\nSQLite 能力：" + (selectedRuntime.sqlite ? "可用" : "不可用，自动切号功能不可用") +
-                    "\r\n\r\nLite 不会修改系统 Node 或 PATH。";
+                : NodeProbeReport(args[0] == "--probe-node-text-en");
             File.WriteAllText(args[1], report, new UTF8Encoding(false));
             return;
         }
@@ -142,6 +138,21 @@ class TrayApp
         StartQuotaNotifications();
         Application.Run(managerForm);
         Cleanup();
+    }
+
+    static string NodeProbeReport(bool english)
+    {
+        if (selectedRuntime == null) return english
+            ? "No local Node.js runtime was found. Lite cannot start until Node.js " + nodeMinimum + "+ is installed. Alternatively, choose the installer with bundled Node."
+            : "未找到本机 Node.js。Lite 安装后尚不能启动，请先安装 Node.js " + nodeMinimum + "+，或选择内置 Node 安装版。";
+        if (english) return "Node.js version: " + selectedRuntime.version + "\r\nPath: " + selectedRuntime.path +
+            "\r\nBasic requirement (" + nodeMinimum + "+): " + (selectedRuntime.runnable ? "met" : "not met; manually upgrade Node before starting Lite") +
+            "\r\nSQLite capability: " + (selectedRuntime.sqlite ? "available" : "unavailable; automatic account switching is unavailable") +
+            "\r\n\r\nLite does not modify system Node or PATH.";
+        return "Node.js 版本：" + selectedRuntime.version + "\r\n路径：" + selectedRuntime.path +
+            "\r\n基本运行要求（" + nodeMinimum + "+）：" + (selectedRuntime.runnable ? "满足" : "不满足，安装后仍不能启动，需要手动升级 Node") +
+            "\r\nSQLite 能力：" + (selectedRuntime.sqlite ? "可用" : "不可用，自动切号功能不可用") +
+            "\r\n\r\nLite 不会修改系统 Node 或 PATH。";
     }
 
     static void ReadBuildMetadata()
