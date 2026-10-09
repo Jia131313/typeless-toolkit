@@ -125,3 +125,4 @@
 - 下一步提交并推送功能分支，记录云构建结果；构建失败从实际日志定位，不绕过现有检查。
 - 第一轮分支提交 `a919819`，手动构建 `37899072042`。Windows 完整检查为 222 通过/0 失败/6 平台或环境跳过，既有更新替换、回退、数据保留和临时目录清理烟测通过。
 - 第一轮 Windows 打包失败：build-tray.bat 的 PowerShell 引号内 `^|` 使 caret 被当作 Get-Content 参数，WebView2 版本为空。改为 ConvertFrom-Json 显式 InputObject，无 cmd 管道转义；提交后重跑，不跳过检查。
+- 第二轮提交 `575a9e0`，构建 `37899294111`：Windows 宿主编译及两个 ZIP 生成成功；Inno 报未知函数 SaveStringToUTF8File。按官方 Pascal API 改为 SaveStringToFile + UTF8Encode，继续保留 UTF-8 结果记录，再次完整构建。

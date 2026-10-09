@@ -73,10 +73,10 @@ begin
   FileName := ExpandConstant('{param:TOOLKITUPDATERESULT|}');
   Version := ExpandConstant('{param:TOOLKITUPDATEVERSION|}');
   if FileName = '' then Exit;
-  SaveStringToUTF8File(FileName,
+  SaveStringToFile(FileName, UTF8Encode(
     '{"stage":"install","status":' + JsonString(Status) +
     ',"target_version":' + JsonString(Version) +
-    ',"error":' + JsonString(ErrorMessage) + '}', False);
+    ',"error":' + JsonString(ErrorMessage) + '}'), False);
 end;
 
 procedure InitializeWizard();
