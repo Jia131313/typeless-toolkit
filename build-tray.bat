@@ -5,7 +5,7 @@ title Typeless Toolkit - build
 cd /d "%~dp0"
 
 set "CSC=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-for /f "delims=" %%V in ('powershell -NoProfile -Command "(Get-Content -Raw -Encoding UTF8 windows-build.json ^| ConvertFrom-Json).webview2_version"') do set "WV2_VERSION=%%V"
+for /f "delims=" %%V in ('powershell -NoProfile -Command "(ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 windows-build.json)).webview2_version"') do set "WV2_VERSION=%%V"
 set "WV2_DIR=.build\webview2\%WV2_VERSION%"
 set "WV2_CORE=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.Core.dll"
 set "WV2_WINFORMS=%WV2_DIR%\lib\net462\Microsoft.Web.WebView2.WinForms.dll"
