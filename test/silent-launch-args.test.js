@@ -80,4 +80,29 @@ test('Windows:参数行由 cdpPort 与 extraArgs 顺序拼接', () => {
   assert.deepEqual(build(null, null), []);
 });
 
+/**
+ * 回归:2.0.0 把 launchApp 的形参从 (exe, cdpPort, userDataDir) 改成
+ * (exe, cdpPort, extraArgs, options) 之后,mac 分支的函数体仍在引用形参之外的
+ * userDataDir,于是 macOS 上**任何一次启动 Typeless** 都会抛
+ *   ReferenceError: userDataDir is not defined
+ * 表现为:点「切换」直接失败(接口返回 500 + 该错误文案),手动/自动切号、
+ * 重置设备后的启动全部不可用;Windows 分支不引用该变量,因此不受影响。
+ *
+ * 这里真实调用一次 mac.launchApp:传入不含 /Contents/ 的路径,函数必然失败,
+ * 但失败原因只能是「定位不到 .app Bundle」,不能再是 ReferenceError。
+ */
+test('macOS:launchApp 不再引用未定义的 userDataDir', async t => {
+  if (!P.IS_MAC) return t.skip('仅 macOS 生效的分支,其它平台无法复现');
+  const missingExe = path.join(__dirname, 'no-such-bundle', 'Typeless');
+  let error = null;
+  try {
+    await P.platform.launchApp(missingExe, null, null, undefined);
+  } catch (e) {
+    error = e;
+  }
+  assert.ok(error, '路径不含 /Contents/ 时应因定位不到 .app Bundle 而失败');
+  assert.match(error.message, /\.app Bundle/, '应走到 bundle 解析这一步,说明启动参数已构造成功');
+  assert.doesNotMatch(error.message, /userDataDir is not defined/, '不得再抛 ReferenceError');
+});
+
 void winArgLine;
