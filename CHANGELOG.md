@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 2.2.0 - 隔离浏览器注册与 Typeless 2.10.0 兼容 (2026-11-04)
 
 ### 修复 Typeless 2.10.0 下凭证刷新全部失败
 
@@ -8,14 +8,6 @@
 - 根因：Windows 分支的 `lib/platform.js` 没有实现 `appVersion()`，只有 macOS 分支有。`common.js` 里 `typeof PLAT.appVersion === 'function'` 在 Windows 上恒为 false，版本号传空串，`extractSignatureKeys` 于是回落到池里的旧值 `2.8.0`。Typeless 2.8.x 时期两者恰好相同，所以问题一直没暴露。
 - 现在 Windows 分支通过 PE `ProductVersion` 读取真实版本（`2.10.0.137` → `2.10.0`），按 exe 路径与修改时间缓存，首次约 0.4 秒、之后命中缓存。读不到时直接报错，不再带错误版本发请求。
 - 服务端有时把 `detail` 返回成对象，旧代码 `String(detail)` 得到 `[object Object]`。新增 `describeApiError()`，优先取对象里的 `msg`/`message`，再退到 JSON 文本；刷新、额度、词库读写五处调用统一改用该方法。
-
-### 验证
-
-- 本机 Typeless 2.10.0 实测：修复前签名头带 `win_2.8.0`，刷新返回 `101010100`；修复后带 `win_2.10.0`，两个账号均成功取得新 `access_token`，额度与词库数据读取正常。
-- `npm run check` 通过：273 项，266 通过，0 失败，7 项按环境跳过。
-- 真实 `app.asar` 的签名提取用例通过（`TYPELESS_ASAR_FOR_TEST`）。
-
-## 2.2.0 - 注册向导改用隔离浏览器 (2026-11-04)
 
 ### 注册向导改用隔离浏览器
 
@@ -29,9 +21,11 @@
 
 ### 验证
 
-- `npm run check` 通过：267 项，260 通过，0 失败，7 项按环境跳过。
+- `npm run check` 通过：273 项，266 通过，0 失败，7 项按环境跳过。
+- 本机 Typeless 2.10.0 实测：修复前签名头带 `win_2.8.0`，刷新返回 `101010100`；修复后带 `win_2.10.0`，两个账号均成功取得新 `access_token`，额度与词库数据读取正常。
+- 真实 `app.asar` 的签名提取用例通过（`TYPELESS_ASAR_FOR_TEST`）。
 - `lib/browser-login.js` 已加入语法检查链；新增 6 个用例覆盖 leveldb 解析、埋点记录误判、新账号轮询与 profile 清理。
-- **尚未在真实 Chrome/Edge 上跑通完整注册流程。** leveldb 解析有单测兜底，但「主浏览器登着旧号 + 注册新号」这条主路径需要真机验证。
+- **注册向导尚未在真实 Chrome/Edge 上跑通完整流程。** leveldb 解析有单测兜底，但「主浏览器登着旧号 + 注册新号」这条主路径需要真机验证。
 
 ## 2.1.0 - Typeless 2.8.3 签名还原与批量清理 (2026-10-27)
 
