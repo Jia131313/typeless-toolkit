@@ -1972,17 +1972,24 @@ function closeRegisterWizard(){
   closeModal('regWizardMask');
 }
 async function registerWizardStart(){
-  if(!await appConfirm(i18nText("ui.3e5768051ab6","开始注册新账号?\n\n1. 保存当前账号快照\n2. 重置设备 ID 并打开登录页\n3. 请你在 Typeless 注册或登录目标账号\n4. 回到工具集抓取凭证并添加\n5. 自动跳过教程并在后台对齐词库\n\n本地备注名不会代替凭证抓取。"))) return;
+  if(!await appConfirm(i18nText("ui.3e5768051ab6","开始注册新账号?\n\n1. 保存当前账号快照\n2. 重置设备 ID 并打开一个独立的浏览器窗口\n3. 请在那个窗口里注册或登录目标账号\n4. 回到工具集点「完成」读取凭证并添加\n5. 自动跳过教程并在后台对齐词库\n\n本地备注名不会代替凭证抓取。"))) return;
   document.getElementById('regStartBtn').disabled=true;
   setRegStatus(i18nText("ui.3fbdfb9b4bc5","正在保存快照并解除设备限制…"));
   try{
     const r=await apiTimed('/api/register-wizard/start',{method:'POST'},60000);
     if(r.status!=='OK'){ setRegStatus(r.msg||i18nText("ui.65525f0f4417","启动失败")); document.getElementById('regStartBtn').disabled=false; toast(r.msg||i18nText("ui.3e3c8068bb0e","失败"),'err'); return; }
     regWizardPrevId=r.data?.previous_user_id||'';
-    setRegStatus((r.msg||i18nText("ui.0618c00e419b","已准备注册"))+i18nText("ui.65574e197c64","\n原账号: ")+(r.data?.previous_email||r.data?.previous_user_id||i18nText("ui.72077749f794","无"))+i18nText("ui.3445eef8b8a0","\n请在 Typeless 中注册或登录目标账号，然后点「检测新号登录」或等待自动检测。"));
+    const viaBrowser=!!r.data?.browser;
+    setRegStatus(
+      (r.msg||i18nText("ui.0618c00e419b","已准备注册"))+
+      i18nText("ui.65574e197c64","\n原账号: ")+(r.data?.previous_email||r.data?.previous_user_id||i18nText("ui.72077749f794","无"))+
+      (viaBrowser
+        ? i18nText("ui.722db92a2640","\n\n请在新打开的浏览器窗口里完成注册。\n如果网页最后提示「无法登录 (1101)」，那是网页尝试唤起桌面端失败，忽略即可 —— 凭证仍然会保存下来，直接点「完成」。")
+        : i18nText("ui.3445eef8b8a0","\n请在 Typeless 中注册或登录目标账号，然后点「检测新号登录」或等待自动检测。"))
+    );
     document.getElementById('regPollBtn').disabled=false;
     document.getElementById('regFinishBtn').disabled=false;
-    toast(i18nText("ui.1f0a7a2ae811","请在 Typeless 登录新号"),'ok');
+    toast(viaBrowser?i18nText("ui.3eab635adc36","请在新打开的浏览器窗口注册"):i18nText("ui.1f0a7a2ae811","请在 Typeless 登录新号"),'ok');
     if(regWizardTimer) clearInterval(regWizardTimer);
     regWizardTimer=setInterval(()=>{ registerWizardPoll(true); }, 4000);
   }catch(e){
@@ -2004,10 +2011,10 @@ async function registerWizardPoll(silent){
   }catch(e){ if(!silent) setRegStatus(i18nText("ui.da9721e1d17a","探测失败: ")+(e.message||e)); }
 }
 async function registerWizardFinish(){
-  if(!await appConfirm(i18nText("ui.c7fff126ac09","确认 Typeless 已登录目标账号?\n将自动抓取 user_id、邮箱和 token，成功后跳过教程、写入管理器，并在后台对齐词库。\n\n本地备注名只影响显示，不参与账号识别。"))) return;
+  if(!await appConfirm(i18nText("ui.20edc5c1c40f","确认已在注册窗口完成登录目标账号?\n将自动读取新号凭证、注入本机 Typeless、跳过教程、写入管理器，并在后台对齐词库。\n\n本地备注名只影响显示，不参与账号识别。"))) return;
   if(regWizardTimer){ clearInterval(regWizardTimer); regWizardTimer=null; }
   document.getElementById('regFinishBtn').disabled=true;
-  setRegStatus(i18nText("ui.2440b16c5fea","正在跳过教程、抓取当前登录凭证并添加账号，请稍候 30～90 秒…"));
+  setRegStatus(i18nText("ui.2440b16c5fea","正在读取新号凭证、注入登录态并添加账号，请稍候 30～90 秒…"));
   toast(i18nText("ui.817a0282e1ea","完成中,请勿关闭…"));
   try{
     const r=await apiTimed('/api/register-wizard/finish',{

@@ -297,7 +297,7 @@
   "ui.bcce03d91868": "\nSözlük arka planda otomatik olarak kontrol edilip eşitlenecek.",
   "ui.33246f6a5e5b": "Tamam",
   "ui.817a0282e1ea": "Tamamlanıyor — lütfen kapatmayın…",
-  "ui.2440b16c5fea": "Onboarding atlanıyor, mevcut giriş kimlik bilgileri alınıyor ve hesap ekleniyor. Lütfen 30–90 saniye bekleyin…",
+  "ui.2440b16c5fea": "Yeni kimlik bilgileri okunuyor, bu cihazda oturum açılıyor ve hesap ekleniyor. Lütfen 30–90 saniye bekleyin…",
   "ui.c7fff126ac09": "Typeless'in hedef hesapta oturum açtığını doğrulayın.\nuser_id, e-posta ve token otomatik olarak alınır; başarılı olursa onboarding atlanır, hesap yöneticiye yazılır ve sözlük arka planda eşitlenir.\n\nYerel takma ad yalnızca görünümü etkiler, hesap tanımlamada kullanılmaz.",
   "ui.da9721e1d17a": "Algılama başarısız: ",
   "ui.1a76a1d189fa": "Yeni oturum algılandı",
@@ -1244,5 +1244,8 @@
   "ui.5f13e5fc17da": "Kimlik bilgisi geçersiz hesap yok",
   "ui.c1c31d8866cc": "Hesap durumu hâlâ okunuyor. Geçersiz hesapları biraz sonra yeniden kaldırın.",
   "ui.78e243e1e60a": "Önce kaldırılacak hesapları seçin",
-  "ui.0cc95c81a49b": "Bu hesabı seç"
+  "ui.0cc95c81a49b": "Bu hesabı seç",
+  "ui.722db92a2640": "\n\nKaydı az önce açılan tarayıcı penceresinde tamamlayın.\nSayfa sonunda \"Oturum açılamıyor (1101)\" yazıyorsa, sayfa masaüstü uygulamasına devredemedi demektir; yok sayın. Kimlik bilgileri zaten kaydedildi, sadece Bitir'e basın.",
+  "ui.3eab635adc36": "Kaydı yeni tarayıcı penceresinde tamamlayın",
+  "ui.20edc5c1c40f": "Kayıt penceresinde hedef hesaba giriş yaptığınızı onaylıyor musunuz?\nYeni kimlik bilgileri okunacak, bu cihazda oturum açılacak, eğitim atlanacak, hesap kaydedilecek ve sözlük arka planda hizalanacak.\n\nYerel takma ad yalnızca görünümü etkiler ve hesabı tanımlamak için kullanılmaz."
 }

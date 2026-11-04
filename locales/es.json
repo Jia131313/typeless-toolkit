@@ -297,7 +297,7 @@
   "ui.bcce03d91868": "\nEl diccionario se comprobará y alineará automáticamente en segundo plano.",
   "ui.33246f6a5e5b": "Completar",
   "ui.817a0282e1ea": "Completando; no cierres…",
-  "ui.2440b16c5fea": "Omitiendo el onboarding, capturando las credenciales de la sesión actual y añadiendo la cuenta. Espera de 30 a 90 segundos…",
+  "ui.2440b16c5fea": "Leyendo las credenciales nuevas, iniciando sesión en este dispositivo y añadiendo la cuenta. Espera de 30 a 90 segundos…",
   "ui.c7fff126ac09": "¿Confirmas que Typeless ha iniciado sesión con la cuenta de destino?\nSe capturarán automáticamente el user_id, el correo y el token; si se consigue, se omitirá el onboarding, se escribirá en el administrador y se alineará el diccionario en segundo plano.\n\nEl nombre de nota local solo afecta a la visualización y no interviene en el reconocimiento de cuentas.",
   "ui.da9721e1d17a": "Error de detección: ",
   "ui.1a76a1d189fa": "Se ha detectado un nuevo inicio de sesión",
@@ -1244,5 +1244,8 @@
   "ui.5f13e5fc17da": "No hay cuentas con credenciales no válidas",
   "ui.c1c31d8866cc": "El estado de las cuentas aún se está cargando. Vuelve a quitar las no válidas dentro de un momento.",
   "ui.78e243e1e60a": "Selecciona primero las cuentas que quieres quitar",
-  "ui.0cc95c81a49b": "Seleccionar esta cuenta"
+  "ui.0cc95c81a49b": "Seleccionar esta cuenta",
+  "ui.722db92a2640": "\n\nCompleta el registro en la ventana del navegador que se acaba de abrir.\nSi la página termina con «No se puede iniciar sesión (1101)», significa que la página no pudo pasar a la aplicación de escritorio; ignóralo. Las credenciales ya están guardadas, solo pulsa Finalizar.",
+  "ui.3eab635adc36": "Completa el registro en la nueva ventana del navegador",
+  "ui.20edc5c1c40f": "¿Confirmas que has iniciado sesión en la cuenta de destino en la ventana de registro?\nSe leerán las credenciales nuevas, se iniciará sesión en este dispositivo, se omitirá el tutorial, se guardará la cuenta y se alineará el diccionario en segundo plano.\n\nEl alias local solo afecta a la visualización y no se usa para identificar la cuenta."
 }
