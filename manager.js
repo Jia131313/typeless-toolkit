@@ -26,6 +26,8 @@ const {
 } = require('./lib/account-sync');
 const { installOfficialUpdate, officialUpdateStatus } = require('./lib/official-update');
 const { createToolkitUpdateController } = require('./lib/toolkit-update');
+// 隔离浏览器登录：注册向导用独立 profile 打开登录页，避开主浏览器的旧账号登录态
+const browserLogin = require('./lib/browser-login');
 const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
@@ -60,6 +62,8 @@ const PAYWALL_MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 const PAYWALL_MAINTENANCE_STARTUP_DELAY_MS = 2500;
 const ACCOUNT_SYNC_CONFIG_FILE = path.join(ROOT, 'account-sync.json');
 const ACCOUNT_SYNC_TOMBSTONES_FILE = path.join(ROOT, 'account-sync-tombstones.json');
+// 注册向导的隔离浏览器会话（每个进程一份；重启后端即失效，临时 profile 会在下次启动时按时间清理）
+let registerWizardSession = null;
 
 function readPrivateJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -1213,7 +1217,7 @@ const server = http.createServer(async (req, res) => {
         return send(res, 500, { status: 'FAIL', msg: '重置设备后自动登录失败：' + (error.message || error) });
       }
     }
-    // 注册并添加新账号·开始:保存当前快照 → 解除设备 → 启动登录页
+    // 注册并添加新账号·开始:保存当前快照 → 解除设备 → 打开隔离浏览器
     if (m === 'POST' && p === '/api/register-wizard/start') {
       const prev = detectCurrentAccountFromFile();
       let snapshot_saved = false;
@@ -1223,19 +1227,64 @@ const server = http.createServer(async (req, res) => {
         snapshot_saved = true;
       }
       await resetDevice();
+
+      // 主浏览器里如果还留着上一个账号的网页登录态，登录页会直接把旧号登回来
+      // （网页端把凭证存在 localStorage，点「打开桌面应用」走 typeless:// 深链）。
+      // 所以改成用独立 profile 的浏览器打开登录页，注册完直接读该 profile 的
+      // localStorage 取新号凭证，再注入本机 Typeless。
+      let browser = null;
+      try {
+        browserLogin.cleanupOldProfiles(ROOT);
+        const detected = browserLogin.detectChromiumBrowser();
+        if (detected) {
+          const profileDir = browserLogin.createIsolatedProfile(ROOT);
+          await browserLogin.launchIsolatedBrowser(detected, profileDir, browserLogin.LOGIN_URL);
+          browser = { name: detected.name, profile_dir: profileDir, isolated: true };
+          registerWizardSession = { prev_user_id: prev.found ? prev.user_id : null, profile_dir: profileDir, captured: null };
+        }
+      } catch (e) {
+        log('[register-wizard] 隔离浏览器启动失败，退回手动流程:', e.message);
+        registerWizardSession = null;
+      }
+
       return send(res, 200, {
         status: 'OK',
         data: {
           previous_user_id: prev.found ? prev.user_id : null,
           previous_email: prev.found ? prev.email : null,
           snapshot_saved,
+          browser,
         },
-        msg: '已解除设备限制。请在 Typeless 中注册或登录新账号,完成后回到管理器点「完成」。',
+        msg: browser
+          ? `已解除设备限制，并打开了一个独立的 ${browser.name} 窗口用于注册。请在该窗口里注册或登录新账号，完成后回到这里点「完成」。`
+          : '已解除设备限制。请在 Typeless 中注册或登录新账号，完成后回到管理器点「完成」。',
       });
     }
     // 注册并添加新账号·探测是否已登录目标账号
     if (m === 'GET' && p === '/api/register-wizard/status') {
       const prevId = u.searchParams.get('previous_user_id') || '';
+      // 隔离浏览器路径：状态看的是临时 profile 的 local storage，不是本机 Typeless
+      if (registerWizardSession && registerWizardSession.profile_dir) {
+        const found = browserLogin.readTokenFromProfile(registerWizardSession.profile_dir);
+        const browserUserId = found ? (browserLogin.tokenUserId(found.accessToken) || found.userId) : null;
+        const isNew = !!browserUserId && browserUserId !== (registerWizardSession.prev_user_id || '');
+        return send(res, 200, {
+          status: 'OK',
+          data: {
+            logged_in: !!browserUserId,
+            is_new_account: isNew,
+            user_id: browserUserId || null,
+            email: found ? found.email : null,
+            roles: null,
+            source: 'isolated-browser',
+            msg: !browserUserId
+              ? '尚未在注册窗口完成登录，请继续'
+              : (isNew
+                ? `已检测到新账号 ${found.email || browserUserId}，可点完成`
+                : '注册窗口里仍是原账号，请换一个账号登录'),
+          },
+        });
+      }
       const cur = detectCurrentAccountFromFile();
       if (!cur.found) {
         return send(res, 200, {
@@ -1262,10 +1311,33 @@ const server = http.createServer(async (req, res) => {
     if (m === 'POST' && p === '/api/register-wizard/finish') {
       try {
         const b = await readBody(req);
+        let captured = null;
+        // 隔离浏览器路径：等临时 profile 里出现「非原账号」的凭证，最多等 20 秒
+        if (registerWizardSession && registerWizardSession.profile_dir) {
+          const hit = await browserLogin.waitForNewToken(
+            registerWizardSession.profile_dir,
+            registerWizardSession.prev_user_id,
+            20000,
+          );
+          if (!hit) throw new Error('注册窗口里还没有检测到新账号凭证，请确认浏览器里已经完成注册或登录');
+          captured = {
+            user_id: hit.userId,
+            email: hit.token.email || '',
+            token: hit.token.accessToken,
+            refresh_token: hit.token.refreshToken,
+            client_user_id: null,
+            captured_at: new Date().toISOString(),
+          };
+        }
         const result = await finishNewAccountWizard({
           import_master: false,
           nickname: b.nickname || '',
+          captured,
         });
+        if (registerWizardSession && registerWizardSession.profile_dir) {
+          browserLogin.removeIsolatedProfile(registerWizardSession.profile_dir);
+        }
+        registerWizardSession = null;
         dictionarySync.schedule('registered-account');
         clearAccountDeletion(result.account.user_id);
         scheduleAccountSync('registered-account');
@@ -1809,6 +1881,12 @@ function startServer() {
       scheduleAccountSync('startup', 1500);
       accountSyncInterval = setInterval(() => scheduleAccountSync('periodic'), AUTO_SYNC_INTERVAL_MS);
       accountSyncInterval.unref();
+      // 注册向导的临时浏览器 profile 每个上百 MB。上次进程退出时没清掉的，
+      // 在这里补一刀；只删超过一小时的，避免误删仍在进行中的注册。
+      try {
+        const cleaned = browserLogin.cleanupOldProfiles(ROOT);
+        if (cleaned) log('[mgr] 已清理 ' + cleaned + ' 个过期的浏览器登录 profile');
+      } catch (e) {}
       resolve(server);
     };
     server.once('error', onError);

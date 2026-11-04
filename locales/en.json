@@ -297,7 +297,7 @@
   "ui.bcce03d91868": "\nThe dictionary will be checked and synced in the background.",
   "ui.33246f6a5e5b": "Done",
   "ui.817a0282e1ea": "Finishing up — please don't close…",
-  "ui.2440b16c5fea": "Skipping onboarding, capturing the current login credentials, and adding the account. This takes 30–90 seconds…",
+  "ui.2440b16c5fea": "Reading the new credentials, signing in this device, and adding the account. This takes 30–90 seconds…",
   "ui.c7fff126ac09": "Confirm that Typeless is signed in to the target account.\nuser_id, email, and token will be captured automatically; on success, onboarding is skipped, the account is written to the manager, and the dictionary is synced in the background.\n\nThe local nickname only affects the display and is not used to identify accounts.",
   "ui.da9721e1d17a": "Detection failed: ",
   "ui.1a76a1d189fa": "New sign-in detected",
@@ -1244,5 +1244,8 @@
   "ui.5f13e5fc17da": "No accounts with invalid credentials",
   "ui.c1c31d8866cc": "Account status is still loading. Remove invalid accounts again in a moment.",
   "ui.78e243e1e60a": "Select accounts to remove first",
-  "ui.0cc95c81a49b": "Select this account"
+  "ui.0cc95c81a49b": "Select this account",
+  "ui.722db92a2640": "\n\nFinish signing up in the browser window that just opened.\nIf the page ends with “Unable to sign in (1101)”, that is the page failing to hand off to the desktop app — ignore it. The credentials are still saved; just click Finish.",
+  "ui.3eab635adc36": "Finish signing up in the new browser window",
+  "ui.20edc5c1c40f": "Confirm you have signed in to the target account in the registration window?\nThis will read the new credentials, sign in this device, skip onboarding, save the account, and align the dictionary in the background.\n\nThe local nickname only affects display and is not used to identify the account."
 }

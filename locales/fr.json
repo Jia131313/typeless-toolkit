@@ -297,7 +297,7 @@
   "ui.bcce03d91868": "\nLe dictionnaire sera vérifié et aligné automatiquement en arrière-plan.",
   "ui.33246f6a5e5b": "Terminer",
   "ui.817a0282e1ea": "Finalisation en cours, ne fermez pas…",
-  "ui.2440b16c5fea": "Passage de l'onboarding, récupération des identifiants de connexion actuels et ajout du compte en cours. Patientez 30 à 90 secondes…",
+  "ui.2440b16c5fea": "Lecture des nouveaux identifiants, connexion de cet appareil et ajout du compte en cours. Patientez 30 à 90 secondes…",
   "ui.c7fff126ac09": "Confirmer que Typeless est connecté au compte cible ?\nuser_id, adresse e-mail et token seront récupérés automatiquement ; en cas de succès, l'onboarding sera passé, le compte écrit dans le gestionnaire et le dictionnaire aligné en arrière-plan.\n\nLe nom local n'affecte que l'affichage et ne participe pas à l'identification du compte.",
   "ui.da9721e1d17a": "Échec de la détection : ",
   "ui.1a76a1d189fa": "Nouvelle connexion détectée",
@@ -1244,5 +1244,8 @@
   "ui.5f13e5fc17da": "Aucun compte avec des identifiants invalides",
   "ui.c1c31d8866cc": "L'état des comptes est encore en cours de chargement. Réessayez de retirer les comptes invalides dans un instant.",
   "ui.78e243e1e60a": "Sélectionnez d'abord les comptes à retirer",
-  "ui.0cc95c81a49b": "Sélectionner ce compte"
+  "ui.0cc95c81a49b": "Sélectionner ce compte",
+  "ui.722db92a2640": "\n\nTerminez l'inscription dans la fenêtre du navigateur qui vient de s'ouvrir.\nSi la page se termine par « Impossible de se connecter (1101) », cela signifie que la page n'a pas pu transmettre à l'application de bureau ; ignorez-le. Les identifiants sont déjà enregistrés, cliquez simplement sur Terminer.",
+  "ui.3eab635adc36": "Terminez l'inscription dans la nouvelle fenêtre du navigateur",
+  "ui.20edc5c1c40f": "Confirmez-vous être connecté au compte cible dans la fenêtre d'inscription ?\nLes nouveaux identifiants seront lus, la session sera ouverte sur cet appareil, le tutoriel sera ignoré, le compte sera enregistré et le dictionnaire aligné en arrière-plan.\n\nLe surnom local n'affecte que l'affichage et ne sert pas à identifier le compte."
 }

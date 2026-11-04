@@ -297,7 +297,7 @@
   "ui.bcce03d91868": "\nDas Wörterbuch wird im Hintergrund automatisch geprüft und abgeglichen.",
   "ui.33246f6a5e5b": "Fertig",
   "ui.817a0282e1ea": "Wird abgeschlossen, bitte nicht schließen…",
-  "ui.2440b16c5fea": "Onboarding wird übersprungen, aktuelle Anmeldedaten werden erfasst und das Konto wird hinzugefügt. Bitte 30～90 Sekunden warten…",
+  "ui.2440b16c5fea": "Die neuen Zugangsdaten werden gelesen, die Anmeldung auf diesem Gerät wird durchgeführt und das Konto wird hinzugefügt. Bitte 30～90 Sekunden warten…",
   "ui.c7fff126ac09": "Ist Typeless beim Zielkonto angemeldet?\nuser_id, E-Mail und Token werden automatisch erfasst; anschließend wird das Onboarding übersprungen, der Eintrag im Manager gespeichert und das Wörterbuch im Hintergrund abgeglichen.\n\nDer lokale Anzeigename beeinflusst nur die Anzeige und wird nicht zur Kontoerkennung verwendet.",
   "ui.da9721e1d17a": "Erkennung fehlgeschlagen: ",
   "ui.1a76a1d189fa": "Neue Anmeldung erkannt",
@@ -1244,5 +1244,8 @@
   "ui.5f13e5fc17da": "Keine Konten mit ungültigen Anmeldedaten",
   "ui.c1c31d8866cc": "Der Kontostatus wird noch geladen. Entferne ungültige Konten gleich noch einmal.",
   "ui.78e243e1e60a": "Wähle zuerst die Konten aus, die entfernt werden sollen",
-  "ui.0cc95c81a49b": "Dieses Konto auswählen"
+  "ui.0cc95c81a49b": "Dieses Konto auswählen",
+  "ui.722db92a2640": "\n\nSchließe die Registrierung im soeben geöffneten Browserfenster ab.\nWenn die Seite mit „Anmeldung nicht möglich (1101)“ endet, konnte sie die Desktop-App nicht aufrufen — ignoriere das. Die Zugangsdaten sind bereits gespeichert, klicke einfach auf Fertigstellen.",
+  "ui.3eab635adc36": "Registrierung im neuen Browserfenster abschließen",
+  "ui.20edc5c1c40f": "Bestätigst du, dass du dich im Registrierungsfenster beim Zielkonto angemeldet hast?\nDie neuen Zugangsdaten werden gelesen, die Anmeldung auf diesem Gerät wird durchgeführt, das Tutorial wird übersprungen, das Konto gespeichert und das Wörterbuch im Hintergrund abgeglichen.\n\nDer lokale Spitzname wirkt sich nur auf die Anzeige aus und dient nicht zur Identifizierung des Kontos."
 }
