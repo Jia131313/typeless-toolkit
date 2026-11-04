@@ -16,15 +16,19 @@ process.env.TYPELESS_EXE = path.join(__dirname, 'no-such-typeless.exe');
 const { describeApiError } = require('../lib/common');
 const P = require('../lib/platform');
 
-test('Windows 平台提供 appVersion,与 macOS 分支对齐', () => {
+// 下面三条针对 Windows 分支。CI 的 macOS job 里 P.platform 是 mac 实现,
+// appVersion 走 plutil 读 Info.plist,错误信息与断言不符,必须跳过。
+const WIN_ONLY = { skip: process.platform !== 'win32' };
+
+test('Windows 平台提供 appVersion,与 macOS 分支对齐', WIN_ONLY, () => {
   assert.equal(typeof P.platform.appVersion, 'function');
 });
 
-test('appVersion 拒绝空路径,不会静默返回空串', () => {
+test('appVersion 拒绝空路径,不会静默返回空串', WIN_ONLY, () => {
   assert.throws(() => P.platform.appVersion(''), /未指定/);
 });
 
-test('appVersion 对不存在的文件给出明确错误', () => {
+test('appVersion 对不存在的文件给出明确错误', WIN_ONLY, () => {
   assert.throws(
     () => P.platform.appVersion(path.join(__dirname, 'no-such-typeless.exe')),
     /不存在/,
