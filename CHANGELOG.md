@@ -1,6 +1,15 @@
 # 更新日志
 
-## 未发布 - 整理仓库根目录
+## 未发布
+
+### 修复 Windows 自动解除弹窗报 EBUSY
+
+- 现象：Typeless 2.12.0 下，切换账号或工具集启动后自动解除弹窗失败，诊断日志为 `EBUSY: resource busy or locked, open '...\Typeless.exe'`，补丁未生效。
+- 根因：Windows 的 `launchTypeless()` 只把启动交给 PowerShell 就返回，机器繁忙时 Typeless 要过一两秒才真正起来。补丁流程原先“关闭一次、盲等 1.5 秒”就开始写 `Typeless.exe`，若 Typeless 在关闭之后才被拉起，写入时程序文件仍被锁定。
+- 现在新增 `stopTypelessForFileWrite()`：持续关闭，直到 Typeless 连续 3 秒保持退出且程序文件可写；复制完回滚备份、写入前再确认一次，失败恢复前也先等文件可写。macOS 流程不变。
+- 2.12.0 本身的补丁兼容性无问题：在副本上完整执行补丁，可定位 `CyPbRSIN.mjs`、自动识别新标记并关闭完整性 fuse。
+
+### 整理仓库根目录
 
 只调整源码仓库结构，发行包内容和用户数据不受影响。
 

@@ -32,7 +32,7 @@ const {
   config, ROOT, TYPELESS_EXE, USERDATA_DIR, ASAR_PATH, IS_MAC,
   readAccounts, writeAccounts, readCurrentUser,
   saveSnapshot, restoreSnapshot, hasSnapshot, hasValidSnapshot, inspectSnapshot,
-  killTypeless, launchTypeless, withSilentLaunch, isTypelessRunning, resetDevice, clearDeviceIdentity, clearLoginResidue,
+  killTypeless, stopTypelessForFileWrite, launchTypeless, withSilentLaunch, isTypelessRunning, resetDevice, clearDeviceIdentity, clearLoginResidue,
   createTypelessAppBackup, createTypelessAppStaging, restoreTypelessAppBackup,
   discardTypelessAppBackup, verifyTypelessAppSignature,
   toolkitAppManagementState, markToolkitAppManagementAuthorized,
@@ -535,7 +535,8 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       throw error;
     }
 
-    killTypeless(); await sleep(1500);
+    // macOS 保持原有关闭方式；Windows 在 try 内等到 Typeless.exe 真正可写，失败时也能走恢复与重启。
+    if (IS_MAC) { killTypeless(); await sleep(1500); }
     // Windows 延续当前版本的文件级回滚；macOS 在 .app 外创建完整 Bundle 备份，
     // 避免签名时把 rollback 文件纳入资源封印，也确保能恢复 _CodeSignature 与嵌套组件。
     const rollbackAsar = IS_MAC ? null : ASAR_PATH + '.toolkit-rollback';
@@ -549,6 +550,7 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
     let rollbackError = null;
     let restartError = null;
     try {
+      if (!IS_MAC) await stopTypelessForFileWrite();
       operationPhase = '创建补丁前备份';
       if (IS_MAC) {
         if (tauriHost.available) appStaging = createTypelessAppStaging('paywall-patch');
@@ -556,6 +558,9 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
       } else {
         fs.copyFileSync(ASAR_PATH, rollbackAsar);
         fs.copyFileSync(TYPELESS_EXE, rollbackExe);
+        // 复制备份要几秒，期间若有延迟启动的 Typeless 起来，写入前再确认一次
+        operationPhase = '确认 Typeless 已退出';
+        await stopTypelessForFileWrite({ quietMs: 0 });
       }
       operationPhase = '修改付费墙与 Electron 完整性配置';
       result = await patchPaywall(tauriHost.available ? {
@@ -593,7 +598,11 @@ async function runPaywallPatchTransaction({ reason = 'manual' } = {}) {
     } catch (error) {
       operationError = error;
       try {
-        killTypeless(); await sleep(500);
+        if (IS_MAC) { killTypeless(); await sleep(500); }
+        else {
+          // 恢复前同样等 exe 可写；等不到也继续，真正的复制结果会如实记入 rollback_error
+          try { await stopTypelessForFileWrite({ quietMs: 0 }); } catch (e) {}
+        }
         if (IS_MAC && tauriHost.available && hostSwapCompleted && appBackup?.app) {
           const restored = await tauriHost.request('restore_typeless_backup', {
             backup: appBackup.app,
