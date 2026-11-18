@@ -58,8 +58,7 @@ Windows 与 macOS 各一套实现。macOS 路径按平台固定(不混用 Window
 账号管理、账号切换、快照、词库增删/导出/同步、主词库、备份、设备重置、注册向导、
 弹窗补丁和跳过新手引导均复用同一套 API 与管理页面；只有桌面宿主和系统调用按平台实现。
 
-- **启动**:可用 `启动管理器.command` / `同步词库.command` 运行源码
-  (首次需在终端执行 `chmod +x *.command` 赋可执行权限;或右键→打开)，也可运行
+- **启动**:源码可在终端运行 `npm start`(管理器)/ `npm run sync`(词库同步)，也可运行
   `npm run build:mac` 构建当前架构 Portable DMG，或运行 `npm run build:mac:all` 构建 arm64/x64 的 Portable/Lite 四个 DMG。开发机可运行 `npm run deploy:mac` 一次完成构建、签名校验、
   替换 `/Applications` 中的旧 App 和启动验证；成功后旧 App 会被删除，外置用户数据不会改动。
   工具集使用个人 ad-hoc 签名而非 Developer ID/公证签名，
