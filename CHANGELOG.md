@@ -6,6 +6,7 @@
 
 - 移除源码模式的旧启动脚本 `启动管理器.bat/.command`、`同步词库.bat/.command`；改用 `npm start` 和 `npm run sync`。Windows 发行版入口仍是 `TypelessToolkit.exe`。
 - 移除与 `README.md` 重复的 `README.zh-CN.md`，以及与内置默认值一致的根目录 `config.json`；源码模式需要覆盖配置时，从 `config.example.json` 复制。
+- Windows 宿主源码 `main.cs`、`ToolkitLocale.cs`、`gen-icon.cs`、`app.manifest` 移入 `windows/`，与 macOS 的 `src-tauri/` 对应；`build/build-tray.bat` 已同步路径。
 - 源码运行可设置 `TYPELESS_DATA_DIR`，把账号、快照、日志等本机数据集中到单独目录；仓库已忽略 `data/`。
 
 ## 2.2.0 - 隔离浏览器注册与 Typeless 2.10.0 兼容 (2026-11-04)

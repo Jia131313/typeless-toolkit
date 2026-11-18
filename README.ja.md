@@ -95,7 +95,7 @@ npm run check
 node manager.js
 ```
 
-管理ページは既定で `http://127.0.0.1:7788` にあります。macOS では `npm run build:mac` で現在のアーキテクチャ向けの Portable DMG をビルドできます。Windows のパッケージング手順と注意点は[インストールガイド](docs/installation.md#windows-桌面窗口与托盘)をご覧ください。主なコードの分担は次のとおりです。`manager.js` がローカル API を提供し、`manager.html` が管理ページ、`lib/` に共通の業務ロジック、`main.cs` と `src-tauri/` がそれぞれ Windows と macOS のデスクトップホストです。
+管理ページは既定で `http://127.0.0.1:7788` にあります。macOS では `npm run build:mac` で現在のアーキテクチャ向けの Portable DMG をビルドできます。Windows のパッケージング手順と注意点は[インストールガイド](docs/installation.md#windows-桌面窗口与托盘)をご覧ください。主なコードの分担は次のとおりです。`manager.js` がローカル API を提供し、`manager.html` が管理ページ、`lib/` に共通の業務ロジック、`windows/` と `src-tauri/` がそれぞれ Windows と macOS のデスクトップホストです。
 
 ## ドキュメントとフィードバック
 

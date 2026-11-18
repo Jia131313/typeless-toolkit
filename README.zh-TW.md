@@ -95,7 +95,7 @@ npm run check
 node manager.js
 ```
 
-管理頁面預設位於 `http://127.0.0.1:7788`。macOS 可執行 `npm run build:mac` 建置目前架構的 Portable DMG；Windows 打包入口與注意事項見[安裝指南](docs/installation.md#windows-桌面窗口与托盘)。主要程式碼分工為：`manager.js` 提供本地 API，`manager.html` 是管理頁面，`lib/` 放共用業務邏輯，`main.cs` 與 `src-tauri/` 分別是 Windows、macOS 桌面宿主。
+管理頁面預設位於 `http://127.0.0.1:7788`。macOS 可執行 `npm run build:mac` 建置目前架構的 Portable DMG；Windows 打包入口與注意事項見[安裝指南](docs/installation.md#windows-桌面窗口与托盘)。主要程式碼分工為：`manager.js` 提供本地 API，`manager.html` 是管理頁面，`lib/` 放共用業務邏輯，`windows/` 與 `src-tauri/` 分別是 Windows、macOS 桌面宿主。
 
 ## 文件與回饋
 

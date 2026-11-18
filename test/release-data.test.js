@@ -16,8 +16,8 @@ const { releaseContent } = require('../scripts/prepare-release-notes');
 test('release version is consistent across packages, launchers, and scripts', () => {
   const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-  const manifest = fs.readFileSync(path.join(root, 'app.manifest'), 'utf8');
-  const host = fs.readFileSync(path.join(root, 'main.cs'), 'utf8');
+  const manifest = fs.readFileSync(path.join(root, 'windows', 'app.manifest'), 'utf8');
+  const host = fs.readFileSync(path.join(root, 'windows', 'main.cs'), 'utf8');
   assert.equal(lock.version, version);
   assert.equal(lock.packages[''].version, version);
   // 构建脚本已移入 build/，$sourceRoot 指向仓库根，package.json 从根目录读取
