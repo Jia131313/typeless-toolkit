@@ -1247,5 +1247,11 @@
   "ui.0cc95c81a49b": "Bu hesabı seç",
   "ui.722db92a2640": "\n\nKaydı az önce açılan tarayıcı penceresinde tamamlayın.\nSayfa sonunda \"Oturum açılamıyor (1101)\" yazıyorsa, sayfa masaüstü uygulamasına devredemedi demektir; yok sayın. Kimlik bilgileri zaten kaydedildi, sadece Bitir'e basın.",
   "ui.3eab635adc36": "Kaydı yeni tarayıcı penceresinde tamamlayın",
-  "ui.20edc5c1c40f": "Kayıt penceresinde hedef hesaba giriş yaptığınızı onaylıyor musunuz?\nYeni kimlik bilgileri okunacak, bu cihazda oturum açılacak, eğitim atlanacak, hesap kaydedilecek ve sözlük arka planda hizalanacak.\n\nYerel takma ad yalnızca görünümü etkiler ve hesabı tanımlamak için kullanılmaz."
+  "ui.20edc5c1c40f": "Kayıt penceresinde hedef hesaba giriş yaptığınızı onaylıyor musunuz?\nYeni kimlik bilgileri okunacak, bu cihazda oturum açılacak, eğitim atlanacak, hesap kaydedilecek ve sözlük arka planda hizalanacak.\n\nYerel takma ad yalnızca görünümü etkiler ve hesabı tanımlamak için kullanılmaz.",
+  "ui.a10100000001": "Ana sözlük",
+  "ui.a10100000002": "{p0}/{p1} eşitlendi",
+  "ui.a10100000003": "{p0} terim eklenecek, {p1} terim silinecek. Silme işlemi tüm yönetilen hesaplarla eşitlenecek.\n\nSilinecekler:\n{p2}{p3}",
+  "ui.a10100000004": "toplam {p0} terim",
+  "ui.a10100000005": "{p0} yinelenen terim birleştirildi; eşitleme arka planda devam edecek",
+  "ui.a10100000007": "Nedeni bilinmiyor"
 }

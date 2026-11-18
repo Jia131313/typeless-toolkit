@@ -122,6 +122,7 @@
   .home-heading .status-pill { max-width:270px; padding:4px 0; }
   .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:20px 0 0; }
   .stat { position:relative; padding:14px 16px; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
+  button.stat { width:100%; text-align:left; font:inherit; color:inherit; cursor:pointer; }
   .stat > .ui-icon { position:absolute; right:14px; top:15px; width:16px; height:16px; color:var(--sub); }
   .stat-content { min-width:0; flex:1; }
   .stat .k { font-size:11.5px; line-height:18px; color:var(--sub); padding-right:20px; }
@@ -1381,14 +1382,44 @@ matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
 });
 
 /* 概览统计 */
+function summarizeQuota(accounts){
+  const result={used:0,limit:0,remaining:0,known:0};
+  for(const account of accounts){
+    const u=account.live?.usage||{};
+    if(Number.isFinite(u.week_word_usage_value)&&u.week_word_usage_value>=0&&Number.isFinite(u.week_word_usage_limit)&&u.week_word_usage_limit>0){
+      result.used+=u.week_word_usage_value;
+      result.limit+=u.week_word_usage_limit;
+      result.remaining+=Math.max(0,u.week_word_usage_limit-u.week_word_usage_value);
+      result.known++;
+    }
+  }
+  return result;
+}
 function renderStats(){
   const n=ACCOUNTS.length;
   const valid=ACCOUNTS.filter(a=>a.live?.token_valid!==false).length;
-  let used=0, lim=0, dict=0, saved=0, known=0;
-  ACCOUNTS.forEach(a=>{ const u=a.live?.usage||{}; if(Number.isFinite(u.week_word_usage_value)&&u.week_word_usage_value>=0&&Number.isFinite(u.week_word_usage_limit)&&u.week_word_usage_limit>0){used+=u.week_word_usage_value; lim+=u.week_word_usage_limit; known++;} dict+=(a.live?.dict_count||0); saved+=(u.mins_saved||0); });
+  const {used,limit:lim,remaining,known}=summarizeQuota(ACCOUNTS);
+  let dict=0, saved=0;
+  ACCOUNTS.forEach(a=>{ const u=a.live?.usage||{}; dict+=(a.live?.dict_count||0); saved+=(u.mins_saved||0); });
   const rp=pct(used,lim);
-  document.getElementById('stats').innerHTML=i18nText("ui.6102f301072b","\n    <div class=\"stat\">{p0}<div class=\"stat-content\"><div class=\"k\">账号</div><div class=\"v\">{p1}</div><div class=\"foot\">有效 {p2} · 失效 {p3}</div></div></div>\n    <div class=\"stat\">{p4}<div class=\"stat-content\"><div class=\"k\">本周额度</div><div class=\"v\">{p5} <small class=\"stat-limit\">/ {p6}</small></div><div class=\"foot\">{p7}{p8}</div></div></div>\n    <div class=\"stat\">{p9}<div class=\"stat-content\"><div class=\"k\">词库合计</div><div class=\"v\">{p10}</div><div class=\"foot\">各账号合计</div></div></div>\n    <div class=\"stat\">{p11}<div class=\"stat-content\"><div class=\"k\">累计节省</div><div class=\"v\">{p12} <small>分钟</small></div><div class=\"foot\">全部账号听写</div></div></div>",[uiIcon('user'),n,valid,n-valid,uiIcon('chart'),known?nfmt(used):'—',known?nfmt(lim):'—',known?i18nText("ui.d532901a892d","已知额度剩 ")+nfmt(Math.max(0,lim-used))+i18nText("ui.9f8ba62c5d1a"," 字"):i18nText("ui.b33315080b04","额度未知"),known<n?' · '+(n-known)+i18nText("ui.cbea1193f00e"," 个未知"):'',uiIcon('book'),nfmt(dict),uiIcon('clock'),nfmt(Math.round(saved))]);
+  document.getElementById('stats').innerHTML=i18nText("ui.6102f301072b","\n    <div class=\"stat\">{p0}<div class=\"stat-content\"><div class=\"k\">账号</div><div class=\"v\">{p1}</div><div class=\"foot\">有效 {p2} · 失效 {p3}</div></div></div>\n    <div class=\"stat\">{p4}<div class=\"stat-content\"><div class=\"k\">本周额度</div><div class=\"v\">{p5} <small class=\"stat-limit\">/ {p6}</small></div><div class=\"foot\">{p7}{p8}</div></div></div>\n    <div class=\"stat\">{p9}<div class=\"stat-content\"><div class=\"k\">词库合计</div><div class=\"v\">{p10}</div><div class=\"foot\">各账号合计</div></div></div>\n    <div class=\"stat\">{p11}<div class=\"stat-content\"><div class=\"k\">累计节省</div><div class=\"v\">{p12} <small>分钟</small></div><div class=\"foot\">全部账号听写</div></div></div>",[uiIcon('user'),n,valid,n-valid,uiIcon('chart'),known?nfmt(used):'—',known?nfmt(lim):'—',known?i18nText("ui.d532901a892d","已知额度剩 ")+nfmt(remaining)+i18nText("ui.9f8ba62c5d1a"," 字"):i18nText("ui.b33315080b04","额度未知"),known<n?' · '+(n-known)+i18nText("ui.cbea1193f00e"," 个未知"):'',uiIcon('book'),nfmt(dict),uiIcon('clock'),nfmt(Math.round(saved))]);
   document.getElementById('settingsAccountCount').textContent=n+i18nText("ui.6ee50f2dfa57"," 个");
+  updateDictionaryStat();
+}
+function updateDictionaryStat(){
+  const summary=DICT_SYNC_STATUS?.summary||{};
+  const dictionaryStat=document.getElementById('stats').children[2];
+  if(!dictionaryStat) return;
+  let dictionaryButton=dictionaryStat;
+  if(dictionaryStat.tagName!=='BUTTON'){
+    dictionaryButton=document.createElement('button');
+    dictionaryButton.type='button'; dictionaryButton.className='stat';
+    dictionaryButton.onclick=openDictionarySyncStatus;
+    dictionaryStat.replaceWith(dictionaryButton);
+  }
+  const count=summary.master_count==null?'—':nfmt(summary.master_count);
+  const alignment=summary.account_count==null?'—':i18nText('ui.a10100000002','{p0}/{p1} 已对齐',[summary.aligned_count||0,summary.account_count]);
+  dictionaryButton.innerHTML=uiIcon('book')+'<div class="stat-content"><div class="k">'+esc(i18nText('ui.a10100000001','主词库'))+'</div><div class="v">'+esc(String(count))+'</div><div class="foot">'+esc(alignment)+'</div></div>';
 }
 
 async function launch(){ toast(i18nText("ui.9374250c94c9","启动中…")); const r=await api('/api/launch',{method:'POST'}); toast(r.msg||i18nText("ui.0eeffdd75bcb","已启动"),'ok'); setTimeout(detectCurrent,3000); }
@@ -1657,6 +1688,7 @@ function renderDictionarySyncStatus(status){
   if(aligned) aligned.textContent=summary.account_count==null?'—':`${summary.aligned_count||0}/${summary.account_count}`;
   if(last) last.textContent=syncTime(DICT_SYNC_STATUS.last_finished_at);
   if(nowBtn){ nowBtn.disabled=!!DICT_SYNC_STATUS.running; nowBtn.textContent=DICT_SYNC_STATUS.running?i18nText("ui.481ee2d4bc7d","正在检查…"):i18nText("ui.72523c64218f","立即检查"); }
+  updateDictionaryStat();
 }
 async function refreshDictionarySyncStatus(){
   try{
@@ -1670,7 +1702,8 @@ async function openDictionarySyncStatus(){
   document.getElementById('syncResultSummary').textContent=s.error
     ? `${s.msg||i18nText("ui.47dcfb6481ba","自动对齐失败")}：${s.error}`
     : (s.msg||i18nText("ui.164e15ce2beb","后台会在启动、新增账号、词库编辑后自动检查，并每 15 分钟兜底重试。"));
-  document.getElementById('syncResultTable').innerHTML='';
+  const failures=Array.isArray(s.failures)?s.failures:[];
+  document.getElementById('syncResultTable').innerHTML=failures.map(x=>'<div style="padding:6px 0;color:var(--err);overflow-wrap:anywhere">'+esc(x.nickname||x.email||x.user_id||'—')+': '+esc(x.reason||i18nText('ui.a10100000007','原因未知'))+'</div>').join('');
   openModal('syncResultMask');
 }
 function showSyncResults(rows, summary, msg){
@@ -2712,20 +2745,36 @@ async function openMaster(){
   const r=await api('/api/master');
   MASTER_ORIGINAL=r.data||[];
   document.getElementById('masterArea').value=MASTER_ORIGINAL.join('\n');
-  document.getElementById('masterCnt').textContent=MASTER_ORIGINAL.length+i18nText("ui.eb8c2d5adde4"," 条");
+  document.getElementById('masterCnt').textContent=normalizeMasterInput(MASTER_ORIGINAL).terms.length+i18nText("ui.eb8c2d5adde4"," 条");
   openModal('masterMask');
 }
+function normalizeMasterInput(lines){
+  const seen=new Set(),terms=[],merged=[];
+  for(const line of lines){
+    const term=String(line).trim(),key=term.toLowerCase();
+    if(!key) continue;
+    if(seen.has(key)) merged.push(term);
+    else {seen.add(key);terms.push(term);}
+  }
+  return {terms,merged};
+}
 async function saveMaster(){
-  const terms=document.getElementById('masterArea').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const input=document.getElementById('masterArea').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const {terms,merged}=normalizeMasterInput(input);
+  if(!merged.length && JSON.stringify(input)===JSON.stringify(MASTER_ORIGINAL)) return;
+  const original=normalizeMasterInput(MASTER_ORIGINAL).terms;
   const nextKeys=new Set(terms.map(s=>s.toLowerCase()));
-  const removed=MASTER_ORIGINAL.filter(term=>!nextKeys.has(term.toLowerCase()));
-  if(removed.length && !await appConfirm(i18nText("ui.8a7c1009309a","确认从主词库移除 {p0} 个词?\n\n这些词会作为明确的同步删除，在后台从所有已管理账号中一并移除。",[removed.length]))) return;
-  const r=await api('/api/master',{method:'POST',body:JSON.stringify({terms})});
+  const originalKeys=new Set(original.map(s=>s.toLowerCase()));
+  const removed=original.filter(term=>!nextKeys.has(term.toLowerCase()));
+  const added=terms.filter(term=>!originalKeys.has(term.toLowerCase()));
+  const more=removed.length>20?'\n'+i18nText('ui.a10100000004','等 {p0} 个词',[removed.length]):'';
+  if(removed.length && !await appConfirm(i18nText('ui.a10100000003','将新增 {p0} 个、删除 {p1} 个词。删除会同步到所有已管理账号。\n\n将删除：\n{p2}{p3}',[added.length,removed.length,removed.slice(0,20).join('\n'),more]))) return;
+  const r=await api('/api/master',{method:'POST',body:JSON.stringify({terms:input})});
   if(r.status==='OK'){
     MASTER_ORIGINAL=r.data||[];
     document.getElementById('masterArea').value=MASTER_ORIGINAL.join('\n');
     document.getElementById('masterCnt').textContent=MASTER_ORIGINAL.length+i18nText("ui.eb8c2d5adde4"," 条");
-    toast(r.msg||i18nText("ui.e70b0dbf8c98","已保存，后台会自动对齐"),'ok');
+    toast(merged.length?i18nText('ui.a10100000005','已合并 {p0} 个重复词，后台会自动对齐',[merged.length]):(r.msg||i18nText("ui.e70b0dbf8c98","已保存，后台会自动对齐")),'ok');
     refreshDictionarySyncStatus();
   }else toast(r.msg||i18nText("ui.40525a732872","保存失败"),'err');
 }

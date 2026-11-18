@@ -48,7 +48,7 @@ const {
   applyOnboardingCompleteToLiveFiles, healOnboardingAfterRestore,
   finishNewAccountWizard,
   getFeatureShortcuts, setFeatureShortcuts,
-  log, sleep,
+  log, sleep, describeApiError,
 } = C;
 
 const PORT = config.manager_port;
@@ -174,6 +174,7 @@ function createDictionarySyncController(syncFn, opts = {}) {
     next_check_at: null,
     reasons: [],
     summary: null,
+    failures: [],
     error: null,
     msg: '等待首次自动检查',
   };
@@ -233,6 +234,10 @@ function createDictionarySyncController(syncFn, opts = {}) {
             failed_count: result.failed_count,
             all_aligned: result.all_aligned,
           },
+          failures: (result.results || []).filter(row => row.error || !row.aligned).map(row => ({
+            user_id: row.user_id, nickname: row.nickname, email: row.email,
+            reason: describeApiError(row.error || row.msg, 200),
+          })),
           error: null,
           msg: empty ? '尚无账号，添加后会自动对齐' : result.msg,
         };
@@ -244,6 +249,7 @@ function createDictionarySyncController(syncFn, opts = {}) {
           running: false,
           last_finished_at: iso(now()),
           error: error.message || String(error),
+          failures: [],
           msg: '自动对齐失败，将在下次检查时重试',
         };
         return { ok: false, error: state.error, status: snapshot() };
@@ -1698,6 +1704,7 @@ const server = http.createServer(async (req, res) => {
         status: 'OK',
         data: changed.terms,
         changes: { added: changed.added.length, removed: changed.removed.length },
+        merged: changed.merged,
         msg: changed.removed.length
           ? `已保存，新增 ${changed.added.length} 条、移除 ${changed.removed.length} 条；后台将自动对齐所有账号`
           : `已保存，后台将自动对齐所有账号`,

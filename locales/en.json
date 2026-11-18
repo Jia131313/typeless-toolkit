@@ -1247,5 +1247,11 @@
   "ui.0cc95c81a49b": "Select this account",
   "ui.722db92a2640": "\n\nFinish signing up in the browser window that just opened.\nIf the page ends with “Unable to sign in (1101)”, that is the page failing to hand off to the desktop app — ignore it. The credentials are still saved; just click Finish.",
   "ui.3eab635adc36": "Finish signing up in the new browser window",
-  "ui.20edc5c1c40f": "Confirm you have signed in to the target account in the registration window?\nThis will read the new credentials, sign in this device, skip onboarding, save the account, and align the dictionary in the background.\n\nThe local nickname only affects display and is not used to identify the account."
+  "ui.20edc5c1c40f": "Confirm you have signed in to the target account in the registration window?\nThis will read the new credentials, sign in this device, skip onboarding, save the account, and align the dictionary in the background.\n\nThe local nickname only affects display and is not used to identify the account.",
+  "ui.a10100000001": "Master dictionary",
+  "ui.a10100000002": "{p0}/{p1} aligned",
+  "ui.a10100000003": "Add {p0} and delete {p1} terms. Deletions will sync to all managed accounts.\n\nTo delete:\n{p2}{p3}",
+  "ui.a10100000004": "{p0} terms in total",
+  "ui.a10100000005": "Merged {p0} duplicate terms; alignment will run in the background",
+  "ui.a10100000007": "Unknown reason"
 }

@@ -1247,5 +1247,11 @@
   "ui.0cc95c81a49b": "Seleccionar esta cuenta",
   "ui.722db92a2640": "\n\nCompleta el registro en la ventana del navegador que se acaba de abrir.\nSi la página termina con «No se puede iniciar sesión (1101)», significa que la página no pudo pasar a la aplicación de escritorio; ignóralo. Las credenciales ya están guardadas, solo pulsa Finalizar.",
   "ui.3eab635adc36": "Completa el registro en la nueva ventana del navegador",
-  "ui.20edc5c1c40f": "¿Confirmas que has iniciado sesión en la cuenta de destino en la ventana de registro?\nSe leerán las credenciales nuevas, se iniciará sesión en este dispositivo, se omitirá el tutorial, se guardará la cuenta y se alineará el diccionario en segundo plano.\n\nEl alias local solo afecta a la visualización y no se usa para identificar la cuenta."
+  "ui.20edc5c1c40f": "¿Confirmas que has iniciado sesión en la cuenta de destino en la ventana de registro?\nSe leerán las credenciales nuevas, se iniciará sesión en este dispositivo, se omitirá el tutorial, se guardará la cuenta y se alineará el diccionario en segundo plano.\n\nEl alias local solo afecta a la visualización y no se usa para identificar la cuenta.",
+  "ui.a10100000001": "Diccionario principal",
+  "ui.a10100000002": "{p0}/{p1} sincronizadas",
+  "ui.a10100000003": "Se añadirán {p0} y eliminarán {p1} términos. Las eliminaciones se sincronizarán con todas las cuentas gestionadas.\n\nSe eliminarán:\n{p2}{p3}",
+  "ui.a10100000004": "{p0} términos en total",
+  "ui.a10100000005": "Se combinaron {p0} términos duplicados; la sincronización continuará en segundo plano",
+  "ui.a10100000007": "Motivo desconocido"
 }
