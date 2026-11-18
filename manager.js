@@ -1697,7 +1697,7 @@ const server = http.createServer(async (req, res) => {
           msg: `本次将同步删除 ${removedCount} 个词，已超过单次 500 条安全上限。请分批删除，避免对每个账号产生大量远端写入。`,
         });
       }
-      const changed = replaceMasterTerms(b.terms || []);
+      const changed = replaceMasterTerms(b.terms || [], { mergeDuplicates: true });
       dictionarySync.schedule('master-edited');
       scheduleAccountSync('master-edited');
       return send(res, 200, {

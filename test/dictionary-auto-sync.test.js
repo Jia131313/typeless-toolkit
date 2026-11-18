@@ -120,14 +120,16 @@ test('主词库保存按大小写和首尾空格合并，读取不改写原文�
     const before = fs.readFileSync(C.MASTER_CSV, 'utf8');
     C.readMaster();
     const afterRead = fs.readFileSync(C.MASTER_CSV, 'utf8');
-    const result = C.replaceMasterTerms([' Alpha ', 'ALPHA', 'Ｂ', 'B', ' beta ', 'Beta']);
-    process.stdout.write(JSON.stringify({ before, afterRead, result }));
+    const imported = C.replaceMasterTerms(['Alpha', 'ALPHA', 'Ｂ', 'B']);
+    const result = C.replaceMasterTerms([' Alpha ', 'ALPHA', 'Ｂ', 'B', ' beta ', 'Beta'], { mergeDuplicates: true });
+    process.stdout.write(JSON.stringify({ before, afterRead, imported, result }));
   `;
   const output = execFileSync(process.execPath, ['-e', script], {
     encoding: 'utf8', env: { ...process.env, TYPELESS_DATA_DIR: root },
   });
-  const { before, afterRead, result } = JSON.parse(output);
+  const { before, afterRead, imported, result } = JSON.parse(output);
   assert.equal(before, afterRead);
+  assert.deepEqual(new Set(imported.terms), new Set(['Alpha', 'ALPHA', 'Ｂ', 'B']));
   assert.deepEqual(new Set(result.terms), new Set(['Alpha', 'Ｂ', 'B', 'beta']));
   assert.deepEqual(result.merged, ['ALPHA', 'Beta']);
   assert.deepEqual(result.removed, []);
