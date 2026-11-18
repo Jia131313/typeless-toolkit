@@ -8,7 +8,7 @@ const publicBuild = fs.readFileSync(path.join(root, 'build', 'build-public-relea
 const localBuild = fs.readFileSync(path.join(root, 'build', 'build-release.bat'), 'utf8');
 // 默认 README.md 已改为简体中文，英文版保留在 README.en.md；脱敏说明两处都要在
 const readme = fs.readFileSync(path.join(root, 'README.en.md'), 'utf8');
-const readmeZh = fs.readFileSync(path.join(root, 'README.zh-CN.md'), 'utf8');
+const readmeZh = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const releaseWorkflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'utf8');
 const releaseGuide = fs.readFileSync(path.join(root, '.github', 'release-guide.md'), 'utf8');
 const { releaseContent } = require('../scripts/prepare-release-notes');

@@ -35,7 +35,7 @@ macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架�
 
 ## 快速开始
 
-1. **配置**(可选):打开 `data/config.json`(release) 或根目录 `config.json`(源码),若 Typeless 不在默认安装路径,填 `typeless_exe`。
+1. **配置**(可选):若 Typeless 不在默认安装路径,在 `data/config.json`(release) 里填 `typeless_exe`;源码模式把 `config.example.json` 复制为根目录 `config.json` 再填写(不建也能运行,使用内置默认值)。
 2. **启动管理器**:
    - Windows release：双击 `TypelessToolkit.exe`
    - 源码：`node manager.js` 后访问 `http://127.0.0.1:7788`

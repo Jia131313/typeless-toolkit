@@ -1,4 +1,6 @@
 # 用户运行时数据(含 token/词库,勿提交)
+# 源码运行可设 TYPELESS_DATA_DIR=data,把下列文件集中放进 data/
+/data/
 accounts.json
 profiles/
 dictionary-sync-meta.json
@@ -8,7 +10,8 @@ quota-monitor.json
 *.csv
 *.bak
 
-# 本地配置覆盖(用户私有,不进 git)
+# 本地配置(用户私有,不进 git;默认值见 lib/common.js,模板见 config.example.json)
+/config.json
 config.local.json
 
 # 依赖
