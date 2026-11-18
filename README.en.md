@@ -95,7 +95,7 @@ npm run check
 node manager.js
 ```
 
-The management page is served at `http://127.0.0.1:7788` by default. On macOS, `npm run build:mac` builds a Portable DMG for the current architecture; Windows packaging entry points and caveats are in the [installation guide](docs/installation.md#windows-桌面窗口与托盘). Main code layout: `manager.js` provides the local API, `manager.html` is the management page, `lib/` holds shared business logic, and `main.cs` and `src-tauri/` are the Windows and macOS desktop hosts.
+The management page is served at `http://127.0.0.1:7788` by default. On macOS, `npm run build:mac` builds a Portable DMG for the current architecture; Windows packaging entry points and caveats are in the [installation guide](docs/installation.md#windows-桌面窗口与托盘). Main code layout: `manager.js` provides the local API, `manager.html` is the management page, `lib/` holds shared business logic, and `windows/` and `src-tauri/` are the Windows and macOS desktop hosts.
 
 ## Documentation and feedback
 

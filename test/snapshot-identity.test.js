@@ -6,18 +6,21 @@
 const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+// 隔离运行时数据:快照写到临时目录,不在仓库根目录或真实数据目录留下 profiles/
+const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'typeless-snapshot-'));
+process.env.TYPELESS_DATA_DIR = dataRoot;
 
 const C = require('../lib/common');
 
 const uidA = '00000000-test-snap-aaaa-aaaaaaaaaaaa';
 const uidB = '00000000-test-snap-bbbb-bbbbbbbbbbbb';
-const created = [];
 
 function writeProfile(uid, storageUserId, email) {
   const dir = path.join(C.PROFILES_DIR, uid);
   fs.mkdirSync(dir, { recursive: true });
-  created.push(dir);
   fs.writeFileSync(
     path.join(dir, 'app-storage.json'),
     JSON.stringify({ userData: { user_id: storageUserId, email } }, null, '\t')
@@ -27,9 +30,7 @@ function writeProfile(uid, storageUserId, email) {
 
 describe('snapshot identity', () => {
   after(() => {
-    for (const dir of created) {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
-    }
+    fs.rmSync(dataRoot, { recursive: true, force: true });
   });
 
   it('exports inspect / valid helpers', () => {

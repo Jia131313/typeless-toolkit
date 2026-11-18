@@ -236,7 +236,7 @@ test('Windows replacement helper uses one temporary rollback and never copies re
 
 test('desktop ready handshake verifies the running backend version before writing a stage marker', () => {
   const manager = fs.readFileSync(path.join(__dirname, '..', 'manager.js'), 'utf8');
-  const desktop = fs.readFileSync(path.join(__dirname, '..', 'main.cs'), 'utf8');
+  const desktop = fs.readFileSync(path.join(__dirname, '..', 'windows', 'main.cs'), 'utf8');
   const updater = fs.readFileSync(path.join(__dirname, '..', 'lib', 'toolkit-update.js'), 'utf8');
   assert.match(manager, /toolkit_version: TOOLKIT_VERSION/);
   assert.match(manager, /code_root: C\.CODE_DIR/);

@@ -22,11 +22,12 @@
 - `lib/common.js`：账号、快照、CDP、词库、补丁与通用环境探测。
 - `lib/platform.js`：Windows/macOS 的进程、路径、凭据、启动和签名差异。
 - `lib/official-update.js`：macOS 官方更新包的发现、校验、安装与回滚。
-- `main.cs`：Windows WebView2 独立窗口、单实例和托盘宿主；不承载业务 UI。
+- `windows/`：Windows C# 宿主源码。`main.cs` 负责 WebView2 独立窗口、单实例和托盘，不承载业务 UI；
+  `ToolkitLocale.cs` 是原生界面文案，`app.manifest` 是程序清单，`gen-icon.cs` 生成 ICO/圆角 PNG 与安装器图片。
 - `src-tauri/`：macOS Tauri 2/WKWebView 宿主，负责窗口、Node 生命周期、原生桥和 App 管理权限写入。
 - `lib/tauri-host.js`：Node 与 Rust 宿主之间的 stdin/stdout JSONL 客户端。
 - `build/macos-build.json`、`scripts/build-mac-tauri.js`：macOS 四种发行物的统一参数和构建入口。
-- `gen-icon.cs`、`icon/`、`assets/`：Windows ICO/圆角 PNG 与 macOS SVG/ICNS 资源。
+- `icon/`、`assets/`：Windows ICO/圆角 PNG 与 macOS SVG/ICNS 资源。
 - `test/`：Node 内置测试，当前覆盖付费墙目标检测和官方升级逻辑。
 - `windows-build.json`、`toolkit-update.json`：构建与运行时共用的参数，必须留在仓库根目录。
 - `build/build-tray.bat`：编译 Windows C# 宿主，产物统一写入 `.build/windows/`。

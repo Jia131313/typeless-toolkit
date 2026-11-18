@@ -35,10 +35,10 @@ macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架�
 
 ## 快速开始
 
-1. **配置**(可选):打开 `data/config.json`(release) 或根目录 `config.json`(源码),若 Typeless 不在默认安装路径,填 `typeless_exe`。
+1. **配置**(可选):若 Typeless 不在默认安装路径,在 `data/config.json`(release) 里填 `typeless_exe`;源码模式把 `config.example.json` 复制为根目录 `config.json` 再填写(不建也能运行,使用内置默认值)。
 2. **启动管理器**:
    - Windows release：双击 `TypelessToolkit.exe`
-   - 源码：`node manager.js` 后访问 `http://127.0.0.1:7788`
+   - 源码：`npm start`(即 `node manager.js`)后访问 `http://127.0.0.1:7788`;数据默认写在仓库根目录,设置环境变量 `TYPELESS_DATA_DIR` 可改到单独目录(如 `data/`)
    - macOS 客户端：`npm run build:mac` 生成当前架构的 Portable DMG；用 `npm run build:mac:all` 生成四种公开包
 3. **添加账号**:在 Typeless 里登录第一个账号 → 管理器点「添加当前账号」(会自动抓 token)。
 4. **词库自动对齐**:添加账号、编辑词库或启动工具集后会自动检查，各账号词库无需手动导入；顶部状态入口可查看结果或立即重试。
@@ -50,7 +50,7 @@ macOS Release 将 Apple Silicon（arm64）与 Intel（x64）分开，每种架�
 「设置 → 通用」；WebDAV 与本地备份位于「同步与数据」；弹窗维护和 macOS 权限说明位于
 「权限与维护」，这里也提供独立的「重置设备」入口。账号卡片中的详情、快照状态和切换入口保持可见。
 
-源码模式也可以直接运行 `同步词库.bat` 或 `node typeless-dict-sync.js`。
+源码模式也可以直接运行 `npm run sync`(即 `node typeless-dict-sync.js`)。
 
 ## Windows 桌面窗口与托盘
 

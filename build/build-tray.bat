@@ -22,7 +22,7 @@ if not exist "%CSC%" (
 )
 
 echo [1/4] Generating application icons...
-"%CSC%" /nologo /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /platform:anycpu /out:.build\gen-icon.exe gen-icon.cs
+"%CSC%" /nologo /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /platform:anycpu /out:.build\gen-icon.exe windows\gen-icon.cs
 if errorlevel 1 exit /b 1
 .build\gen-icon.exe
 if errorlevel 1 exit /b 1
@@ -34,7 +34,7 @@ if not exist "%WV2_CORE%" (
 )
 
 echo [3/4] Compiling the single desktop application...
-"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" main.cs ToolkitLocale.cs
+"%CSC%" /nologo /target:winexe /platform:x64 /win32icon:icon\tray-icon.ico /win32manifest:windows\app.manifest /out:"%WINDOWS_OUT%\TypelessToolkit.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll /reference:"%WV2_CORE%" /reference:"%WV2_WINFORMS%" windows\main.cs windows\ToolkitLocale.cs
 if errorlevel 1 exit /b 1
 
 copy /Y "%WV2_CORE%" "%WINDOWS_OUT%\Microsoft.Web.WebView2.Core.dll" >nul
