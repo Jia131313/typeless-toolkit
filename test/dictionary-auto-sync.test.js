@@ -10,6 +10,26 @@ const { createDictionarySyncController } = require('../manager');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+test('词库状态保留未对齐账号的原因，并在恢复后清空', async () => {
+  let failed = true;
+  const controller = createDictionarySyncController(async () => ({
+    results: failed ? [
+      { user_id: 'a', nickname: 'A', aligned: true },
+      { user_id: 'b', nickname: 'B', email: 'b@example.invalid', aligned: false, error: 'x'.repeat(300) },
+      { user_id: 'c', aligned: false, msg: 'not aligned' },
+    ] : [{ user_id: 'a', aligned: true }],
+    master_count: 1, account_count: failed ? 3 : 1, aligned_count: 1,
+    failed_count: failed ? 2 : 0, all_aligned: !failed,
+  }));
+  await controller.run();
+  assert.deepEqual(controller.status().failures.map(x => x.user_id), ['b', 'c']);
+  assert.equal(controller.status().failures[0].reason.length, 200);
+  assert.equal(controller.status().failures[1].reason, 'not aligned');
+  failed = false;
+  await controller.run();
+  assert.deepEqual(controller.status().failures, []);
+});
+
 test('automatic dictionary sync debounces changes and exposes aligned status', async t => {
   let calls = 0;
   const controller = createDictionarySyncController(async () => {
@@ -88,4 +108,29 @@ test('explicit dictionary deletions persist as tombstones until explicitly re-ad
   assert.deepEqual(result.final.master, ['Beta']);
   assert.equal(result.final.meta.tombstones.alpha.source, 'master-edit');
   assert.deepEqual(result.final.removedAgain.removed, ['Alpha']);
+});
+
+test('主词库保存按大小写和首尾空格合并，读取不改写原文件', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'typeless-master-merge-test-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const script = `
+    const fs = require('node:fs');
+    const C = require(${JSON.stringify(path.join(__dirname, '..', 'lib', 'common.js'))});
+    C.writeMaster(['Alpha', 'ALPHA', 'Ｂ', 'B']);
+    const before = fs.readFileSync(C.MASTER_CSV, 'utf8');
+    C.readMaster();
+    const afterRead = fs.readFileSync(C.MASTER_CSV, 'utf8');
+    const imported = C.replaceMasterTerms(['Alpha', 'ALPHA', 'Ｂ', 'B']);
+    const result = C.replaceMasterTerms([' Alpha ', 'ALPHA', 'Ｂ', 'B', ' beta ', 'Beta'], { mergeDuplicates: true });
+    process.stdout.write(JSON.stringify({ before, afterRead, imported, result }));
+  `;
+  const output = execFileSync(process.execPath, ['-e', script], {
+    encoding: 'utf8', env: { ...process.env, TYPELESS_DATA_DIR: root },
+  });
+  const { before, afterRead, imported, result } = JSON.parse(output);
+  assert.equal(before, afterRead);
+  assert.deepEqual(new Set(imported.terms), new Set(['Alpha', 'ALPHA', 'Ｂ', 'B']));
+  assert.deepEqual(new Set(result.terms), new Set(['Alpha', 'Ｂ', 'B', 'beta']));
+  assert.deepEqual(result.merged, ['ALPHA', 'Beta']);
+  assert.deepEqual(result.removed, []);
 });

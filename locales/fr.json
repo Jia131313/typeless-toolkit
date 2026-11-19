@@ -1245,7 +1245,13 @@
   "ui.c1c31d8866cc": "L'état des comptes est encore en cours de chargement. Réessayez de retirer les comptes invalides dans un instant.",
   "ui.78e243e1e60a": "Sélectionnez d'abord les comptes à retirer",
   "ui.0cc95c81a49b": "Sélectionner ce compte",
-  "ui.722db92a2640": "\n\nTerminez l'inscription dans la fenêtre du navigateur qui vient de s'ouvrir.\nSi la page se termine par « Impossible de se connecter (1101) », cela signifie que la page n'a pas pu transmettre à l'application de bureau ; ignorez-le. Les identifiants sont déjà enregistrés, cliquez simplement sur Terminer.",
+  "ui.ec2520382e0f": "Terminez l’inscription ou la connexion dans la fenêtre du navigateur qui vient de s’ouvrir.\nEnsuite, la page tente d’ouvrir Typeless : si le navigateur demande s’il faut l’ouvrir, cliquez simplement sur Annuler. Si Typeless s’ouvre quand même et affiche « Impossible de se connecter (1101) », ignorez-le. Les identifiants du nouveau compte sont déjà enregistrés dans le navigateur ; revenez ici et cliquez sur « Capturer les identifiants et ajouter ».",
   "ui.3eab635adc36": "Terminez l'inscription dans la nouvelle fenêtre du navigateur",
-  "ui.20edc5c1c40f": "Confirmez-vous être connecté au compte cible dans la fenêtre d'inscription ?\nLes nouveaux identifiants seront lus, la session sera ouverte sur cet appareil, le tutoriel sera ignoré, le compte sera enregistré et le dictionnaire aligné en arrière-plan.\n\nLe surnom local n'affecte que l'affichage et ne sert pas à identifier le compte."
+  "ui.20edc5c1c40f": "Confirmez-vous être connecté au compte cible dans la fenêtre d'inscription ?\nLes nouveaux identifiants seront lus, la session sera ouverte sur cet appareil, le tutoriel sera ignoré, le compte sera enregistré et le dictionnaire aligné en arrière-plan.\n\nLe surnom local n'affecte que l'affichage et ne sert pas à identifier le compte.",
+  "ui.a10100000001": "Dictionnaire principal",
+  "ui.a10100000002": "{p0}/{p1} synchronisés",
+  "ui.a10100000003": "Ajouter {p0} et supprimer {p1} termes. Les suppressions seront synchronisées sur tous les comptes gérés.\n\nÀ supprimer :\n{p2}{p3}",
+  "ui.a10100000004": "{p0} termes au total",
+  "ui.a10100000005": "{p0} termes en double fusionnés ; la synchronisation se poursuivra en arrière-plan",
+  "ui.a10100000007": "Raison inconnue"
 }
