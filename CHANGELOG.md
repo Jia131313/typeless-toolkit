@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 2.2.1 - Typeless 2.12.0 兼容与额度词库修复 (2026-11-19)
 
 ### 修复额度与词库状态
 
@@ -29,6 +29,12 @@
 - 移除与 `README.md` 重复的 `README.zh-CN.md`，以及与内置默认值一致的根目录 `config.json`；源码模式需要覆盖配置时，从 `config.example.json` 复制。
 - Windows 宿主源码 `main.cs`、`ToolkitLocale.cs`、`gen-icon.cs`、`app.manifest` 移入 `windows/`，与 macOS 的 `src-tauri/` 对应；`build/build-tray.bat` 已同步路径。
 - 源码运行可设置 `TYPELESS_DATA_DIR`，把账号、快照、日志等本机数据集中到单独目录；仓库已忽略 `data/`。
+
+### 验证
+
+- `npm run check` 通过：283 项，276 通过，0 失败，7 项按环境跳过。
+- EBUSY 修复：模拟 Typeless 延迟启动复现了程序文件占用，修复后补丁正常写入；已在本机安装版确认可用。
+- 额度、词库与注册向导改动已先部署到本机安装版，经用户确认后合并发布。
 
 ## 2.2.0 - 隔离浏览器注册与 Typeless 2.10.0 兼容 (2026-11-04)
 
