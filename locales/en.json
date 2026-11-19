@@ -1245,7 +1245,7 @@
   "ui.c1c31d8866cc": "Account status is still loading. Remove invalid accounts again in a moment.",
   "ui.78e243e1e60a": "Select accounts to remove first",
   "ui.0cc95c81a49b": "Select this account",
-  "ui.722db92a2640": "\n\nFinish signing up in the browser window that just opened.\nIf the page ends with “Unable to sign in (1101)”, that is the page failing to hand off to the desktop app — ignore it. The credentials are still saved; just click Finish.",
+  "ui.ec2520382e0f": "Finish signing up or signing in to the account in the browser window that just opened.\nAfterwards the page tries to open Typeless: if the browser asks whether to open it, just click Cancel. If Typeless opens anyway and shows “Unable to sign in (1101)”, ignore it. The new account’s credentials are already saved in the browser; come back here and click “Capture credentials and add”.",
   "ui.3eab635adc36": "Finish signing up in the new browser window",
   "ui.20edc5c1c40f": "Confirm you have signed in to the target account in the registration window?\nThis will read the new credentials, sign in this device, skip onboarding, save the account, and align the dictionary in the background.\n\nThe local nickname only affects display and is not used to identify the account.",
   "ui.a10100000001": "Master dictionary",

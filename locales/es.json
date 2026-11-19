@@ -1245,7 +1245,7 @@
   "ui.c1c31d8866cc": "El estado de las cuentas aún se está cargando. Vuelve a quitar las no válidas dentro de un momento.",
   "ui.78e243e1e60a": "Selecciona primero las cuentas que quieres quitar",
   "ui.0cc95c81a49b": "Seleccionar esta cuenta",
-  "ui.722db92a2640": "\n\nCompleta el registro en la ventana del navegador que se acaba de abrir.\nSi la página termina con «No se puede iniciar sesión (1101)», significa que la página no pudo pasar a la aplicación de escritorio; ignóralo. Las credenciales ya están guardadas, solo pulsa Finalizar.",
+  "ui.ec2520382e0f": "Completa el registro o el inicio de sesión en la ventana del navegador que se acaba de abrir.\nDespués, la página intentará abrir Typeless: si el navegador pregunta si quieres abrirlo, pulsa Cancelar. Si Typeless se abre igualmente y muestra «No se puede iniciar sesión (1101)», ignóralo. Las credenciales de la cuenta nueva ya están guardadas en el navegador; vuelve aquí y pulsa «Capturar las credenciales y añadirla».",
   "ui.3eab635adc36": "Completa el registro en la nueva ventana del navegador",
   "ui.20edc5c1c40f": "¿Confirmas que has iniciado sesión en la cuenta de destino en la ventana de registro?\nSe leerán las credenciales nuevas, se iniciará sesión en este dispositivo, se omitirá el tutorial, se guardará la cuenta y se alineará el diccionario en segundo plano.\n\nEl alias local solo afecta a la visualización y no se usa para identificar la cuenta.",
   "ui.a10100000001": "Diccionario principal",
